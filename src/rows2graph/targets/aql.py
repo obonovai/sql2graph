@@ -17,11 +17,17 @@ engineering:
    the role of the :attr:`graph_name` constructor argument.
 3. *Predicate* and *output* keywords are ``FILTER`` and ``RETURN``, not
    ``WHERE`` and ``RETURN``.
+
+The prompt section is assembled from a fixed base block (always emitted) and
+a dictionary of per-:class:`~rows2graph.sql_features.SqlFeature` rule chunks
+(emitted only for features detected in the input SQL).
 """
 
 from __future__ import annotations
 
 import re
+
+from rows2graph.sql_features import SqlFeature
 
 # Match a fenced code block tagged ``aql`` (case-insensitive) or untagged.
 _FENCE_RE = re.compile(
@@ -34,6 +40,109 @@ _START_RE = re.compile(
     r"^(FOR|LET|INSERT|UPDATE|REPLACE|REMOVE|UPSERT|WITH|RETURN)\b",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# The base block keeps the vertex/edge-collection convention and the
+# FOR ... GRAPH traversal — these are universal AQL idioms, not specific to
+# any one SQL operation. Without them the LLM cannot produce any working
+# query against the target ArangoDB instance.
+_BASE_RULES_TEMPLATE = (
+    "Generate valid AQL (ArangoDB Query Language) queries.\n"
+    "- Treat each node label from the schema as a vertex collection name.\n"
+    "- Treat each edge type from the schema as an edge collection name.\n"
+    "- {graph_hint}\n"
+    "- Use `FOR v, e, p IN <min>..<max> OUTBOUND/INBOUND/ANY "
+    '<startVertex> GRAPH "<graph>"` for graph traversals; '
+    "do NOT use Cypher-style `MATCH (a)-[:REL]->(b)` patterns.\n"
+    "- Use `FILTER` (not `WHERE`) for predicates.\n"
+    "- Use `RETURN` for output (terminates each query level).\n"
+    "- Start the query with one of: FOR, LET, INSERT, UPDATE, REPLACE, "
+    "REMOVE, UPSERT, WITH, RETURN."
+)
+
+_LIKE_RULES = (
+    "SQL LIKE patterns: use the `LIKE(text, pattern, case_insensitive)` "
+    "function — e.g. `FILTER LIKE(p.name, \"%foo%\")` for "
+    "`name LIKE '%foo%'`. For `ILIKE`, pass `true` as the third argument: "
+    "`LIKE(p.name, \"%foo%\", true)`. Do NOT use Cypher's "
+    "`CONTAINS`/`STARTS WITH`/`ENDS WITH` keywords — they are not AQL."
+)
+
+_JOIN_RULES = (
+    "SQL JOINs → AQL graph traversals: each `JOIN` becomes a step in a "
+    "`FOR v, e, p IN OUTBOUND/INBOUND/ANY` traversal along the relevant "
+    "edge collection. Use the direction declared by the schema. For outer "
+    "joins, wrap the traversal in a `LET matches = (FOR ...)` and emit "
+    "with `LENGTH(matches) > 0 ? matches : [null]`-style fallbacks."
+)
+
+_AGGREGATION_RULES = (
+    "Aggregations: `COLLECT ... WITH COUNT INTO counter` for plain counts; "
+    "`COLLECT key = expr WITH COUNT INTO n` for grouped counts; "
+    "`COLLECT key = expr AGGREGATE total = SUM(...), avg = AVERAGE(...) "
+    "INTO groups` for multi-aggregate grouping. AGGREGATE functions: "
+    "SUM, AVERAGE, MIN, MAX, LENGTH, COUNT_DISTINCT. To express SQL "
+    "`HAVING`, add a `FILTER` after the `COLLECT` clause."
+)
+
+_ORDER_LIMIT_RULES = (
+    "Sorting: `SORT expr ASC|DESC`. Paging: `LIMIT n` or "
+    "`LIMIT offset, n` (offset comes first, unlike SQL's `OFFSET n`)."
+)
+
+_CTE_RULES = (
+    "SQL CTEs (`WITH x AS (...)`) → AQL `LET x = (FOR ... RETURN ...)` "
+    "subquery assignments. Note: AQL's top-level `WITH` keyword declares "
+    "collection bindings for transactions, NOT a CTE — use `LET` for the "
+    "CTE pattern."
+)
+
+_UNION_RULES = (
+    "Set operations: AQL has `UNION(arr1, arr2)` and `UNION_DISTINCT(arr1, "
+    "arr2)` as array functions. Pattern: "
+    "`FOR x IN UNION_DISTINCT((FOR a IN ... RETURN a), "
+    "(FOR b IN ... RETURN b)) RETURN x`. For `INTERSECT`/`EXCEPT`, use "
+    "`INTERSECTION(...)` and `MINUS(...)`."
+)
+
+_WINDOW_RULES = (
+    "AQL has no native window functions. Emulate by collecting rows per "
+    "partition, then iterating with an index: "
+    "`COLLECT key = expr INTO group ... LET ranked = (FOR g IN group SORT "
+    "g.x RETURN g) FOR i IN 0..LENGTH(ranked)-1 ...`. Use `ROW_NUMBER`-"
+    "style logic via the loop index."
+)
+
+_CASE_RULES = (
+    "Conditional expressions: AQL has no `CASE` keyword. Use the ternary "
+    "operator: `cond ? a : b`. For multi-branch conditionals, chain "
+    "ternaries: `cond1 ? a : (cond2 ? b : c)`."
+)
+
+_SUBQUERY_RULES = (
+    "Subqueries in AQL are inline expressions wrapped in parentheses, "
+    "always returning an array: `LET sub = (FOR x IN coll FILTER ... "
+    "RETURN x)`. For scalar results, take the first element: `sub[0]`. "
+    "For `EXISTS`, test `LENGTH(sub) > 0`. For `IN (subquery)`, the "
+    "subquery array is the right-hand side of `FILTER x.col IN sub`."
+)
+
+_DISTINCT_RULES = (
+    "`SELECT DISTINCT` → `RETURN DISTINCT ...`. For `COUNT(DISTINCT x)`, "
+    "use `COUNT_DISTINCT(x)` inside `AGGREGATE`, or `LENGTH(UNIQUE(...))`."
+)
+
+_FEATURE_RULES: dict[SqlFeature, str] = {
+    SqlFeature.LIKE: _LIKE_RULES,
+    SqlFeature.JOIN: _JOIN_RULES,
+    SqlFeature.AGGREGATION: _AGGREGATION_RULES,
+    SqlFeature.ORDER_LIMIT: _ORDER_LIMIT_RULES,
+    SqlFeature.CTE: _CTE_RULES,
+    SqlFeature.UNION: _UNION_RULES,
+    SqlFeature.WINDOW: _WINDOW_RULES,
+    SqlFeature.CASE: _CASE_RULES,
+    SqlFeature.SUBQUERY: _SUBQUERY_RULES,
+    SqlFeature.DISTINCT: _DISTINCT_RULES,
+}
 
 
 class AqlTarget:
@@ -55,31 +164,15 @@ class AqlTarget:
     def name(self) -> str:
         return "aql"
 
-    def system_prompt_section(self) -> str:
+    def system_prompt_section(self, features: frozenset[SqlFeature]) -> str:
         if self._graph_name:
             graph_hint = f'The named graph is "{self._graph_name}".'
         else:
             graph_hint = "Use the configured named graph for traversals."
-        return (
-            "Generate valid AQL (ArangoDB Query Language) queries.\n"
-            "- Treat each node label from the schema as a vertex collection name.\n"
-            "- Treat each edge type from the schema as an edge collection name.\n"
-            f"- {graph_hint}\n"
-            "- Use `FOR v, e, p IN <min>..<max> OUTBOUND/INBOUND/ANY "
-            '<startVertex> GRAPH "<graph>"` for graph traversals; '
-            "do NOT use Cypher-style `MATCH (a)-[:REL]->(b)` patterns.\n"
-            "- Use `FILTER` (not `WHERE`) for predicates.\n"
-            "- Use `RETURN` for output (terminates each query level).\n"
-            "- Aggregations: `COLLECT ... WITH COUNT INTO counter` for counts; "
-            "`COLLECT key = expr AGGREGATE total = SUM(...)` for grouped sums.\n"
-            "- Sorting: `SORT expr ASC|DESC`. Limiting: `LIMIT n` or `LIMIT offset, n`.\n"
-            "- For SQL LIKE patterns: use the `LIKE(text, pattern, "
-            "case_insensitive)` function — e.g. `FILTER LIKE(p.name, "
-            "\"%foo%\")` for `name LIKE '%foo%'`. Do NOT use Cypher's "
-            "`CONTAINS`/`STARTS WITH`/`ENDS WITH` keywords.\n"
-            "- Start the query with one of: FOR, LET, INSERT, UPDATE, REPLACE, "
-            "REMOVE, UPSERT, WITH, RETURN."
-        )
+        base = _BASE_RULES_TEMPLATE.format(graph_hint=graph_hint)
+
+        chunks = [base, *(_FEATURE_RULES[feat] for feat in SqlFeature if feat in features)]
+        return "\n\n".join(chunks)
 
     def extract_query(self, llm_response: str) -> str:
         """Pull an AQL query out of (possibly noisy) LLM output.

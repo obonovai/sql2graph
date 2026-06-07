@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from rows2graph.sql_features import SqlFeature
 from rows2graph.targets.aql import AqlTarget
 from rows2graph.targets.cypher import CypherTarget
 
@@ -36,7 +37,7 @@ class TargetLanguage(Protocol):
     @property
     def name(self) -> str: ...
 
-    def system_prompt_section(self) -> str: ...
+    def system_prompt_section(self, features: frozenset[SqlFeature]) -> str: ...
 
     def extract_query(self, llm_response: str) -> str: ...
 

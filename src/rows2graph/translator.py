@@ -32,6 +32,7 @@ from typing import Any, Self
 from rows2graph.llm import LLMClient
 from rows2graph.mapping import SchemaMapping
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
+from rows2graph.sql_features import detect_features
 from rows2graph.state import TranslationResult, TranslationState
 from rows2graph.targets import TargetLanguage
 from rows2graph.validators import QueryValidator
@@ -91,7 +92,9 @@ class SQLTranslator:
             target_language=target_name,  # type: ignore[arg-type]
         )
 
-        system_prompt = build_system_prompt(self._schema_mapping, self._target)
+        features = detect_features(sql_query)
+        logger.info("Detected SQL features: %s", sorted(f.value for f in features))
+        system_prompt = build_system_prompt(self._schema_mapping, self._target, features)
         state.messages.append(_msg("system", system_prompt))
 
         user_msg = build_generate_prompt(sql_query)

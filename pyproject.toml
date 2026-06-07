@@ -15,6 +15,7 @@ dependencies = [
     "python-arango>=8.0",
     "anthropic>=0.96.0",
     "rich>=13",
+    "sqlglot>=23",
 ]
 
 [dependency-groups]

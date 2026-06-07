@@ -40,6 +40,7 @@ from rows2graph import (
 )
 from rows2graph._env import interpolate_env
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
+from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -257,12 +258,12 @@ def test_make_target_aql_carries_graph_name() -> None:
     t = make_target("aql", graph_name="myGraph")
     assert isinstance(t, AqlTarget)
     assert t.name == "aql"
-    assert "myGraph" in t.system_prompt_section()
+    assert "myGraph" in t.system_prompt_section(frozenset())
 
 
 def test_make_target_aql_without_graph_name_falls_back() -> None:
     t = make_target("aql")
-    assert "configured named graph" in t.system_prompt_section()
+    assert "configured named graph" in t.system_prompt_section(frozenset())
 
 
 def test_make_target_rejects_unknown_name() -> None:
@@ -443,14 +444,14 @@ def test_aql_syntax_flags_unbalanced_brackets() -> None:
 
 
 def test_build_system_prompt_cypher() -> None:
-    prompt = build_system_prompt(_schema(), CypherTarget())
+    prompt = build_system_prompt(_schema(), CypherTarget(), frozenset())
     assert "cypher" in prompt
     assert "MATCH" in prompt
     assert "Person" in prompt  # schema is embedded
 
 
 def test_build_system_prompt_aql_includes_graph_name() -> None:
-    prompt = build_system_prompt(_schema(), AqlTarget(graph_name="mygraph"))
+    prompt = build_system_prompt(_schema(), AqlTarget(graph_name="mygraph"), frozenset())
     assert "aql" in prompt
     assert "FOR" in prompt
     assert "mygraph" in prompt
@@ -459,7 +460,7 @@ def test_build_system_prompt_aql_includes_graph_name() -> None:
 
 
 def test_build_system_prompt_aql_without_graph_name_falls_back() -> None:
-    prompt = build_system_prompt(_schema(), AqlTarget(graph_name=None))
+    prompt = build_system_prompt(_schema(), AqlTarget(graph_name=None), frozenset())
     assert "configured named graph" in prompt
 
 
@@ -575,3 +576,151 @@ def test_translator_context_manager_closes_components() -> None:
     ) as translator:
         translator.translate("SELECT 1")
     assert fake.closed is True
+
+
+# ---------------------------------------------------------------------------
+# SQL feature detection (sql_features)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_features_plain_select_is_empty() -> None:
+    assert detect_features("SELECT a, b FROM t") == frozenset()
+
+
+def test_detect_features_like() -> None:
+    assert SqlFeature.LIKE in detect_features("SELECT a FROM t WHERE name LIKE '%x%'")
+
+
+def test_detect_features_ilike() -> None:
+    assert SqlFeature.LIKE in detect_features("SELECT a FROM t WHERE name ILIKE '%x%'")
+
+
+def test_detect_features_join() -> None:
+    assert SqlFeature.JOIN in detect_features("SELECT a.x FROM a JOIN b ON a.id = b.aid")
+
+
+def test_detect_features_group_by() -> None:
+    feats = detect_features("SELECT k, COUNT(*) FROM t GROUP BY k")
+    assert SqlFeature.AGGREGATION in feats
+
+
+def test_detect_features_aggregate_without_group_by() -> None:
+    assert SqlFeature.AGGREGATION in detect_features("SELECT COUNT(*) FROM t")
+
+
+def test_detect_features_having_implies_aggregation() -> None:
+    assert SqlFeature.AGGREGATION in detect_features(
+        "SELECT k, COUNT(*) c FROM t GROUP BY k HAVING COUNT(*) > 5"
+    )
+
+
+def test_detect_features_order_limit() -> None:
+    feats = detect_features("SELECT a FROM t ORDER BY a LIMIT 10")
+    assert SqlFeature.ORDER_LIMIT in feats
+
+
+def test_detect_features_cte() -> None:
+    feats = detect_features("WITH c AS (SELECT * FROM t) SELECT * FROM c")
+    assert SqlFeature.CTE in feats
+    # A bare CTE without any nested SELECT inside an expression must NOT
+    # light up SUBQUERY — distinguishing the two clusters is the whole point.
+    assert SqlFeature.SUBQUERY not in feats
+
+
+def test_detect_features_union() -> None:
+    assert SqlFeature.UNION in detect_features("SELECT a FROM t UNION SELECT b FROM u")
+
+
+def test_detect_features_window() -> None:
+    feats = detect_features("SELECT a, ROW_NUMBER() OVER (ORDER BY b) FROM t")
+    assert SqlFeature.WINDOW in feats
+
+
+def test_detect_features_case() -> None:
+    feats = detect_features("SELECT CASE WHEN a > 0 THEN 1 ELSE 0 END FROM t")
+    assert SqlFeature.CASE in feats
+
+
+def test_detect_features_scalar_subquery() -> None:
+    feats = detect_features("SELECT (SELECT MAX(b) FROM u) FROM t")
+    assert SqlFeature.SUBQUERY in feats
+
+
+def test_detect_features_in_subquery() -> None:
+    feats = detect_features("SELECT a FROM t WHERE a IN (SELECT b FROM u)")
+    assert SqlFeature.SUBQUERY in feats
+
+
+def test_detect_features_exists_subquery() -> None:
+    feats = detect_features(
+        "SELECT a FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = t.x)"
+    )
+    assert SqlFeature.SUBQUERY in feats
+
+
+def test_detect_features_distinct() -> None:
+    assert SqlFeature.DISTINCT in detect_features("SELECT DISTINCT a FROM t")
+
+
+def test_detect_features_parse_failure_returns_all() -> None:
+    # Garbage SQL must yield the full feature set so no rule chunk is
+    # silently stripped from the prompt.
+    assert detect_features("SELECT ;;; FROM") == ALL_FEATURES
+
+
+# ---------------------------------------------------------------------------
+# Feature-gated prompt assembly
+# ---------------------------------------------------------------------------
+
+
+def test_cypher_prompt_includes_like_chunk_only_when_feature_detected() -> None:
+    with_like = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.LIKE}))
+    without_like = build_system_prompt(_schema(), CypherTarget(), frozenset())
+    assert "CONTAINS" in with_like
+    assert "CONTAINS" not in without_like
+
+
+def test_cypher_prompt_omits_window_when_not_detected() -> None:
+    prompt = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.LIKE}))
+    assert "window function" not in prompt.lower()
+
+
+def test_cypher_prompt_includes_window_chunk_when_detected() -> None:
+    prompt = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.WINDOW}))
+    assert "window function" in prompt.lower()
+
+
+def test_aql_prompt_includes_collect_only_when_aggregation_detected() -> None:
+    with_agg = build_system_prompt(
+        _schema(), AqlTarget(graph_name="g"), frozenset({SqlFeature.AGGREGATION})
+    )
+    without_agg = build_system_prompt(
+        _schema(), AqlTarget(graph_name="g"), frozenset()
+    )
+    assert "COLLECT" in with_agg
+    assert "COLLECT" not in without_agg
+
+
+def test_generic_join_rule_is_feature_gated() -> None:
+    with_join = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.JOIN}))
+    without_join = build_system_prompt(_schema(), CypherTarget(), frozenset())
+    assert "Map SQL JOINs" in with_join
+    assert "Map SQL JOINs" not in without_join
+
+
+def test_translator_omits_unused_rules_from_system_message() -> None:
+    # SQL has only LIKE — the system prompt should carry the LIKE chunk
+    # and omit the WINDOW chunk.
+    fake = _FakeLLM(["MATCH (p:Person) WHERE p.name CONTAINS 'a' RETURN p"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        translator.translate("SELECT * FROM persons WHERE full_name LIKE '%a%'")
+
+    system_msg = fake.calls[0][0]
+    assert system_msg["role"] == "system"
+    assert "CONTAINS" in system_msg["content"]
+    assert "window function" not in system_msg["content"].lower()
