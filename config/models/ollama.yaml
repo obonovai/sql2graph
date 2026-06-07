@@ -1,0 +1,17 @@
+# Ollama LLM backend.
+#
+# Ollama is a local-first model server. The framework uses the official
+# Python client; this YAML file is the typed configuration consumed by
+# rows2graph.llm.OllamaLLMClient.
+#
+# If you run Ollama on a remote GPU server, tunnel the port to localhost
+# (see README.md) and leave `host` as-is.
+
+provider: "ollama"
+model: "llama3.2"
+host: "http://localhost:11434"
+temperature: 0.1
+# num_ctx is the model's working-context window in tokens. The framework
+# sends the full chat history (system + every prior turn) on each call,
+# so raise this for large schemas or many fix iterations.
+num_ctx: 8192

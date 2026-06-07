@@ -1,0 +1,58 @@
+"""Cypher syntax-only validator.
+
+A lightweight, deployment-free validator: it checks a handful of regex-based
+invariants over the candidate Cypher string. It does *not* validate against
+the graph database's schema (a server-side validator is the right tool for
+that), so it will not catch label/relationship-type/property hallucinations.
+
+The trade-off is intentional: with this validator the framework can run
+end-to-end in a CI environment or on a thesis reviewer's laptop without
+provisioning a Neo4j instance. The server validator
+(:class:`rows2graph.validators.cypher.server.CypherServerValidator`) is the
+preferred option in any production-quality evaluation.
+"""
+
+from __future__ import annotations
+
+import re
+
+# Whitelist of Cypher statements that may legally start a query.
+_VALID_START_RE = re.compile(
+    r"^\s*(MATCH|CREATE|MERGE|RETURN|WITH|UNWIND|CALL|OPTIONAL\s+MATCH|"
+    r"DETACH\s+DELETE|DELETE|SET|REMOVE|FOREACH|LOAD\s+CSV)",
+    re.IGNORECASE,
+)
+
+
+class CypherSyntaxValidator:
+    """Regex-based sanity checks for Cypher queries."""
+
+    def validate(self, query: str) -> list[str]:
+        errors: list[str] = []
+
+        if not query.strip():
+            errors.append("Query is empty")
+            return errors
+
+        if not _VALID_START_RE.match(query):
+            errors.append("Query does not start with a valid Cypher keyword (MATCH, CREATE, MERGE, RETURN, WITH, etc.)")
+
+        if query.count("(") != query.count(")"):
+            errors.append("Unbalanced parentheses")
+
+        if query.count("[") != query.count("]"):
+            errors.append("Unbalanced square brackets")
+
+        if query.count("{") != query.count("}"):
+            errors.append("Unbalanced curly braces")
+
+        # A MATCH query without a RETURN is almost always an accidental
+        # truncation — the model dropped the projection clause.
+        if re.match(r"^\s*MATCH\b", query, re.IGNORECASE):
+            if not re.search(r"\bRETURN\b", query, re.IGNORECASE):
+                errors.append("MATCH query is missing a RETURN clause")
+
+        return errors
+
+    def close(self) -> None:
+        return None

@@ -1,0 +1,18 @@
+# Neo4j server connection — used only when running the demo with
+# --validation server --target cypher.
+#
+# The framework validates each candidate Cypher query by submitting it as
+# `EXPLAIN <query>`, which parses and plans the query without executing it.
+# That is safe even for write queries and catches the entire class of
+# hallucinated-label / hallucinated-property errors that the syntax
+# validator misses.
+#
+# Secrets: the `password` field supports environment-variable interpolation.
+# The recommended pattern is to keep the literal `${NEO4J_PASSWORD}` here
+# and `export NEO4J_PASSWORD=...` in your shell before invoking the demo.
+
+type: "neo4j"
+uri: "bolt://localhost:7687"
+username: "neo4j"
+password: "${NEO4J_PASSWORD}"
+database: "neo4j"

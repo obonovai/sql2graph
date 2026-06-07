@@ -1,0 +1,162 @@
+# Relational-to-graph mapping for the TPC-H benchmark dataset.
+#
+# Mirrors the graphonauts project's mapping:
+#   Relational source: /src/graphonauts/postgres_db/schema.py
+#   Graph loader:      /src/graphonauts/neo4j_db/loader.py
+#
+# 8 relational tables -> 7 node labels + 7 edge types.
+# The `partsupp` join table becomes a SUPPLIES edge with properties.
+#
+# This file describes ONLY the schema mapping — no LLM, server, or
+# translation-loop settings. Load it with rows2graph.SchemaMapping.from_yaml.
+
+nodes:
+  - label: "Region"
+    source_table: "region"
+    properties:
+      regionkey: "regionkey"
+      name: "name"
+      comment: "comment"
+    primary_key: "regionkey"
+
+  - label: "Nation"
+    source_table: "nation"
+    properties:
+      nationkey: "nationkey"
+      name: "name"
+      comment: "comment"
+    primary_key: "nationkey"
+
+  - label: "Supplier"
+    source_table: "supplier"
+    properties:
+      suppkey: "suppkey"
+      name: "name"
+      address: "address"
+      phone: "phone"
+      acctbal: "acctbal"
+      comment: "comment"
+    primary_key: "suppkey"
+
+  - label: "Customer"
+    source_table: "customer"
+    properties:
+      custkey: "custkey"
+      name: "name"
+      address: "address"
+      phone: "phone"
+      acctbal: "acctbal"
+      mktsegment: "mktsegment"
+      comment: "comment"
+    primary_key: "custkey"
+
+  - label: "Part"
+    source_table: "part"
+    properties:
+      partkey: "partkey"
+      name: "name"
+      mfgr: "mfgr"
+      brand: "brand"
+      type: "type"
+      size: "size"
+      container: "container"
+      retailprice: "retailprice"
+      comment: "comment"
+    primary_key: "partkey"
+
+  - label: "Order"
+    source_table: "orders"  # the SQL table is "orders" (plural) because ORDER is reserved
+    properties:
+      orderkey: "orderkey"
+      orderstatus: "orderstatus"
+      totalprice: "totalprice"
+      orderdate: "orderdate"
+      orderpriority: "orderpriority"
+      clerk: "clerk"
+      shippriority: "shippriority"
+      comment: "comment"
+    primary_key: "orderkey"
+
+  - label: "LineItem"
+    # Note: lineitem has a composite PK (orderkey, linenumber). This mapping
+    # lists linenumber as primary_key because orderkey is materialised on
+    # the CONTAINS edge from Order rather than as a LineItem property.
+    source_table: "lineitem"
+    properties:
+      linenumber: "linenumber"
+      quantity: "quantity"
+      extendedprice: "extendedprice"
+      discount: "discount"
+      tax: "tax"
+      returnflag: "returnflag"
+      linestatus: "linestatus"
+      shipdate: "shipdate"
+      commitdate: "commitdate"
+      receiptdate: "receiptdate"
+      shipinstruct: "shipinstruct"
+      shipmode: "shipmode"
+      comment: "comment"
+    primary_key: "linenumber"
+
+edges:
+  - type: "BELONGS_TO"
+    source_node: "Nation"
+    target_node: "Region"
+    source_table: "nation"
+    source_foreign_key: "regionkey"
+    target_primary_key: "regionkey"
+
+  - type: "LOCATED_IN"
+    source_node: "Supplier"
+    target_node: "Nation"
+    source_table: "supplier"
+    source_foreign_key: "nationkey"
+    target_primary_key: "nationkey"
+
+  - type: "LOCATED_IN"
+    source_node: "Customer"
+    target_node: "Nation"
+    source_table: "customer"
+    source_foreign_key: "nationkey"
+    target_primary_key: "nationkey"
+
+  - type: "SUPPLIES"
+    # Materialised from the partsupp junction table. Edge properties come
+    # from the non-FK columns of partsupp.
+    source_node: "Supplier"
+    target_node: "Part"
+    source_table: "partsupp"
+    source_foreign_key: "partkey"
+    target_primary_key: "partkey"
+    properties:
+      availqty: "availqty"
+      supplycost: "supplycost"
+      comment: "comment"
+
+  - type: "PLACED"
+    source_node: "Customer"
+    target_node: "Order"
+    source_table: "orders"
+    source_foreign_key: "custkey"
+    target_primary_key: "custkey"
+
+  - type: "CONTAINS"
+    source_node: "Order"
+    target_node: "LineItem"
+    source_table: "lineitem"
+    source_foreign_key: "orderkey"
+    target_primary_key: "orderkey"
+
+  - type: "OF_PART"
+    source_node: "LineItem"
+    target_node: "Part"
+    source_table: "lineitem"
+    source_foreign_key: "partkey"
+    target_primary_key: "partkey"
+
+  - type: "SUPPLIED_BY"
+    source_node: "LineItem"
+    target_node: "Supplier"
+    source_table: "lineitem"
+    source_foreign_key: "suppkey"
+    target_primary_key: "suppkey"

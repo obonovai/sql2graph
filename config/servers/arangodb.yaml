@@ -1,0 +1,20 @@
+# ArangoDB server connection — used only when running the demo with
+# --validation server --target aql.
+#
+# The framework validates each candidate AQL query via
+# `db.aql.validate(query)`, which parses the query without executing it.
+#
+# Conventions enforced by the schema mapping:
+#   - Each node `label` in the mapping is the name of a vertex collection.
+#   - Each edge `type`  in the mapping is the name of an edge collection.
+#   - `graph_name` below names the registered named graph that ties them
+#     together; the demo CLI threads this name into the AQL system prompt
+#     (`FOR v IN ... GRAPH "<graph_name>" ...`) unless overridden by
+#     --aql-graph-name.
+
+type: "arangodb"
+url: "http://localhost:8529"
+username: "root"
+password: "${ARANGO_PASSWORD}"
+database: "ldbc"
+graph_name: "ldbc"

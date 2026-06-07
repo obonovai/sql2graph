@@ -1,0 +1,59 @@
+[project]
+name = "rows2graph-ai"
+version = "0.1.0"
+description = "LLM-driven SQL-to-graph-database query translator with a generate–validate–fix loop."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Ivona Oboňová", email = "ivonaobonova@gmail.com" },
+]
+dependencies = [
+    "ollama>=0.6.1",
+    "pydantic>=2.12",
+    "pyyaml>=6.0",
+    "neo4j>=5.28",
+    "python-arango>=8.0",
+    "anthropic>=0.96.0",
+    "rich>=13",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.1",
+    "pytest>=8.4.1",
+    "ruff>=0.7",
+    "types-pyyaml>=6.0.12",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Hatchling's src-layout discovery is unreliable without explicit package paths,
+# so name them. The wheel exposes the `rows2graph` package at top level.
+[tool.hatch.build.targets.wheel]
+packages = ["src/rows2graph"]
+
+[tool.ruff]
+line-length = 120
+output-format = "full"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "PERF", "ARG", "W", "UP", "B"]
+ignore = ["E1", "E4", "E5", "PERF203"]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 120
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+addopts = "--verbose"
+testpaths = ["tests"]
