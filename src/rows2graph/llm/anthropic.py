@@ -60,9 +60,16 @@ class AnthropicLLMClient:
     list and concatenates them into the request's ``system`` parameter,
     leaving only user/assistant turns in ``messages``.
 
+    The system block is marked ``cache_control: ephemeral`` so Anthropic's
+    prompt cache reuses it across the generate–validate–fix iterations of a
+    single translation (where the schema mapping + target rules + feature
+    rules are byte-identical on every call). The cache silently no-ops below
+    the per-model minimum (1024 tokens for most models, 2048 for Haiku) and
+    has a 5-minute TTL — both are fine for our use case.
+
     Token usage from each response is logged at INFO level so the demo's
     ``-v`` flag surfaces per-call consumption — useful for tracking spend
-    against a budget cap.
+    against a budget cap. Cache hit/creation counts are logged alongside.
     """
 
     def __init__(self, config: AnthropicConfig) -> None:
@@ -81,7 +88,7 @@ class AnthropicLLMClient:
             else:
                 chat_messages.append({"role": message["role"], "content": message["content"]})
 
-        system = "\n\n".join(system_parts) if system_parts else None
+        system_text = "\n\n".join(system_parts) if system_parts else None
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -89,16 +96,24 @@ class AnthropicLLMClient:
             "temperature": self._temperature,
             "messages": chat_messages,
         }
-        if system is not None:
-            kwargs["system"] = system
+        if system_text is not None:
+            kwargs["system"] = [
+                {
+                    "type": "text",
+                    "text": system_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
 
         response = self._client.messages.create(**kwargs)
 
         if response.usage is not None:
             logger.info(
-                "Anthropic call: input=%d output=%d tokens (model=%s)",
+                "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
                 response.usage.input_tokens,
                 response.usage.output_tokens,
+                getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+                getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
                 self._model,
             )
 
