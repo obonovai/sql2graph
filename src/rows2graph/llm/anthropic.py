@@ -22,7 +22,7 @@ import logging
 from typing import Any, Literal
 
 from anthropic import Anthropic
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ class AnthropicConfig(BaseModel):
     :data:`rows2graph.llm.ModelConfig` uses to dispatch
     :func:`rows2graph.llm.load_model_config` to this class when parsing a
     YAML model config.
+
+    ``max_retries`` is forwarded to the upstream SDK's
+    :class:`anthropic.Anthropic` constructor; the SDK does exponential
+    backoff with jitter on 408/409/429/5xx and connection errors. The
+    default of 3 is one above the SDK's own default of 2 — a small
+    deliberate bump because losing several iterations of a translation to
+    a single transient blip is much more painful than retrying once more.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -49,6 +56,7 @@ class AnthropicConfig(BaseModel):
     model: str = "claude-opus-4-7"
     temperature: float = 0.1
     max_output_tokens: int = 4096
+    max_retries: int = Field(default=3, ge=0)
 
 
 class AnthropicLLMClient:
@@ -74,7 +82,7 @@ class AnthropicLLMClient:
 
     def __init__(self, config: AnthropicConfig) -> None:
         # `api_key=None` triggers the SDK's ANTHROPIC_API_KEY fallback.
-        self._client = Anthropic(api_key=config.api_key)
+        self._client = Anthropic(api_key=config.api_key, max_retries=config.max_retries)
         self._model = config.model
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens

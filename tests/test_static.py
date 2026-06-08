@@ -354,13 +354,108 @@ def test_make_llm_ollama_dispatch() -> None:
         mock_client.assert_called_once_with(host="http://x:1")
 
 
+def test_ollama_chat_retries_on_request_error_then_succeeds() -> None:
+    """Connection-layer failures (RequestError) are retried with backoff."""
+    from ollama import RequestError
+
+    from rows2graph.llm.ollama import OllamaLLMClient
+
+    with (
+        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
+        patch("rows2graph.llm.ollama.time.sleep") as mock_sleep,
+    ):
+        mock_response = MagicMock()
+        mock_response.message.content = "ok"
+        mock_client_cls.return_value.chat.side_effect = [
+            RequestError("connection refused"),
+            RequestError("connection refused"),
+            mock_response,
+        ]
+        client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
+        assert client.chat([{"role": "user", "content": "hi"}]) == "ok"
+        assert mock_client_cls.return_value.chat.call_count == 3
+        # First failure → sleep 1s; second failure → sleep 2s.
+        assert [call.args[0] for call in mock_sleep.call_args_list] == [1.0, 2.0]
+
+
+def test_ollama_chat_retries_on_5xx_response_error() -> None:
+    from ollama import ResponseError
+
+    from rows2graph.llm.ollama import OllamaLLMClient
+
+    with (
+        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
+        patch("rows2graph.llm.ollama.time.sleep"),
+    ):
+        mock_response = MagicMock()
+        mock_response.message.content = "ok"
+        mock_client_cls.return_value.chat.side_effect = [
+            ResponseError("server overloaded", 503),
+            mock_response,
+        ]
+        client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
+        assert client.chat([{"role": "user", "content": "hi"}]) == "ok"
+        assert mock_client_cls.return_value.chat.call_count == 2
+
+
+def test_ollama_chat_does_not_retry_on_4xx_response_error() -> None:
+    """4xx errors are client-side bugs — retrying just wastes time."""
+    from ollama import ResponseError
+
+    from rows2graph.llm.ollama import OllamaLLMClient
+
+    with (
+        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
+        patch("rows2graph.llm.ollama.time.sleep") as mock_sleep,
+    ):
+        mock_client_cls.return_value.chat.side_effect = ResponseError("unknown model", 404)
+        client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
+        with pytest.raises(ResponseError):
+            client.chat([{"role": "user", "content": "hi"}])
+        assert mock_client_cls.return_value.chat.call_count == 1
+        mock_sleep.assert_not_called()
+
+
+def test_ollama_chat_exhausts_retries_and_reraises() -> None:
+    from ollama import RequestError
+
+    from rows2graph.llm.ollama import OllamaLLMClient
+
+    with (
+        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
+        patch("rows2graph.llm.ollama.time.sleep"),
+    ):
+        mock_client_cls.return_value.chat.side_effect = RequestError("nope")
+        client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=2))
+        with pytest.raises(RequestError):
+            client.chat([{"role": "user", "content": "hi"}])
+        # max_retries=2 → 1 initial + 2 retries = 3 total attempts.
+        assert mock_client_cls.return_value.chat.call_count == 3
+
+
+def test_ollama_config_rejects_negative_max_retries() -> None:
+    with pytest.raises(ValidationError):
+        OllamaConfig(max_retries=-1)
+
+
 def test_make_llm_anthropic_dispatch() -> None:
     with patch("rows2graph.llm.anthropic.Anthropic") as mock_anthropic:
         llm = make_llm(AnthropicConfig(api_key="sk-ant-test", model="claude-x"))
         from rows2graph.llm.anthropic import AnthropicLLMClient
 
         assert isinstance(llm, AnthropicLLMClient)
-        mock_anthropic.assert_called_once_with(api_key="sk-ant-test")
+        mock_anthropic.assert_called_once_with(api_key="sk-ant-test", max_retries=3)
+
+
+def test_make_llm_anthropic_forwards_custom_max_retries() -> None:
+    with patch("rows2graph.llm.anthropic.Anthropic") as mock_anthropic:
+        make_llm(AnthropicConfig(api_key="sk-ant-test", model="claude-x", max_retries=7))
+        mock_anthropic.assert_called_once_with(api_key="sk-ant-test", max_retries=7)
+
+
+def test_anthropic_config_rejects_negative_max_retries() -> None:
+    with pytest.raises(ValidationError):
+        AnthropicConfig(max_retries=-1)
 
 
 def test_anthropic_chat_marks_system_prompt_cacheable() -> None:
