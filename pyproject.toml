@@ -1,5 +1,5 @@
 [project]
-name = "rows2graph-ai"
+name = "rows2graph"
 version = "0.1.0"
 description = "LLM-driven SQL-to-graph-database query translator with a generate–validate–fix loop."
 readme = "README.md"

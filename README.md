@@ -31,8 +31,16 @@ The codebase is structured as a *framework + reference demo*:
                                    │
                                    ▼
                       ┌─────────────────────────┐
+                      │  detect_features(sql)   │  ◄─── sqlglot AST
+                      │  → {SqlFeature, ...}    │       (parser fail-open)
+                      └────────────┬────────────┘
+                                   │
+                                   ▼
+                      ┌─────────────────────────┐
                       │  build_system_prompt    │  ◄─── SchemaMapping
                       │  build_generate_prompt  │       (nodes + edges)
+                      │  (rules gated by        │       + detected features
+                      │   detected features)    │
                       └────────────┬────────────┘
                                    │
                                    ▼
@@ -69,6 +77,21 @@ See `docs/ARCHITECTURE.md` for the deeper technical reference, including a
 discussion of why the loop is implemented as plain Python rather than a
 graph-orchestration framework, and `docs/API.md` for the library API and YAML
 schema reference.
+
+## Per-query prompt assembly
+
+The system prompt is assembled *per query*, not once per translator. Before
+the first LLM call, `detect_features` (in `src/rows2graph/sql_features.py`)
+parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
+operation clusters present — `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
+`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`. Both the generic
+rules block and the target-language section (see
+`src/rows2graph/targets/cypher.py` and `targets/aql.py`) emit only the rule
+chunks corresponding to features actually in the query, so the LLM is not
+distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
+no string predicates. On any parser failure the function returns
+`ALL_FEATURES`, which restores the pre-refactor "ship every rule" behaviour
+— unparseable input degrades prompt focus, never translation correctness.
 
 ## Install
 
@@ -170,8 +193,9 @@ ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 
 ## Acknowledgments
 
-The generate–validate–fix loop pattern was inspired by the
-[yara-copilot](https://github.com/gendigitalinc/yara-copilot) project, which
-implements the same pattern with LangGraph for YARA rule generation.
-`rows2graph` adapts the core pattern with a plain-Python loop (no LangGraph
-dependency) and targets SQL-to-graph query translation.
+The generate–validate–fix loop pattern was inspired by prior work on LLM
+code generation paired with deterministic-validator feedback loops, where
+a generated artifact is checked by a compiler-like tool and validator
+errors are fed back as additional context for retry. `rows2graph` adapts
+that core pattern with a plain-Python loop — no graph-orchestration
+framework — and targets SQL-to-graph query translation.

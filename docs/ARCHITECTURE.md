@@ -27,9 +27,9 @@ The framework deliberately optimises for four properties, in this order:
 
 2. **Simplicity over framework ceremony.** The full generate–validate–fix
    loop is implemented as a single `while` loop in
-   `src/rows2graph/translator.py`. The reference project (yara-copilot,
-   which inspired the loop pattern) used LangGraph, LangChain, and
-   Langfuse — roughly ten heavy dependencies. For one retry edge a plain
+   `src/rows2graph/translator.py`. Comparable LLM-feedback-loop projects
+   in this space typically reach for LangGraph + LangChain + a tracing
+   layer — easily ten heavy dependencies. For one retry edge a plain
    `while` loop with explicit state is shorter, easier to trace through,
    and has an order of magnitude less import surface.
 
@@ -77,6 +77,7 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 | `mapping.py` | Parse and validate the schema mapping YAML. | `SchemaMapping.from_yaml(path) -> SchemaMapping` |
 | `state.py`   | Loop-internal state + public result. | `TranslationState`, `TranslationResult` |
 | `prompts.py` | Assemble system/user/fix prompts. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `format_schema_context` |
+| `sql_features.py` | Parse SQL with sqlglot and detect which operation clusters it uses. | `SqlFeature`, `ALL_FEATURES`, `detect_features` |
 | `_env.py` | YAML env-var interpolation helper. | `interpolate_env` (internal) |
 | `llm/__init__.py` | LLM Protocol + discriminated-union config. | `LLMClient`, `ModelConfig`, `load_model_config`, `make_llm` |
 | `llm/ollama.py`   | Wrap `ollama.Client`. | `OllamaConfig`, `OllamaLLMClient` |
@@ -156,9 +157,74 @@ sees every prior attempt and every prior error in a single chat context.
 If we built one giant prompt per call instead, we would lose that
 accumulated context.
 
-This mirrors yara-copilot's separation of `create_rule_agent` and
-`fix_rule_node` graph nodes — implemented here as plain function calls
-that append to a shared list.
+The three prompt builders are plain function calls that append to a
+shared `messages` list — no graph nodes, no middleware, no separate
+agents.
+
+---
+
+## Per-query prompt assembly
+
+The system prompt is rebuilt for every translation, not cached once per
+translator. The motivation is empirical: small models lose accuracy when
+the system prompt contains rules irrelevant to the input — for example,
+Cypher's 14-line `LIKE`/`ILIKE` mapping table on a query with no string
+predicates is pure noise. The framework strips those rules out by
+detecting which SQL operation clusters the input uses and emitting only
+the corresponding rule chunks.
+
+### The detector
+
+`detect_features` (in `src/rows2graph/sql_features.py`) calls
+`sqlglot.parse_one`, walks the resulting AST with `find_all`, and returns
+a `frozenset[SqlFeature]` naming the clusters present. The enum has ten
+members:
+
+| `SqlFeature` | sqlglot nodes that light it up |
+|---|---|
+| `LIKE` | `exp.Like`, `exp.ILike` |
+| `JOIN` | `exp.Join` |
+| `AGGREGATION` | `exp.Group`, `exp.Having`, `exp.AggFunc` |
+| `ORDER_LIMIT` | `exp.Order`, `exp.Limit`, `exp.Offset` |
+| `CTE` | `exp.CTE` |
+| `UNION` | `exp.Union`, `exp.Intersect`, `exp.Except` |
+| `WINDOW` | `exp.Window` |
+| `CASE` | `exp.Case` |
+| `SUBQUERY` | `exp.Subquery`, `exp.Exists` (CTEs are excluded — they get their own bucket) |
+| `DISTINCT` | `exp.Distinct` |
+
+On any `sqlglot.errors.ParseError` the function returns `ALL_FEATURES`,
+which restores the pre-refactor "ship every rule" behaviour. That
+fail-open is load-bearing: a silently-stripped rule would be a
+translation-quality regression, while a few extra tokens on an
+unparseable query is harmless.
+
+### How the rules are gated
+
+The feature set flows through two layers:
+
+1. **Generic rules in `prompts.py`.** `_GENERIC_FEATURE_RULES` (a small
+   `dict[SqlFeature, str]` near the top of the module) holds the
+   one-line, target-agnostic rules — currently `JOIN` and `AGGREGATION`.
+   `build_system_prompt` iterates `SqlFeature` in declaration order and
+   emits each line only if its feature is in the detected set.
+2. **Target-specific rule chunks.**
+   `TargetLanguage.system_prompt_section` now takes the feature set as
+   an argument. Both `CypherTarget` and `AqlTarget` keep a private
+   `_FEATURE_RULES: dict[SqlFeature, str]` mapping (see
+   `targets/cypher.py` and `targets/aql.py`) holding the multi-line rule
+   chunks per operation, and append only the chunks for features present.
+   The always-on base block (`MATCH`/`CREATE`/keyword list for Cypher,
+   the `FOR ... GRAPH` traversal idiom for AQL) is emitted unconditionally.
+
+### Trade-off
+
+The mechanism requires the AST detectors and the per-target rule chunks
+to stay in sync. Adding a rule chunk without a matching detector means
+the chunk never fires; adding a detector without a chunk is harmless but
+pointless. Whenever a new operation cluster is supported, the change is
+three-touch: a `SqlFeature` enum member, a detector branch in
+`detect_features`, and one entry in each target's `_FEATURE_RULES` dict.
 
 ---
 
@@ -266,28 +332,22 @@ here.
 
 ---
 
-## Comparison to yara-copilot
+## Generalising the pattern
 
-The reference project implements essentially the same pattern with much
-more machinery. This table maps yara-copilot concepts to `rows2graph`
-equivalents.
+The structural idea behind `rows2graph` is independent of both SQL and
+graph databases: *generate an artifact with an LLM, validate it with a
+deterministic compiler-like tool, then retry with the validator's errors
+as additional context*. Any domain that pairs an LLM-generatable
+artifact with a fast, programmatic validator fits the same shape — SQL
+migrations checked by a planner, configuration files checked by a schema
+validator, regex patterns checked against a sample corpus, infra
+manifests checked by `terraform validate`, security rules checked by
+their respective compilers.
 
-| yara-copilot concept | `rows2graph` equivalent | Notes |
-|---|---|---|
-| LangGraph `StateGraph` with nodes + edges | `SQLTranslator.translate()` with a `while` loop | Linear flow with one retry edge does not need a graph executor. |
-| `yr_dump_agent` node | Initial-generation block of `translator.py` | Same responsibility: build prompt, call LLM, extract output. |
-| `validate_rule_node` | `validator.validate()` call inside the loop | Protocol-dispatched instead of being a graph node. |
-| `fix_rule_node` | Fix block of `translator.py` | Rebuilds the fix prompt with accumulated error context. |
-| `should_fix_or_end` conditional edge | `while` condition + early `break` | Plain Python control flow. |
-| `StateGlobal` + mixins | Single `TranslationState` Pydantic model | The state is small enough to live in one class. |
-| `@dynamic_prompt` middleware | Schema passed as an argument to `build_system_prompt` | The schema is static per translator instance; no middleware needed. |
-| `RuleChecker` from `yrtc` | `CypherServerValidator` / `AqlServerValidator` | Equivalent role: compile-check without executing. |
-| Langfuse tracing | Standard `logging` module | Lighter-weight observability. |
-| MCP knowledge base + `read_kb_resource` | Schema mapping baked into system prompt | Small fixed schema — no need for retrieval at runtime. |
-| FastAPI + Uvicorn server | Demo CLI (`demo/cli.py`) | The framework is a library + reference demo, not a web service. |
-
-The shared structural idea: *"generate, then validate with a
-compiler-like tool, then retry with the errors as context"*. This pattern
-generalises beyond YARA rules and graph queries — to SQL migrations,
-config files, regex patterns, or any domain where a deterministic
-validator exists alongside an LLM.
+What this project demonstrates is that the pattern does not require a
+graph-orchestration runtime to express. The loop is a `while` block, the
+state is one Pydantic model, the extension points are three Protocols,
+and the per-query prompt is rebuilt from feature-gated chunks. A reader
+adapting the pattern to a new domain mostly replaces the schema mapping,
+the target language module, and the validator — the orchestrator stays
+unchanged.

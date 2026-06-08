@@ -2325,7 +2325,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rows2graph-ai"
+name = "rows2graph"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
