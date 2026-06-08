@@ -38,6 +38,15 @@ A minimal end-to-end usage::
         print(result.generated_query)
 """
 
+from rows2graph.events import (
+    CompletedEvent,
+    EventHandler,
+    FixGeneratedEvent,
+    GeneratedEvent,
+    MaxIterationsReachedEvent,
+    TranslationEvent,
+    ValidatedEvent,
+)
 from rows2graph.llm import (
     AnthropicConfig,
     AnthropicLLMClient,
@@ -73,11 +82,16 @@ __all__ = [
     "AqlSyntaxValidator",
     "AqlTarget",
     "ArangoDBConfig",
+    "CompletedEvent",
     "CypherServerValidator",
     "CypherSyntaxValidator",
     "CypherTarget",
     "EdgeMapping",
+    "EventHandler",
+    "FixGeneratedEvent",
+    "GeneratedEvent",
     "LLMClient",
+    "MaxIterationsReachedEvent",
     "ModelConfig",
     "Neo4jConfig",
     "NodeMapping",
@@ -89,7 +103,9 @@ __all__ = [
     "SchemaMapping",
     "ServerConfig",
     "TargetLanguage",
+    "TranslationEvent",
     "TranslationResult",
+    "ValidatedEvent",
     "load_model_config",
     "load_server_config",
     "make_llm",

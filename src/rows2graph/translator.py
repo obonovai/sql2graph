@@ -29,6 +29,15 @@ from time import perf_counter
 from types import TracebackType
 from typing import Any, Self
 
+from rows2graph.events import (
+    CompletedEvent,
+    EventHandler,
+    FixGeneratedEvent,
+    GeneratedEvent,
+    MaxIterationsReachedEvent,
+    TranslationEvent,
+    ValidatedEvent,
+)
 from rows2graph.llm import LLMClient
 from rows2graph.mapping import SchemaMapping
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
@@ -74,12 +83,24 @@ class SQLTranslator:
     ) -> None:
         self.close()
 
-    def translate(self, sql_query: str) -> TranslationResult:
+    def translate(
+        self,
+        sql_query: str,
+        on_event: EventHandler | None = None,
+    ) -> TranslationResult:
         """Translate a SQL query through the full feedback loop.
 
         Returns a :class:`TranslationResult` regardless of outcome — on
         ``max_iterations_reached`` the result still carries the last
         candidate query so the caller can inspect it.
+
+        Args:
+            sql_query: The SQL to translate.
+            on_event: Optional callback invoked at each loop milestone
+                (initial generation, each validation pass, each fix,
+                max-iterations hit, completion). See
+                :mod:`rows2graph.events`. Handler exceptions are caught,
+                logged at WARNING, and do not abort the translation.
         """
         start_time = perf_counter()
         target_name = self._target.name
@@ -105,6 +126,7 @@ class SQLTranslator:
         state.generated_query = self._target.extract_query(raw_content)
 
         logger.info("Initial query generated:\n%s", state.generated_query)
+        _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
         while state.validation_iteration < self._max_iterations:
             state.validation_iteration += 1
@@ -115,6 +137,15 @@ class SQLTranslator:
                 state.validation_passed = True
                 state.final_status = "success"
                 logger.info("Validation passed on iteration %d", state.validation_iteration)
+                _emit(
+                    on_event,
+                    ValidatedEvent(
+                        iteration=state.validation_iteration,
+                        query=state.generated_query or "",
+                        errors=[],
+                        passed=True,
+                    ),
+                )
                 break
 
             logger.info(
@@ -123,6 +154,15 @@ class SQLTranslator:
                 len(errors),
                 errors,
             )
+            _emit(
+                on_event,
+                ValidatedEvent(
+                    iteration=state.validation_iteration,
+                    query=state.generated_query or "",
+                    errors=list(errors),
+                    passed=False,
+                ),
+            )
 
             if state.validation_iteration >= self._max_iterations:
                 state.final_status = "max_iterations_reached"
@@ -130,6 +170,13 @@ class SQLTranslator:
                     "Max iterations (%d) reached with errors: %s",
                     self._max_iterations,
                     errors,
+                )
+                _emit(
+                    on_event,
+                    MaxIterationsReachedEvent(
+                        iteration=state.validation_iteration,
+                        errors=list(errors),
+                    ),
                 )
                 break
 
@@ -145,11 +192,18 @@ class SQLTranslator:
             state.generated_query = self._target.extract_query(raw_content)
 
             logger.info("Fix iteration %d produced:\n%s", state.validation_iteration, state.generated_query)
+            _emit(
+                on_event,
+                FixGeneratedEvent(
+                    iteration=state.validation_iteration,
+                    query=state.generated_query or "",
+                ),
+            )
 
         state.iterations_used = state.validation_iteration
         state.duration_seconds = perf_counter() - start_time
 
-        return TranslationResult(
+        result = TranslationResult(
             sql_query=state.sql_query,
             generated_query=state.generated_query,
             target_language=state.target_language,
@@ -159,6 +213,8 @@ class SQLTranslator:
             status=state.final_status,
             duration_seconds=state.duration_seconds,
         )
+        _emit(on_event, CompletedEvent(result=result))
+        return result
 
     def close(self) -> None:
         """Release LLM and validator resources.
@@ -176,3 +232,18 @@ class SQLTranslator:
 
 def _msg(role: str, content: str) -> dict[str, Any]:
     return {"role": role, "content": content}
+
+
+def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:
+    """Invoke an event handler, isolating its exceptions from the loop.
+
+    A misbehaving handler should not abort the user's translation — we log
+    the exception at WARNING and continue. The handler is responsible for
+    its own thread/coroutine safety.
+    """
+    if handler is None:
+        return
+    try:
+        handler(event)
+    except Exception:  # noqa: BLE001 — the whole point is to swallow user errors
+        logger.warning("Event handler raised on %s", type(event).__name__, exc_info=True)
