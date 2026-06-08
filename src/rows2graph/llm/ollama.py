@@ -14,11 +14,12 @@ client can satisfy the Protocol without importing this module.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any, Literal
 
-from ollama import Client, RequestError, ResponseError
+from ollama import AsyncClient, Client, RequestError, ResponseError
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
@@ -113,4 +114,59 @@ class OllamaLLMClient:
 
     def close(self) -> None:
         """No-op: ``ollama.Client`` does not expose a connection-pool close."""
+        return None
+
+
+class AsyncOllamaLLMClient:
+    """Asynchronous Ollama chat client.
+
+    Mirrors :class:`OllamaLLMClient`; the only differences are :meth:`chat`
+    is ``async def`` and uses :class:`ollama.AsyncClient`, and the retry
+    backoff sleeps via :func:`asyncio.sleep` rather than blocking the event
+    loop. Same :class:`OllamaConfig` — both clients can be built from the
+    same loaded config.
+    """
+
+    def __init__(self, config: OllamaConfig) -> None:
+        self._client = AsyncClient(host=config.host)
+        self._model = config.model
+        self._max_retries = config.max_retries
+        self._options: dict[str, Any] = {
+            "temperature": config.temperature,
+            "num_ctx": config.num_ctx,
+        }
+
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = await self._client.chat(
+                    model=self._model,
+                    messages=messages,
+                    options=self._options,
+                )
+                return response.message.content or ""
+            except ResponseError as exc:
+                if exc.status_code < 500:
+                    raise
+                last_exc = exc
+            except RequestError as exc:
+                last_exc = exc
+
+            if attempt < self._max_retries:
+                delay = float(1 << attempt)
+                logger.warning(
+                    "Ollama call failed (attempt %d/%d): %s — retrying in %.1fs",
+                    attempt + 1,
+                    self._max_retries + 1,
+                    last_exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        assert last_exc is not None
+        raise last_exc
+
+    async def close(self) -> None:
+        """No-op: ``ollama.AsyncClient`` does not expose a connection-pool close."""
         return None

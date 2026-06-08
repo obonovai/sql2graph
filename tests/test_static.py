@@ -997,3 +997,181 @@ def test_translator_omits_unused_rules_from_system_message() -> None:
     assert system_msg["role"] == "system"
     assert "CONTAINS" in system_msg["content"]
     assert "window function" not in system_msg["content"].lower()
+
+
+# ---------------------------------------------------------------------------
+# AsyncSQLTranslator end-to-end with fake async LLM
+# ---------------------------------------------------------------------------
+
+
+class _FakeAsyncLLM:
+    """In-process double for the AsyncLLMClient Protocol."""
+
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = list(responses)
+        self.calls: list[list[dict[str, Any]]] = []
+        self.closed = False
+
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
+        self.calls.append(list(messages))
+        return self._responses.pop(0)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def test_async_translator_returns_result_on_first_try_success() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> TranslationResult:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            result = await translator.translate("SELECT * FROM persons")
+        assert fake.closed is True
+        return result
+
+    result = asyncio.run(run())
+    assert result.validation_passed is True
+    assert result.status == "success"
+    assert result.iterations_used == 1
+    assert result.generated_query == "MATCH (p:Person) RETURN p"
+
+
+def test_async_translator_runs_fix_loop_on_validation_failure() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> TranslationResult:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            return await translator.translate("SELECT * FROM persons")
+
+    result = asyncio.run(run())
+    assert result.validation_passed is True
+    assert result.iterations_used == 2
+
+
+def test_async_translator_hits_max_iterations() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> TranslationResult:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)"] * 3)
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+            max_iterations=3,
+        ) as translator:
+            return await translator.translate("SELECT * FROM persons")
+
+    result = asyncio.run(run())
+    assert result.validation_passed is False
+    assert result.status == "max_iterations_reached"
+    assert result.iterations_used == 3
+
+
+def test_async_translator_emits_same_event_sequence_as_sync() -> None:
+    """The async translator emits the same event sequence as the sync one
+    for an identical input — events are part of the cross-translator contract."""
+    import asyncio
+
+    from rows2graph import (
+        AsyncSQLTranslator,
+        CompletedEvent,
+        FixGeneratedEvent,
+        GeneratedEvent,
+        TranslationEvent,
+        ValidatedEvent,
+    )
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> list[TranslationEvent]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        events: list[TranslationEvent] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            await translator.translate("SELECT * FROM persons", on_event=events.append)
+        return events
+
+    events = asyncio.run(run())
+    types = [type(e).__name__ for e in events]
+    assert types == [
+        "GeneratedEvent",
+        "ValidatedEvent",
+        "FixGeneratedEvent",
+        "ValidatedEvent",
+        "CompletedEvent",
+    ]
+    assert isinstance(events[0], GeneratedEvent) and events[0].iteration == 1
+    assert isinstance(events[1], ValidatedEvent) and events[1].passed is False
+    assert isinstance(events[2], FixGeneratedEvent) and events[2].iteration == 1
+    assert isinstance(events[3], ValidatedEvent) and events[3].passed is True
+    assert isinstance(events[4], CompletedEvent)
+
+
+def test_make_async_llm_dispatches_correctly() -> None:
+    from rows2graph import make_async_llm
+    from rows2graph.llm.anthropic import AsyncAnthropicLLMClient
+    from rows2graph.llm.ollama import AsyncOllamaLLMClient
+
+    with patch("rows2graph.llm.anthropic.AsyncAnthropic"):
+        llm = make_async_llm(AnthropicConfig(api_key="sk-ant-test"))
+        assert isinstance(llm, AsyncAnthropicLLMClient)
+
+    with patch("rows2graph.llm.ollama.AsyncClient"):
+        llm = make_async_llm(OllamaConfig(model="m", host="http://x:1"))
+        assert isinstance(llm, AsyncOllamaLLMClient)
+
+
+def test_make_async_validator_dispatches_correctly() -> None:
+    from rows2graph import make_async_validator
+    from rows2graph.validators import (
+        AsyncCypherSyntaxValidator,
+        AsyncNoopValidator,
+    )
+
+    assert isinstance(make_async_validator("cypher", "none"), AsyncNoopValidator)
+    assert isinstance(make_async_validator("cypher", "syntax"), AsyncCypherSyntaxValidator)
+
+
+def test_async_cypher_syntax_validator_matches_sync() -> None:
+    """Async syntax validator returns the same errors as its sync sibling."""
+    import asyncio
+
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async_v = AsyncCypherSyntaxValidator()
+    sync_v = CypherSyntaxValidator()
+    cases = [
+        "MATCH (p:Person) RETURN p",
+        "MATCH (p:Person)",  # missing RETURN
+        "",  # empty
+        "MATCH (p:Person RETURN p",  # unbalanced paren
+    ]
+    for q in cases:
+        sync_errors = sync_v.validate(q)
+        async_errors = asyncio.run(async_v.validate(q))
+        assert async_errors == sync_errors, f"divergence for query: {q!r}"

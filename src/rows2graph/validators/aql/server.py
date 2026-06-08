@@ -16,6 +16,7 @@ server config when ``--validation server``).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Literal
 
@@ -45,6 +46,20 @@ class ArangoDBConfig(BaseModel):
     graph_name: str
 
 
+def _validate_aql_sync(db: object, query: str) -> list[str]:
+    """Shared validation body for sync and async server validators."""
+    errors: list[str] = []
+    try:
+        db.aql.validate(query)  # type: ignore[attr-defined]
+    except AQLQueryValidateError as e:
+        logger.info("AQL validation error: %s", e)
+        errors.append(str(e))
+    except Exception as e:
+        logger.info("AQL validation failed: %s", e)
+        errors.append(f"AQL validation failed: {e}")
+    return errors
+
+
 class AqlServerValidator:
     """Validate AQL queries via ``db.aql.validate`` against an ArangoDB server."""
 
@@ -57,17 +72,33 @@ class AqlServerValidator:
         )
 
     def validate(self, query: str) -> list[str]:
-        errors: list[str] = []
-        try:
-            self._db.aql.validate(query)
-        except AQLQueryValidateError as e:
-            logger.info("AQL validation error: %s", e)
-            errors.append(str(e))
-        except Exception as e:
-            logger.info("AQL validation failed: %s", e)
-            errors.append(f"AQL validation failed: {e}")
-        return errors
+        return _validate_aql_sync(self._db, query)
 
     def close(self) -> None:
+        # python-arango uses pooled HTTP sessions; nothing persistent to close.
+        return None
+
+
+class AsyncAqlServerValidator:
+    """Async sibling of :class:`AqlServerValidator`.
+
+    python-arango ships no native async driver, so the sync HTTP call is
+    pushed to a worker thread via :func:`asyncio.to_thread`. That keeps the
+    event loop responsive without forcing the project onto an alternative
+    aioarango stack.
+    """
+
+    def __init__(self, config: ArangoDBConfig) -> None:
+        self._client = ArangoClient(hosts=config.url)
+        self._db = self._client.db(
+            config.database,
+            username=config.username,
+            password=config.password,
+        )
+
+    async def validate(self, query: str) -> list[str]:
+        return await asyncio.to_thread(_validate_aql_sync, self._db, query)
+
+    async def close(self) -> None:
         # python-arango uses pooled HTTP sessions; nothing persistent to close.
         return None

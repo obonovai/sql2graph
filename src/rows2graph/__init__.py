@@ -38,6 +38,7 @@ A minimal end-to-end usage::
         print(result.generated_query)
 """
 
+from rows2graph.async_translator import AsyncSQLTranslator
 from rows2graph.events import (
     CompletedEvent,
     EventHandler,
@@ -50,11 +51,15 @@ from rows2graph.events import (
 from rows2graph.llm import (
     AnthropicConfig,
     AnthropicLLMClient,
+    AsyncAnthropicLLMClient,
+    AsyncLLMClient,
+    AsyncOllamaLLMClient,
     LLMClient,
     ModelConfig,
     OllamaConfig,
     OllamaLLMClient,
     load_model_config,
+    make_async_llm,
     make_llm,
 )
 from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
@@ -65,6 +70,12 @@ from rows2graph.validators import (
     AqlServerValidator,
     AqlSyntaxValidator,
     ArangoDBConfig,
+    AsyncAqlServerValidator,
+    AsyncAqlSyntaxValidator,
+    AsyncCypherServerValidator,
+    AsyncCypherSyntaxValidator,
+    AsyncNoopValidator,
+    AsyncQueryValidator,
     CypherServerValidator,
     CypherSyntaxValidator,
     Neo4jConfig,
@@ -72,6 +83,7 @@ from rows2graph.validators import (
     QueryValidator,
     ServerConfig,
     load_server_config,
+    make_async_validator,
     make_validator,
 )
 
@@ -82,6 +94,16 @@ __all__ = [
     "AqlSyntaxValidator",
     "AqlTarget",
     "ArangoDBConfig",
+    "AsyncAnthropicLLMClient",
+    "AsyncAqlServerValidator",
+    "AsyncAqlSyntaxValidator",
+    "AsyncCypherServerValidator",
+    "AsyncCypherSyntaxValidator",
+    "AsyncLLMClient",
+    "AsyncNoopValidator",
+    "AsyncOllamaLLMClient",
+    "AsyncQueryValidator",
+    "AsyncSQLTranslator",
     "CompletedEvent",
     "CypherServerValidator",
     "CypherSyntaxValidator",
@@ -108,6 +130,8 @@ __all__ = [
     "ValidatedEvent",
     "load_model_config",
     "load_server_config",
+    "make_async_llm",
+    "make_async_validator",
     "make_llm",
     "make_target",
     "make_validator",

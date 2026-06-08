@@ -38,8 +38,8 @@ import yaml
 from pydantic import Field, TypeAdapter
 
 from rows2graph._env import interpolate_env
-from rows2graph.llm.anthropic import AnthropicConfig, AnthropicLLMClient
-from rows2graph.llm.ollama import OllamaConfig, OllamaLLMClient
+from rows2graph.llm.anthropic import AnthropicConfig, AnthropicLLMClient, AsyncAnthropicLLMClient
+from rows2graph.llm.ollama import AsyncOllamaLLMClient, OllamaConfig, OllamaLLMClient
 
 
 class LLMClient(Protocol):
@@ -53,6 +53,22 @@ class LLMClient(Protocol):
     def chat(self, messages: list[dict[str, Any]]) -> str: ...
 
     def close(self) -> None: ...
+
+
+class AsyncLLMClient(Protocol):
+    """Structural type for the async LLM backends.
+
+    The async translator
+    (:class:`rows2graph.async_translator.AsyncSQLTranslator`) consumes this
+    Protocol. Implementations must define both :meth:`chat` and
+    :meth:`close` as ``async``. Same shape as :class:`LLMClient` otherwise —
+    one chat method that takes a flat message list and returns the
+    assistant turn's text.
+    """
+
+    async def chat(self, messages: list[dict[str, Any]]) -> str: ...
+
+    async def close(self) -> None: ...
 
 
 ModelConfig = Annotated[OllamaConfig | AnthropicConfig, Field(discriminator="provider")]
@@ -88,13 +104,29 @@ def make_llm(config: OllamaConfig | AnthropicConfig) -> LLMClient:
     raise TypeError(f"Unknown model config type: {type(config).__name__}")
 
 
+def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient:
+    """Construct the appropriate :class:`AsyncLLMClient` for a loaded model config.
+
+    Parallels :func:`make_llm` — same config types, async client returned.
+    """
+    if isinstance(config, OllamaConfig):
+        return AsyncOllamaLLMClient(config)
+    if isinstance(config, AnthropicConfig):
+        return AsyncAnthropicLLMClient(config)
+    raise TypeError(f"Unknown model config type: {type(config).__name__}")
+
+
 __all__ = [
     "AnthropicConfig",
     "AnthropicLLMClient",
+    "AsyncAnthropicLLMClient",
+    "AsyncLLMClient",
+    "AsyncOllamaLLMClient",
     "LLMClient",
     "ModelConfig",
     "OllamaConfig",
     "OllamaLLMClient",
     "load_model_config",
+    "make_async_llm",
     "make_llm",
 ]

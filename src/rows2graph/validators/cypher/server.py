@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from neo4j import GraphDatabase
+from neo4j import AsyncGraphDatabase, GraphDatabase
 from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
@@ -69,3 +69,33 @@ class CypherServerValidator:
 
     def close(self) -> None:
         self._driver.close()
+
+
+class AsyncCypherServerValidator:
+    """Async sibling of :class:`CypherServerValidator`.
+
+    Uses :class:`neo4j.AsyncGraphDatabase` to drive the same ``EXPLAIN``
+    round-trip without blocking the event loop. Same :class:`Neo4jConfig`
+    — both validators consume the same loaded config.
+    """
+
+    def __init__(self, config: Neo4jConfig) -> None:
+        self._driver = AsyncGraphDatabase.driver(
+            config.uri,
+            auth=(config.username, config.password),
+        )
+        self._database = config.database
+
+    async def validate(self, query: str) -> list[str]:
+        errors: list[str] = []
+        try:
+            async with self._driver.session(database=self._database) as session:
+                result = await session.run(f"EXPLAIN {query}")
+                await result.consume()
+        except Exception as e:
+            logger.info("Cypher validation error: %s", e)
+            errors.append(str(e))
+        return errors
+
+    async def close(self) -> None:
+        await self._driver.close()

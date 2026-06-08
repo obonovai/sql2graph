@@ -38,11 +38,19 @@ import yaml
 from pydantic import Field, TypeAdapter
 
 from rows2graph._env import interpolate_env
-from rows2graph.validators.aql.server import AqlServerValidator, ArangoDBConfig
-from rows2graph.validators.aql.syntax import AqlSyntaxValidator
-from rows2graph.validators.cypher.server import CypherServerValidator, Neo4jConfig
-from rows2graph.validators.cypher.syntax import CypherSyntaxValidator
-from rows2graph.validators.noop import NoopValidator
+from rows2graph.validators.aql.server import (
+    AqlServerValidator,
+    ArangoDBConfig,
+    AsyncAqlServerValidator,
+)
+from rows2graph.validators.aql.syntax import AqlSyntaxValidator, AsyncAqlSyntaxValidator
+from rows2graph.validators.cypher.server import (
+    AsyncCypherServerValidator,
+    CypherServerValidator,
+    Neo4jConfig,
+)
+from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator, CypherSyntaxValidator
+from rows2graph.validators.noop import AsyncNoopValidator, NoopValidator
 
 
 class QueryValidator(Protocol):
@@ -51,6 +59,18 @@ class QueryValidator(Protocol):
     def validate(self, query: str) -> list[str]: ...
 
     def close(self) -> None: ...
+
+
+class AsyncQueryValidator(Protocol):
+    """Structural type for any async query validator.
+
+    Consumed by :class:`rows2graph.async_translator.AsyncSQLTranslator`.
+    Same shape as :class:`QueryValidator` with both methods made async.
+    """
+
+    async def validate(self, query: str) -> list[str]: ...
+
+    async def close(self) -> None: ...
 
 
 ServerConfig = Annotated[Neo4jConfig | ArangoDBConfig, Field(discriminator="type")]
@@ -117,10 +137,57 @@ def make_validator(
     raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
 
 
+def make_async_validator(
+    target: str,
+    mode: str,
+    *,
+    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+) -> AsyncQueryValidator:
+    """Construct an :class:`AsyncQueryValidator` from a target/mode pair.
+
+    Parallels :func:`make_validator` with the same target/mode/server_config
+    contract — only the returned validator's interface is async.
+    """
+    if mode == "none":
+        return AsyncNoopValidator()
+
+    if mode == "syntax":
+        if target == "cypher":
+            return AsyncCypherSyntaxValidator()
+        if target == "aql":
+            return AsyncAqlSyntaxValidator()
+        raise ValueError(f"Unknown target language: {target!r}")
+
+    if mode == "server":
+        if server_config is None:
+            raise ValueError(f"validation_mode='server' requires a server_config (target={target!r})")
+        if target == "cypher":
+            if not isinstance(server_config, Neo4jConfig):
+                raise TypeError(
+                    f"target='cypher' with mode='server' requires a Neo4jConfig, got {type(server_config).__name__}"
+                )
+            return AsyncCypherServerValidator(server_config)
+        if target == "aql":
+            if not isinstance(server_config, ArangoDBConfig):
+                raise TypeError(
+                    f"target='aql' with mode='server' requires an ArangoDBConfig, got {type(server_config).__name__}"
+                )
+            return AsyncAqlServerValidator(server_config)
+        raise ValueError(f"Unknown target language: {target!r}")
+
+    raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
+
+
 __all__ = [
     "AqlServerValidator",
     "AqlSyntaxValidator",
     "ArangoDBConfig",
+    "AsyncAqlServerValidator",
+    "AsyncAqlSyntaxValidator",
+    "AsyncCypherServerValidator",
+    "AsyncCypherSyntaxValidator",
+    "AsyncNoopValidator",
+    "AsyncQueryValidator",
     "CypherServerValidator",
     "CypherSyntaxValidator",
     "Neo4jConfig",
@@ -128,5 +195,6 @@ __all__ = [
     "QueryValidator",
     "ServerConfig",
     "load_server_config",
+    "make_async_validator",
     "make_validator",
 ]

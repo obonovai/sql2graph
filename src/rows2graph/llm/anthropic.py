@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
@@ -88,48 +88,112 @@ class AnthropicLLMClient:
         self._max_tokens = config.max_output_tokens
 
     def chat(self, messages: list[dict[str, Any]]) -> str:
-        system_parts: list[str] = []
-        chat_messages: list[dict[str, Any]] = []
-        for message in messages:
-            if message["role"] == "system":
-                system_parts.append(message["content"])
-            else:
-                chat_messages.append({"role": message["role"], "content": message["content"]})
-
-        system_text = "\n\n".join(system_parts) if system_parts else None
-
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "max_tokens": self._max_tokens,
-            "temperature": self._temperature,
-            "messages": chat_messages,
-        }
-        if system_text is not None:
-            kwargs["system"] = [
-                {
-                    "type": "text",
-                    "text": system_text,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ]
-
+        kwargs = _build_anthropic_kwargs(
+            messages,
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+        )
         response = self._client.messages.create(**kwargs)
-
-        if response.usage is not None:
-            logger.info(
-                "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
-                response.usage.input_tokens,
-                response.usage.output_tokens,
-                getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-                getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
-                self._model,
-            )
-
-        for block in response.content:
-            if getattr(block, "type", None) == "text":
-                return block.text or ""
-        return ""
+        _log_anthropic_usage(response, self._model)
+        return _extract_anthropic_text(response)
 
     def close(self) -> None:
         """No-op: ``Anthropic`` manages its own HTTP session lifecycle."""
         return None
+
+
+def _build_anthropic_kwargs(
+    messages: list[dict[str, Any]],
+    *,
+    model: str,
+    max_tokens: int,
+    temperature: float,
+) -> dict[str, Any]:
+    """Shared kwargs builder for the sync and async Anthropic clients.
+
+    Separates system turns from user/assistant turns and marks the system
+    block ``cache_control: ephemeral`` so the prompt cache is shared across
+    the generate-validate-fix iterations of a single translation.
+    """
+    system_parts: list[str] = []
+    chat_messages: list[dict[str, Any]] = []
+    for message in messages:
+        if message["role"] == "system":
+            system_parts.append(message["content"])
+        else:
+            chat_messages.append({"role": message["role"], "content": message["content"]})
+
+    system_text = "\n\n".join(system_parts) if system_parts else None
+
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": chat_messages,
+    }
+    if system_text is not None:
+        kwargs["system"] = [
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+    return kwargs
+
+
+def _log_anthropic_usage(response: Any, model: str) -> None:
+    """Shared usage-logging helper for sync and async clients."""
+    if response.usage is not None:
+        logger.info(
+            "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+            getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+            getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+            model,
+        )
+
+
+def _extract_anthropic_text(response: Any) -> str:
+    """Shared response-extraction helper for sync and async clients."""
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            return block.text or ""
+    return ""
+
+
+class AsyncAnthropicLLMClient:
+    """Asynchronous chat client for the direct Anthropic API.
+
+    Mirrors :class:`AnthropicLLMClient` shape for shape; the only
+    differences are :meth:`chat` is ``async def`` and uses
+    :class:`anthropic.AsyncAnthropic`, and :meth:`close` actually does work
+    (the async SDK exposes ``aclose()`` on its underlying httpx client).
+
+    Behavior — prompt caching, retry/backoff via the SDK, usage logging —
+    is identical to the sync client. Same :class:`AnthropicConfig`; both
+    clients can be constructed from the same loaded config.
+    """
+
+    def __init__(self, config: AnthropicConfig) -> None:
+        self._client = AsyncAnthropic(api_key=config.api_key, max_retries=config.max_retries)
+        self._model = config.model
+        self._temperature = config.temperature
+        self._max_tokens = config.max_output_tokens
+
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
+        kwargs = _build_anthropic_kwargs(
+            messages,
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+        )
+        response = await self._client.messages.create(**kwargs)
+        _log_anthropic_usage(response, self._model)
+        return _extract_anthropic_text(response)
+
+    async def close(self) -> None:
+        """Release the underlying httpx connection pool."""
+        await self._client.close()

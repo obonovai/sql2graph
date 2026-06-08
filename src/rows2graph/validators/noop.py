@@ -18,3 +18,13 @@ class NoopValidator:
 
     def close(self) -> None:
         return None
+
+
+class AsyncNoopValidator:
+    """Async sibling of :class:`NoopValidator`."""
+
+    async def validate(self, query: str) -> list[str]:  # noqa: ARG002
+        return []
+
+    async def close(self) -> None:
+        return None
