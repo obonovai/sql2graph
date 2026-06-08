@@ -18,6 +18,17 @@ dependencies = [
     "sqlglot>=23",
 ]
 
+[project.optional-dependencies]
+eval = [
+    "apted>=1.0.3",
+    "jupyter>=1.1",
+    "ipykernel>=6.29",
+    "pandas>=2.2",
+    "matplotlib>=3.9",
+    "psycopg[binary]>=3.2",
+    "tabulate>=0.9",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=1.16.1",

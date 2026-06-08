@@ -13,3 +13,6 @@ build/
 .env.*
 .DS_Store
 *.swp
+evaluation/reports/
+evaluation/outputs/
+.ipynb_checkpoints/
