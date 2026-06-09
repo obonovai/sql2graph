@@ -9,11 +9,19 @@ schema mapping. Every generated query is automatically validated; on failure
 the validator's errors are fed back to the LLM for correction, up to a
 configurable number of iterations.
 
+The framework exposes both a synchronous orchestrator (`SQLTranslator`) and an
+asynchronous sibling (`AsyncSQLTranslator`) so callers can pick the model that
+matches their environment — sync for scripts, evaluation notebooks, and the
+CLI; async for UIs and concurrent multi-translation services. Both support an
+optional typed event callback that surfaces every loop milestone in real time;
+the async path additionally supports token-by-token streaming.
+
 The codebase is structured as a *framework + reference demo*:
 
 * `src/rows2graph/` — a library exposing typed components (schema mapping,
   LLM client, target language, validator, orchestrator) connected through
-  small structural Protocols.
+  small structural Protocols. Both sync and async variants of the LLM
+  client, validator, and translator ship side by side.
 * `demo/cli.py` — a parametrized command-line client that exercises the
   library API. Use it directly, or copy it as a starting point for embedding
   the framework into a larger system.
@@ -73,6 +81,13 @@ The codebase is structured as a *framework + reference demo*:
                   └──────────────┘
 ```
 
+`AsyncSQLTranslator` mirrors this flow step-for-step — same prompts, same
+state, same iteration semantics — with `await` at the LLM and validator
+call sites. Both translators accept an optional `on_event` callback that
+fires at every milestone (`GeneratedEvent`, `ValidatedEvent`,
+`FixGeneratedEvent`, `MaxIterationsReachedEvent`, `CompletedEvent`); the
+async path also accepts `stream_to` for token-by-token output.
+
 See `docs/ARCHITECTURE.md` for the deeper technical reference, including a
 discussion of why the loop is implemented as plain Python rather than a
 graph-orchestration framework, and `docs/API.md` for the library API and YAML
@@ -92,6 +107,14 @@ distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
 no string predicates. On any parser failure the function returns
 `ALL_FEATURES`, which restores the pre-refactor "ship every rule" behaviour
 — unparseable input degrades prompt focus, never translation correctness.
+
+The Anthropic backends (sync and async) send the assembled system block
+with `cache_control: ephemeral` set, so iterations 2+ of any multi-iteration
+translation read the schema + rules from Anthropic's prompt cache instead
+of re-billing them as input tokens. See `src/rows2graph/llm/anthropic.py`
+— the `Anthropic call:` log line reports `cache_read` and `cache_write`
+counts alongside the regular input/output totals so cache hit rate is
+observable per call.
 
 ## Install
 
@@ -179,14 +202,57 @@ with SQLTranslator(mapping, llm, target, validator) as translator:
         print(f"Failed after {result.iterations_used} iterations: {result.validation_errors}")
 ```
 
+### Async variant
+
+For UI integration, concurrent translations, or token streaming, use
+`AsyncSQLTranslator`. The same configs construct the async stack via
+`make_async_llm` and `make_async_validator`; the loop, prompts, events,
+and result type are identical to the sync path.
+
+```python
+import asyncio
+from rows2graph import (
+    AsyncSQLTranslator, SchemaMapping, TranslationEvent,
+    load_model_config, make_async_llm, make_async_validator, make_target,
+)
+
+
+def on_event(event: TranslationEvent) -> None:
+    print(f"  → {type(event).__name__}")
+
+
+async def main() -> None:
+    mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+    llm = make_async_llm(load_model_config("config/models/anthropic.yaml"))
+    target = make_target("cypher")
+    validator = make_async_validator("cypher", "syntax")
+
+    async with AsyncSQLTranslator(mapping, llm, target, validator) as translator:
+        result = await translator.translate(
+            "SELECT name FROM supplier WHERE suppkey = 1337",
+            on_event=on_event,
+            stream_to=lambda chunk: print(chunk, end="", flush=True),
+        )
+    print(f"\n→ {result.status} in {result.duration_seconds:.2f}s")
+
+
+asyncio.run(main())
+```
+
 ## Development
 
 ```bash
-uv run mypy src/                 # Strict type checking
-uv run ruff check .              # Linting
-uv run ruff format .             # Formatting
-uv run pytest                    # Tests (mocked — no LLM or DB calls)
+uv run mypy src/                  # Strict type checking
+uv run ruff check .               # Linting
+uv run ruff format .              # Formatting
+uv run pytest                     # Static tests (mocked — no LLM or DB calls)
+uv run pytest -m integration      # Integration tests (real Anthropic + Neo4j)
 ```
+
+The static suite (~100 tests) is what runs by default; the `integration`
+marker is excluded via `pyproject.toml`. Integration tests gracefully skip
+when their credentials are absent — see `tests/README.md` for the env-var
+reference and a `docker run` recipe for Neo4j.
 
 The project enforces `mypy --strict` across all source files and the same
 ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).

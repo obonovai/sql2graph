@@ -76,22 +76,24 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 |---|---|---|
 | `mapping.py` | Parse and validate the schema mapping YAML. | `SchemaMapping.from_yaml(path) -> SchemaMapping` |
 | `state.py`   | Loop-internal state + public result. | `TranslationState`, `TranslationResult` |
+| `events.py`  | Typed iteration events emitted by the loop. | `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`, `MaxIterationsReachedEvent`, `CompletedEvent`, `TranslationEvent`, `EventHandler` |
 | `prompts.py` | Assemble system/user/fix prompts. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `format_schema_context` |
 | `sql_features.py` | Parse SQL with sqlglot and detect which operation clusters it uses. | `SqlFeature`, `ALL_FEATURES`, `detect_features` |
 | `_env.py` | YAML env-var interpolation helper. | `interpolate_env` (internal) |
-| `llm/__init__.py` | LLM Protocol + discriminated-union config. | `LLMClient`, `ModelConfig`, `load_model_config`, `make_llm` |
-| `llm/ollama.py`   | Wrap `ollama.Client`. | `OllamaConfig`, `OllamaLLMClient` |
-| `llm/anthropic.py`| Wrap `anthropic.Anthropic` (direct API). | `AnthropicConfig`, `AnthropicLLMClient` |
+| `llm/__init__.py` | LLM Protocols + discriminated-union config. | `LLMClient`, `AsyncLLMClient`, `StreamCallback`, `ModelConfig`, `load_model_config`, `make_llm`, `make_async_llm` |
+| `llm/ollama.py`   | Wrap `ollama.Client` and `ollama.AsyncClient`. | `OllamaConfig`, `OllamaLLMClient`, `AsyncOllamaLLMClient` |
+| `llm/anthropic.py`| Wrap `anthropic.Anthropic` and `anthropic.AsyncAnthropic` (direct API). | `AnthropicConfig`, `AnthropicLLMClient`, `AsyncAnthropicLLMClient` |
 | `targets/__init__.py` | Target-language Protocol + factory. | `TargetLanguage`, `make_target` |
 | `targets/cypher.py`   | Cypher prompt + extractor. | `CypherTarget` |
 | `targets/aql.py`      | AQL prompt + extractor. | `AqlTarget(graph_name)` |
-| `validators/__init__.py` | Validator Protocol + discriminated-union config. | `QueryValidator`, `ServerConfig`, `load_server_config`, `make_validator` |
-| `validators/noop.py` | Pass-through. | `NoopValidator` |
-| `validators/cypher/syntax.py` | Regex-based Cypher validation. | `CypherSyntaxValidator` |
-| `validators/cypher/server.py` | Neo4j `EXPLAIN` validation + `Neo4jConfig`. | `Neo4jConfig`, `CypherServerValidator` |
-| `validators/aql/syntax.py` | Regex-based AQL validation. | `AqlSyntaxValidator` |
-| `validators/aql/server.py` | ArangoDB `db.aql.validate` validation + `ArangoDBConfig`. | `ArangoDBConfig`, `AqlServerValidator` |
-| `translator.py` | Orchestrate the loop. | `SQLTranslator(...)` |
+| `validators/__init__.py` | Validator Protocols + discriminated-union config. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator` |
+| `validators/noop.py` | Pass-through (sync + async). | `NoopValidator`, `AsyncNoopValidator` |
+| `validators/cypher/syntax.py` | Regex-based Cypher validation (sync + async). | `CypherSyntaxValidator`, `AsyncCypherSyntaxValidator` |
+| `validators/cypher/server.py` | Neo4j `EXPLAIN` validation (sync + async) + `Neo4jConfig`. | `Neo4jConfig`, `CypherServerValidator`, `AsyncCypherServerValidator` |
+| `validators/aql/syntax.py` | Regex-based AQL validation (sync + async). | `AqlSyntaxValidator`, `AsyncAqlSyntaxValidator` |
+| `validators/aql/server.py` | ArangoDB `db.aql.validate` validation (sync + async) + `ArangoDBConfig`. | `ArangoDBConfig`, `AqlServerValidator`, `AsyncAqlServerValidator` |
+| `translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
+| `async_translator.py` | Async sibling of `translator.py`. | `AsyncSQLTranslator(...)` |
 
 ---
 
@@ -129,6 +131,128 @@ without validating it again.
 
 ---
 
+## Async path
+
+`AsyncSQLTranslator` lives next to `SQLTranslator` in
+`src/rows2graph/async_translator.py` and exposes the same surface — same
+constructor parameters, same `translate()` return type, same iteration
+semantics — with `await` at the LLM and validator call sites. Both
+translators co-exist; the sync path stays the default for scripts,
+notebooks, and the CLI.
+
+**Why bother, given that the loop is sequential per translation?** A
+single translation will not finish faster under async — each iteration's
+`chat → validate → fix` chain genuinely depends on the previous result.
+The wins are elsewhere:
+
+- **UI integration.** Streamlit and other event-loop-based frontends
+  cannot show progress while a blocking LLM call holds the event loop.
+  An async translator yields between calls, so the UI thread keeps
+  painting.
+- **Concurrent translations.** A service that fields several translations
+  in parallel costs one event-loop task per translation, not one thread.
+- **Streaming.** Token-by-token output requires an async generator
+  somewhere; the async path makes that a small extension (see "Streaming"
+  below) rather than a rewrite.
+- **Cancellation.** `asyncio.CancelledError` propagates cleanly through
+  `await self._llm.chat(...)` if the caller decides to abandon a
+  translation.
+
+**Structural mirroring, not divergence.** The async translator's
+`translate()` body is a copy of the sync one with `await` added at the
+right places. The events emitted, the iteration numbering, the
+`TranslationResult` produced, and even the log lines are identical. Tests
+in `tests/test_static.py` assert event-sequence parity between the two
+paths against the same fake LLM.
+
+**Shared helpers prevent silent divergence in the interesting logic.**
+`llm/anthropic.py` factors `_build_anthropic_kwargs`, `_log_anthropic_usage`,
+and `_extract_anthropic_text` out of both sync and async `chat()`
+implementations, so prompt caching, usage logging, and response extraction
+have one definition each. The translator loop body is the one place that
+genuinely duplicates — kept structurally identical, watched by parity
+tests.
+
+**Streaming.** When `AsyncLLMClient.chat(messages, stream_to=cb)` receives
+a non-None callback, the implementation switches to the SDK's streaming
+endpoint (`anthropic.messages.stream(...)` or
+`ollama.AsyncClient.chat(..., stream=True)`) and calls `cb(delta)` for
+every text chunk while still returning the assembled string at the end.
+`AsyncSQLTranslator.translate(sql, stream_to=...)` forwards the callback
+to each LLM call in the loop. Ollama deliberately falls back to
+non-streaming on retries so the caller's UI buffer does not get
+contaminated by deltas from a discarded prior attempt.
+
+---
+
+## Iteration events
+
+The loop emits a typed event at every milestone. The contract is in
+`src/rows2graph/events.py`:
+
+```python
+@dataclass(frozen=True)
+class GeneratedEvent:           # initial LLM call finished
+    iteration: int              # always 1
+    query: str
+
+@dataclass(frozen=True)
+class ValidatedEvent:           # one validate() call finished
+    iteration: int
+    query: str
+    errors: list[str]
+    passed: bool
+
+@dataclass(frozen=True)
+class FixGeneratedEvent:        # a fix LLM call finished
+    iteration: int              # the iteration that just failed
+    query: str                  # candidate for iteration N+1
+
+@dataclass(frozen=True)
+class MaxIterationsReachedEvent:
+    iteration: int
+    errors: list[str]
+
+@dataclass(frozen=True)
+class CompletedEvent:           # always emitted last
+    result: TranslationResult
+
+TranslationEvent = (
+    GeneratedEvent | ValidatedEvent | FixGeneratedEvent
+    | MaxIterationsReachedEvent | CompletedEvent
+)
+EventHandler = Callable[[TranslationEvent], None]
+```
+
+Both `SQLTranslator.translate` and `AsyncSQLTranslator.translate` accept
+an optional `on_event: EventHandler | None = None` parameter. Iteration
+numbering matches the existing log lines exactly: `iteration=N` always
+refers to validation pass N, so `FixGeneratedEvent.iteration=N` means
+"the fix produced after iteration N failed; this candidate will be
+validated as iteration N+1". This is the convention to internalise once
+when consuming events.
+
+**Handler exceptions are isolated.** Both translators wrap each handler
+invocation in `_emit(handler, event)` (defined at the bottom of
+`translator.py` / `async_translator.py`), which catches all exceptions,
+logs them at WARNING, and returns. A misbehaving handler cannot abort a
+user's translation. The trade-off is that handler bugs surface in logs
+rather than as direct exceptions — acceptable for an observer pattern.
+
+**Why typed events instead of subscribing to logger output?** The Streamlit
+UI's earlier revision parsed library log strings ("Initial query
+generated", "Validation passed on iteration N", etc.) to reconstruct
+iteration progress for its timeline. That contract was brittle: a tweak
+to a log format would silently break the UI's progress display. Typed
+events make the contract explicit, statically checked, and trivially
+testable with `events.append` as a handler.
+
+The existing log lines stay emitted unchanged so any other code that
+already depended on them continues to work; events are an additive
+overlay.
+
+---
+
 ## Prompt strategy
 
 Three distinct prompts, built by separate functions in `prompts.py`:
@@ -160,6 +284,23 @@ accumulated context.
 The three prompt builders are plain function calls that append to a
 shared `messages` list — no graph nodes, no middleware, no separate
 agents.
+
+### Anthropic prompt caching
+
+The Anthropic backends — both `AnthropicLLMClient` and
+`AsyncAnthropicLLMClient` — emit the assembled system block with
+`cache_control: {"type": "ephemeral"}` set. The schema + rules block is
+identical across all iterations of a single translation, so iterations 2+
+read it from Anthropic's prompt cache instead of paying for it as input
+tokens. With a 1024-token minimum (2048 on Haiku) and a 5-minute TTL, a
+3-iteration multi-iteration translation typically lands ~90% of its
+system-prompt cost on cache reads.
+
+Cache hit/write counts surface in the per-call `Anthropic call:` INFO log
+line so consumers can observe cache effectiveness directly (see
+`_log_anthropic_usage` in `src/rows2graph/llm/anthropic.py`). The
+single-shot first call necessarily writes; every subsequent retry within
+the TTL reads.
 
 ---
 
@@ -251,6 +392,18 @@ or Anthropic config: it loads the file once, lets Pydantic pick the right
 subclass, and the rest of the program is statically typed against the
 union.
 
+Both `AnthropicConfig` and `OllamaConfig` expose a `max_retries: int = 3`
+field (validated `>= 0`). `AnthropicConfig` forwards it to the SDK's
+built-in retry layer, which already does exponential backoff with jitter
+on 408/409/429/5xx and connection errors. `OllamaConfig` is consumed by a
+handwritten exponential-backoff loop inside
+`OllamaLLMClient.chat()` / `AsyncOllamaLLMClient.chat()` — the `ollama`
+SDK has no native retry — that retries on `RequestError` (connection
+issues) and `ResponseError` with `status_code >= 500`, sleeping 1s, 2s,
+4s, …. 4xx responses propagate immediately on the assumption that they
+signal client-side mistakes a retry cannot fix (unknown model, malformed
+request).
+
 ---
 
 ## Protocol-typed extension points
@@ -294,19 +447,26 @@ implementation.
 * **Fewer dependencies.** `ollama` is a thin HTTP wrapper; `anthropic` is
   a focused Anthropic API client. LangChain pulls in hundreds of packages
   transitively.
-* **Synchronous flow is easier to reason about.** The
-  generate–validate–fix loop is inherently sequential — no parallelism,
-  no streaming, no complex I/O scheduling. Async adds complexity without
-  benefit here.
+* **The sync loop is easy to read and modify.** It is one screen of
+  Python in `translator.py` with no framework machinery hiding control
+  flow. The async path (`async_translator.py`) is a structural mirror,
+  not a separate framework — `await` at the same call sites, same
+  prompts, same events, same `TranslationResult`. The trade-off is two
+  near-identical loop bodies; the upside is that neither path imports
+  any orchestration layer.
 * **No framework lock-in.** Adding a new provider is a ~30-line class
-  against the `LLMClient` protocol, not a rewiring of a chain-of-runnables.
+  against the `LLMClient` (or `AsyncLLMClient`) protocol, not a rewiring
+  of a chain-of-runnables.
 * **Easier to test.** Mocking `ollama.Client` or `anthropic.Anthropic` is
-  trivial; mocking LangChain's full ecosystem is not.
+  trivial; mocking LangChain's full ecosystem is not. The
+  `_FakeLLM` / `_FakeAsyncLLM` doubles in `tests/test_static.py` are a
+  dozen lines each.
 
 The trade-off: if the project grows to need tool calling, multi-agent
-orchestration, persistent checkpointing, or streaming UI, a framework
-like LangGraph would start paying for itself. None of those are needed
-here.
+orchestration, or persistent checkpointing, a framework like LangGraph
+would start paying for itself. Streaming and async are already covered
+by the existing protocols, so those alone do not justify the framework
+overhead.
 
 ---
 
@@ -324,11 +484,26 @@ here.
   prompt-section generation (for example, AQL prompts that enumerate
   vertex-collection names explicitly) would need to widen the Protocol
   to accept the schema as a parameter.
-* **No streaming output.** The translator waits for the full LLM
-  response before extracting a query. If translation latency becomes a
-  user-facing concern, a `chat_stream` method on `LLMClient` could
-  surface tokens as they arrive, at the cost of an incremental
-  `extract_query` implementation per target language.
+* **Sync and async translator bodies duplicate the loop.**
+  `SQLTranslator.translate` and `AsyncSQLTranslator.translate` are kept
+  structurally identical by hand. Logic that lives entirely *inside*
+  either method (state transitions, event-emission ordering, iteration
+  numbering) has no shared definition. The mitigations are (a) shared
+  helpers for the interesting non-loop logic (Anthropic kwargs builder,
+  usage logger, response extractor), and (b) explicit parity tests in
+  `tests/test_static.py` that drive both translators with the same fake
+  LLM and assert identical event sequences. If a future change
+  introduces a real algorithmic divergence between the two, this would
+  be the place to factor a shared helper out — but trying to share the
+  loop bodies themselves would force one path to compromise (probably
+  the sync one — a sync function that wraps an async coroutine via
+  `asyncio.run` is awkward and erases the sync path's "no event loop"
+  property).
+* **Streaming is async-only.** The `stream_to` callback is on
+  `AsyncLLMClient.chat`, not `LLMClient.chat`. A sync streaming variant
+  would block while consuming the stream, which defeats the point of
+  streaming (live UI feedback); the sync path is for callers that just
+  want a final string back.
 
 ---
 

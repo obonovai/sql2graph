@@ -38,14 +38,43 @@ class LLMClient(Protocol):
     def chat(self, messages: list[dict[str, Any]]) -> str: ...
     def close(self) -> None: ...
 
+
+StreamCallback = Callable[[str], None]
+"""Receives one text delta per call when streaming."""
+
+
+class AsyncLLMClient(Protocol):
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        stream_to: StreamCallback | None = None,
+    ) -> str: ...
+    async def close(self) -> None: ...
+
+
 ModelConfig = OllamaConfig | AnthropicConfig   # discriminated on .provider
 
 def load_model_config(path: Path | str) -> OllamaConfig | AnthropicConfig
 def make_llm(config: OllamaConfig | AnthropicConfig) -> LLMClient
+def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient
 ```
 
-`OllamaConfig` and `AnthropicConfig` are typed Pydantic models. See the
-YAML reference below for their field layouts.
+`OllamaConfig` and `AnthropicConfig` are typed Pydantic models — same
+config drives both the sync and async backends. See the YAML reference
+below for their field layouts; both include `max_retries: int = 3`.
+
+Concrete classes (exported from the top-level package):
+`AnthropicLLMClient` / `AsyncAnthropicLLMClient`,
+`OllamaLLMClient` / `AsyncOllamaLLMClient`. Use the factories above unless
+you have a reason to instantiate directly.
+
+When `AsyncLLMClient.chat` is called with a non-None `stream_to`, the
+implementation switches to its provider's streaming endpoint and invokes
+the callback for each text delta as it arrives, returning the assembled
+text when the stream completes. With `stream_to=None` (the default) the
+call is a single-round-trip request — useful for callers that don't need
+a live display.
 
 ### Target language components
 
@@ -69,6 +98,12 @@ class QueryValidator(Protocol):
     def validate(self, query: str) -> list[str]: ...
     def close(self) -> None: ...
 
+
+class AsyncQueryValidator(Protocol):
+    async def validate(self, query: str) -> list[str]: ...
+    async def close(self) -> None: ...
+
+
 ServerConfig = Neo4jConfig | ArangoDBConfig    # discriminated on .type
 
 def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig
@@ -78,13 +113,26 @@ def make_validator(
     *,
     server_config: Neo4jConfig | ArangoDBConfig | None = None,
 ) -> QueryValidator
+def make_async_validator(
+    target: str,
+    mode: str,
+    *,
+    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+) -> AsyncQueryValidator
 ```
 
-`make_validator` raises `ValueError` if `mode == "server"` and
+Both factories raise `ValueError` if `mode == "server"` and
 `server_config` is missing, and `TypeError` if the `server_config`'s type
 does not match `target`.
 
-### Orchestrator: `SQLTranslator`
+Concrete async classes (also exported from the top-level package):
+`AsyncCypherSyntaxValidator`, `AsyncAqlSyntaxValidator`,
+`AsyncNoopValidator`, `AsyncCypherServerValidator` (uses
+`neo4j.AsyncGraphDatabase`), `AsyncAqlServerValidator` (wraps
+python-arango calls in `asyncio.to_thread` — the underlying SDK has no
+async driver). Same constructor signatures as their sync siblings.
+
+### Orchestrator: `SQLTranslator` (sync) and `AsyncSQLTranslator` (async)
 
 ```python
 class SQLTranslator:
@@ -97,14 +145,44 @@ class SQLTranslator:
         max_iterations: int = 3,
     ) -> None: ...
 
-    def translate(self, sql_query: str) -> TranslationResult: ...
+    def translate(
+        self,
+        sql_query: str,
+        on_event: EventHandler | None = None,
+    ) -> TranslationResult: ...
     def close(self) -> None: ...
     def __enter__(self) -> SQLTranslator: ...
     def __exit__(self, *exc: object) -> None: ...
+
+
+class AsyncSQLTranslator:
+    def __init__(
+        self,
+        schema_mapping: SchemaMapping,
+        llm: AsyncLLMClient,
+        target: TargetLanguage,
+        validator: AsyncQueryValidator,
+        max_iterations: int = 3,
+    ) -> None: ...
+
+    async def translate(
+        self,
+        sql_query: str,
+        on_event: EventHandler | None = None,
+        stream_to: StreamCallback | None = None,
+    ) -> TranslationResult: ...
+    async def close(self) -> None: ...
+    async def __aenter__(self) -> AsyncSQLTranslator: ...
+    async def __aexit__(self, *exc: object) -> None: ...
 ```
 
-`SQLTranslator` is a context manager: use `with SQLTranslator(...)` to
-ensure both the LLM client and the validator are closed even on exception.
+Both translators are context managers: use `with SQLTranslator(...)` or
+`async with AsyncSQLTranslator(...)` to ensure the LLM client and
+validator are closed even on exception.
+
+Same `TranslationResult`, same iteration semantics, same prompts — see
+`docs/ARCHITECTURE.md` § "Async path" for the rationale and the parity
+contract.
 
 ### `TranslationResult`
 
@@ -119,6 +197,54 @@ class TranslationResult(BaseModel):
     status: str                        # "success" | "max_iterations_reached"
     duration_seconds: float
 ```
+
+### Iteration events
+
+Both `translate()` methods accept an optional `on_event` callback fired
+at every loop milestone. Events are immutable frozen dataclasses:
+
+```python
+@dataclass(frozen=True)
+class GeneratedEvent:                  # initial LLM call finished
+    iteration: int                     # always 1
+    query: str
+
+@dataclass(frozen=True)
+class ValidatedEvent:                  # one validate() call finished
+    iteration: int
+    query: str
+    errors: list[str]
+    passed: bool
+
+@dataclass(frozen=True)
+class FixGeneratedEvent:               # a fix LLM call finished
+    iteration: int                     # the iteration that just failed
+    query: str                         # candidate for iteration N+1
+
+@dataclass(frozen=True)
+class MaxIterationsReachedEvent:
+    iteration: int
+    errors: list[str]
+
+@dataclass(frozen=True)
+class CompletedEvent:                  # always emitted last
+    result: TranslationResult
+
+TranslationEvent = (
+    GeneratedEvent | ValidatedEvent | FixGeneratedEvent
+    | MaxIterationsReachedEvent | CompletedEvent
+)
+EventHandler = Callable[[TranslationEvent], None]
+```
+
+Iteration numbering: `iteration=N` refers to validation pass N.
+`FixGeneratedEvent.iteration=N` means "the fix produced after iteration N
+failed; this candidate will be validated as iteration N+1." A handler is
+typically a `match` over the union — see the end-to-end example below.
+
+Handler exceptions are caught and logged at WARNING by the translator;
+they cannot abort a translation. Consumers should treat the handler as
+an observer hook, not a control point.
 
 ---
 
@@ -151,6 +277,57 @@ with SQLTranslator(
             f"Translation failed after {result.iterations_used} iterations: "
             f"{result.validation_errors}"
         )
+```
+
+### Async variant with events and streaming
+
+```python
+import asyncio
+from rows2graph import (
+    AsyncSQLTranslator, SchemaMapping,
+    GeneratedEvent, ValidatedEvent, FixGeneratedEvent,
+    MaxIterationsReachedEvent, CompletedEvent, TranslationEvent,
+    load_model_config, make_async_llm, make_async_validator, make_target,
+)
+
+
+def on_event(event: TranslationEvent) -> None:
+    match event:
+        case GeneratedEvent(iteration=i, query=q):
+            print(f"[iter {i}] generated: {q!r}")
+        case ValidatedEvent(iteration=i, passed=True):
+            print(f"[iter {i}] ✓ validation passed")
+        case ValidatedEvent(iteration=i, errors=errs, passed=False):
+            print(f"[iter {i}] ✗ {len(errs)} validation error(s)")
+        case FixGeneratedEvent(iteration=i, query=q):
+            print(f"[iter {i + 1}] fix: {q!r}")
+        case MaxIterationsReachedEvent(iteration=i):
+            print(f"gave up at iter {i}")
+        case CompletedEvent(result=r):
+            print(f"done in {r.duration_seconds:.2f}s")
+
+
+async def main() -> None:
+    mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+    llm = make_async_llm(load_model_config("config/models/anthropic.yaml"))
+    target = make_target("cypher")
+    validator = make_async_validator("cypher", "syntax")
+
+    async with AsyncSQLTranslator(mapping, llm, target, validator) as translator:
+        result = await translator.translate(
+            "SELECT name FROM supplier WHERE suppkey = 1337",
+            on_event=on_event,
+            stream_to=lambda delta: print(delta, end="", flush=True),
+        )
+
+    if not result.validation_passed:
+        raise RuntimeError(
+            f"Translation failed after {result.iterations_used} iterations: "
+            f"{result.validation_errors}"
+        )
+
+
+asyncio.run(main())
 ```
 
 ---
@@ -221,6 +398,8 @@ model: "llama3.2"                    # must be pulled on the Ollama server
 host: "http://localhost:11434"
 temperature: 0.1
 num_ctx: 8192                        # context window size in tokens
+max_retries: 3                       # exponential backoff on connection errors
+                                     # and 5xx; 4xx propagates immediately.
 ```
 
 #### Anthropic (`provider: "anthropic"`)
@@ -231,6 +410,9 @@ provider: "anthropic"
 model: "claude-opus-4-7"
 temperature: 0.1
 max_output_tokens: 4096
+max_retries: 3                       # forwarded to the Anthropic SDK's
+                                     # built-in retry layer (exp. backoff +
+                                     # jitter on 408/409/429/5xx).
 ```
 
 Authentication is via the `ANTHROPIC_API_KEY` environment variable. The
