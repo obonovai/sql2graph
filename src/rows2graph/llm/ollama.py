@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from typing import Any, Literal
 
 from ollama import AsyncClient, Client, RequestError, ResponseError
@@ -136,16 +137,43 @@ class AsyncOllamaLLMClient:
             "num_ctx": config.num_ctx,
         }
 
-    async def chat(self, messages: list[dict[str, Any]]) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        stream_to: Callable[[str], None] | None = None,
+    ) -> str:
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
+            # Stream only on the first attempt. On retries, fall back to
+            # non-streaming so the caller's UI buffer (if any) isn't
+            # polluted by deltas from a discarded prior attempt — the
+            # retry is meant to be invisible from the caller's perspective.
+            should_stream = stream_to is not None and attempt == 0
             try:
-                response = await self._client.chat(
+                if not should_stream:
+                    response = await self._client.chat(
+                        model=self._model,
+                        messages=messages,
+                        options=self._options,
+                    )
+                    return response.message.content or ""
+
+                # Streaming path.
+                text_buf: list[str] = []
+                stream_iter = await self._client.chat(
                     model=self._model,
                     messages=messages,
                     options=self._options,
+                    stream=True,
                 )
-                return response.message.content or ""
+                assert stream_to is not None  # narrows the type for mypy
+                async for chunk in stream_iter:
+                    delta = chunk.message.content or ""
+                    if delta:
+                        text_buf.append(delta)
+                        stream_to(delta)
+                return "".join(text_buf)
             except ResponseError as exc:
                 if exc.status_code < 500:
                     raise

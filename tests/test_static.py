@@ -1005,16 +1005,32 @@ def test_translator_omits_unused_rules_from_system_message() -> None:
 
 
 class _FakeAsyncLLM:
-    """In-process double for the AsyncLLMClient Protocol."""
+    """In-process double for the AsyncLLMClient Protocol.
+
+    When ``stream_to`` is supplied, emits the response character-by-character
+    through the callback before returning the full text — enough to exercise
+    the streaming plumbing without needing a real LLM.
+    """
 
     def __init__(self, responses: list[str]) -> None:
         self._responses = list(responses)
         self.calls: list[list[dict[str, Any]]] = []
+        self.stream_calls: int = 0
         self.closed = False
 
-    async def chat(self, messages: list[dict[str, Any]]) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        stream_to: Any = None,
+    ) -> str:
         self.calls.append(list(messages))
-        return self._responses.pop(0)
+        response = self._responses.pop(0)
+        if stream_to is not None:
+            self.stream_calls += 1
+            for char in response:
+                stream_to(char)
+        return response
 
     async def close(self) -> None:
         self.closed = True
@@ -1175,3 +1191,58 @@ def test_async_cypher_syntax_validator_matches_sync() -> None:
         sync_errors = sync_v.validate(q)
         async_errors = asyncio.run(async_v.validate(q))
         assert async_errors == sync_errors, f"divergence for query: {q!r}"
+
+
+def test_async_translator_forwards_stream_to_into_each_llm_call() -> None:
+    """The translator must invoke the stream callback for every LLM call —
+    once for the initial generate, once per fix iteration."""
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> tuple[list[str], _FakeAsyncLLM]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        chunks: list[str] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            await translator.translate(
+                "SELECT * FROM persons",
+                stream_to=chunks.append,
+            )
+        return chunks, fake
+
+    chunks, fake = asyncio.run(run())
+    # Both LLM responses must have streamed in their entirety. The fake LLM
+    # emits one chunk per character.
+    streamed = "".join(chunks)
+    assert "MATCH (p:Person)" in streamed
+    assert "MATCH (p:Person) RETURN p" in streamed
+    assert fake.stream_calls == 2  # initial generate + 1 fix
+
+
+def test_async_translator_omits_stream_to_by_default() -> None:
+    """Without stream_to, the fake LLM records zero stream calls — confirms
+    the streaming path is opt-in."""
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> _FakeAsyncLLM:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            await translator.translate("SELECT * FROM persons")
+        return fake
+
+    fake = asyncio.run(run())
+    assert fake.stream_calls == 0

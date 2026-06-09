@@ -19,6 +19,7 @@ The class implements the :class:`rows2graph.llm.LLMClient` Protocol.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any, Literal
 
 from anthropic import Anthropic, AsyncAnthropic
@@ -183,16 +184,35 @@ class AsyncAnthropicLLMClient:
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens
 
-    async def chat(self, messages: list[dict[str, Any]]) -> str:
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        stream_to: Callable[[str], None] | None = None,
+    ) -> str:
         kwargs = _build_anthropic_kwargs(
             messages,
             model=self._model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
         )
-        response = await self._client.messages.create(**kwargs)
-        _log_anthropic_usage(response, self._model)
-        return _extract_anthropic_text(response)
+
+        if stream_to is None:
+            response = await self._client.messages.create(**kwargs)
+            _log_anthropic_usage(response, self._model)
+            return _extract_anthropic_text(response)
+
+        # Streaming path: yields text deltas via ``stream_to`` while still
+        # assembling the full text for the return value. ``get_final_message``
+        # is what exposes the usage stats once the stream completes.
+        text_buf: list[str] = []
+        async with self._client.messages.stream(**kwargs) as stream:
+            async for delta in stream.text_stream:
+                text_buf.append(delta)
+                stream_to(delta)
+            final = await stream.get_final_message()
+        _log_anthropic_usage(final, self._model)
+        return "".join(text_buf)
 
     async def close(self) -> None:
         """Release the underlying httpx connection pool."""

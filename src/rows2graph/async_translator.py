@@ -30,7 +30,7 @@ from rows2graph.events import (
     TranslationEvent,
     ValidatedEvent,
 )
-from rows2graph.llm import AsyncLLMClient
+from rows2graph.llm import AsyncLLMClient, StreamCallback
 from rows2graph.mapping import SchemaMapping
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
 from rows2graph.sql_features import detect_features
@@ -80,6 +80,7 @@ class AsyncSQLTranslator:
         self,
         sql_query: str,
         on_event: EventHandler | None = None,
+        stream_to: StreamCallback | None = None,
     ) -> TranslationResult:
         """Translate a SQL query through the full feedback loop.
 
@@ -87,6 +88,13 @@ class AsyncSQLTranslator:
         :meth:`rows2graph.translator.SQLTranslator.translate`. Same return
         type, same event semantics, same iteration numbering. Handler
         exceptions are caught and logged; they do not abort the loop.
+
+        When ``stream_to`` is set, every LLM call in the loop (the initial
+        generate and each fix) streams its text deltas through that
+        callback as they arrive. The full assembled response still
+        feeds the validator after each call completes. The callback is
+        invoked many times per LLM call — once per text delta — and runs
+        on the same task as the translator itself.
         """
         start_time = perf_counter()
         target_name = self._target.name
@@ -105,7 +113,7 @@ class AsyncSQLTranslator:
         user_msg = build_generate_prompt(sql_query)
         state.messages.append(_msg("user", user_msg))
 
-        raw_content = await self._llm.chat(state.messages)
+        raw_content = await self._llm.chat(state.messages, stream_to=stream_to)
         state.messages.append(_msg("assistant", raw_content))
         state.generated_query = self._target.extract_query(raw_content)
 
@@ -171,7 +179,7 @@ class AsyncSQLTranslator:
             )
             state.messages.append(_msg("user", fix_msg))
 
-            raw_content = await self._llm.chat(state.messages)
+            raw_content = await self._llm.chat(state.messages, stream_to=stream_to)
             state.messages.append(_msg("assistant", raw_content))
             state.generated_query = self._target.extract_query(raw_content)
 

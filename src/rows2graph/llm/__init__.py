@@ -31,6 +31,7 @@ Why ``Protocol`` rather than an abstract base class?
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Protocol
 
@@ -55,6 +56,10 @@ class LLMClient(Protocol):
     def close(self) -> None: ...
 
 
+StreamCallback = Callable[[str], None]
+"""Signature for token-stream callbacks. Receives one text delta per call."""
+
+
 class AsyncLLMClient(Protocol):
     """Structural type for the async LLM backends.
 
@@ -64,9 +69,21 @@ class AsyncLLMClient(Protocol):
     :meth:`close` as ``async``. Same shape as :class:`LLMClient` otherwise —
     one chat method that takes a flat message list and returns the
     assistant turn's text.
+
+    The optional ``stream_to`` callback opts into token-by-token streaming:
+    when set, the implementation invokes ``stream_to(delta)`` for each
+    text chunk as it arrives, and still returns the fully assembled text
+    once the response completes. When unset, the call is non-streaming
+    (single round-trip), which is the default for callers that don't need
+    a live display.
     """
 
-    async def chat(self, messages: list[dict[str, Any]]) -> str: ...
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        stream_to: StreamCallback | None = None,
+    ) -> str: ...
 
     async def close(self) -> None: ...
 
@@ -126,6 +143,7 @@ __all__ = [
     "ModelConfig",
     "OllamaConfig",
     "OllamaLLMClient",
+    "StreamCallback",
     "load_model_config",
     "make_async_llm",
     "make_llm",
