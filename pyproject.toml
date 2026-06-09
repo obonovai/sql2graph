@@ -67,5 +67,12 @@ warn_unused_ignores = true
 warn_unreachable = true
 
 [tool.pytest.ini_options]
-addopts = "--verbose"
+# Integration tests are deselected by default — they call real LLMs and
+# real databases, which costs money and requires services. Opt in with
+# ``uv run pytest -m integration`` (or ``-m "integration or not integration"``
+# to run everything). See tests/README.md for required env vars.
+addopts = "--verbose -m 'not integration'"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that hit real LLMs or databases (slow, cost money)",
+]
