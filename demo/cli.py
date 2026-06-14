@@ -57,6 +57,7 @@ from rich.table import Table
 from rows2graph import (
     AnthropicConfig,
     ArangoDBConfig,
+    GremlinConfig,
     Neo4jConfig,
     OllamaConfig,
     SchemaMapping,
@@ -89,7 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rows2graph-demo",
         description=(
-            "Translate a SQL query into a graph database query (Cypher or AQL) using the rows2graph framework."
+            "Translate a SQL query into a graph database query (Cypher, AQL, or Gremlin) "
+            "using the rows2graph framework."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -118,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     target_group = parser.add_argument_group("Target language")
     target_group.add_argument(
         "--target",
-        choices=("cypher", "aql"),
+        choices=("cypher", "aql", "gremlin"),
         default="cypher",
         help="Target graph query language (default: cypher).",
     )
@@ -183,7 +185,7 @@ def _read_sql(sql_arg: str) -> str:
 
 def _resolve_aql_graph_name(
     args: argparse.Namespace,
-    server_config: Neo4jConfig | ArangoDBConfig | None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None,
 ) -> str | None:
     """Pick the AQL graph name from CLI flag, falling back to server config."""
     if args.target != "aql":
@@ -197,7 +199,7 @@ def _resolve_aql_graph_name(
 
 def _load_server_config_or_die(
     args: argparse.Namespace,
-) -> Neo4jConfig | ArangoDBConfig | None:
+) -> Neo4jConfig | ArangoDBConfig | GremlinConfig | None:
     """Load a server config if --validation=server, validating cross-flag invariants."""
     if args.validation != "server":
         return None
@@ -212,6 +214,11 @@ def _load_server_config_or_die(
     if args.target == "aql" and not isinstance(server_config, ArangoDBConfig):
         _die(
             f"--target=aql requires an ArangoDB server config; "
+            f"got type={type(server_config).__name__} from {args.server}"
+        )
+    if args.target == "gremlin" and not isinstance(server_config, GremlinConfig):
+        _die(
+            f"--target=gremlin requires a Gremlin server config; "
             f"got type={type(server_config).__name__} from {args.server}"
         )
     return server_config
@@ -232,12 +239,14 @@ def _load_model_config_or_die(
 # ---------------------------------------------------------------------------
 
 
-# Pygments lexer name per target language. Pygments ships a `cypher` lexer,
-# but no AQL one — AQL falls back to plain `text` (no syntax highlighting,
-# just monospaced rendering inside the colored panel).
+# Pygments lexer name per target language. Pygments ships a `cypher` lexer
+# but neither AQL nor Gremlin. AQL falls back to plain `text`; Gremlin
+# uses the `groovy` lexer since Gremlin-Groovy is its host language and
+# the visual match is closer than plain text.
 _PYGMENTS_LEXER: dict[str, str] = {
     "cypher": "cypher",
     "aql": "text",
+    "gremlin": "groovy",
 }
 
 
@@ -261,7 +270,7 @@ def _print_settings(
     target: str,
     validation: str,
     server_path: Path | None,
-    server_config: Neo4jConfig | ArangoDBConfig | None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None,
     max_iterations: int,
     aql_graph_name: str | None,
 ) -> None:

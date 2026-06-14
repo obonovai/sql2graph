@@ -9,17 +9,19 @@ knowledge the framework needs during translation:
 3. An :meth:`extract_query` routine that pulls a query out of (possibly
    noisy) LLM output.
 
-Two implementations ship: :class:`rows2graph.targets.cypher.CypherTarget`
-(Neo4j) and :class:`rows2graph.targets.aql.AqlTarget` (ArangoDB). Both
-satisfy the :class:`TargetLanguage` :class:`~typing.Protocol` structurally —
-there is no abstract base class to inherit from.
+Three implementations ship: :class:`rows2graph.targets.cypher.CypherTarget`
+(Neo4j), :class:`rows2graph.targets.aql.AqlTarget` (ArangoDB), and
+:class:`rows2graph.targets.gremlin.GremlinTarget` (Apache TinkerPop /
+JanusGraph / Neptune / Cosmos DB Gremlin API). All satisfy the
+:class:`TargetLanguage` :class:`~typing.Protocol` structurally — there is
+no abstract base class to inherit from.
 
-Adding a third target language (e.g. Gremlin, SPARQL) requires implementing
-the Protocol in a new module and extending :func:`make_target` to recognise
+Adding a further target language (e.g. SPARQL) requires implementing the
+Protocol in a new module and extending :func:`make_target` to recognise
 its name. Note that
-:attr:`rows2graph.state.TranslationState.target_language` is currently a
-``Literal["cypher", "aql"]`` — widening that literal is the one
-non-Protocol-friendly step in adding a new target.
+:attr:`rows2graph.state.TranslationState.target_language` is a
+``Literal["cypher", "aql", "gremlin"]`` — widening that literal is the
+one non-Protocol-friendly step in adding a new target.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from typing import Protocol
 from rows2graph.sql_features import SqlFeature
 from rows2graph.targets.aql import AqlTarget
 from rows2graph.targets.cypher import CypherTarget
+from rows2graph.targets.gremlin import GremlinTarget
 
 
 class TargetLanguage(Protocol):
@@ -46,16 +49,18 @@ def make_target(name: str, *, graph_name: str | None = None) -> TargetLanguage:
     """Construct a :class:`TargetLanguage` by short name.
 
     Args:
-        name: ``"cypher"`` or ``"aql"``.
+        name: ``"cypher"``, ``"aql"``, or ``"gremlin"``.
         graph_name: Only used by AQL — the named graph in the target
             ArangoDB instance, woven into the system prompt. Ignored for
-            Cypher.
+            Cypher and Gremlin.
     """
     if name == "cypher":
         return CypherTarget()
     if name == "aql":
         return AqlTarget(graph_name=graph_name)
-    raise ValueError(f"Unknown target language: {name!r}. Supported: 'cypher', 'aql'.")
+    if name == "gremlin":
+        return GremlinTarget()
+    raise ValueError(f"Unknown target language: {name!r}. Supported: 'cypher', 'aql', 'gremlin'.")
 
 
-__all__ = ["AqlTarget", "CypherTarget", "TargetLanguage", "make_target"]
+__all__ = ["AqlTarget", "CypherTarget", "GremlinTarget", "TargetLanguage", "make_target"]

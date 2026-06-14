@@ -6,15 +6,19 @@ loop: it inspects a candidate query and returns a list of error strings
 
 * **Syntax** validators
   (:class:`~rows2graph.validators.cypher.syntax.CypherSyntaxValidator`,
-  :class:`~rows2graph.validators.aql.syntax.AqlSyntaxValidator`) —
+  :class:`~rows2graph.validators.aql.syntax.AqlSyntaxValidator`,
+  :class:`~rows2graph.validators.gremlin.syntax.GremlinSyntaxValidator`) —
   regex-based, deployment-free; catch obvious structural defects.
 * **Server** validators
   (:class:`~rows2graph.validators.cypher.server.CypherServerValidator`,
-  :class:`~rows2graph.validators.aql.server.AqlServerValidator`) —
+  :class:`~rows2graph.validators.aql.server.AqlServerValidator`,
+  :class:`~rows2graph.validators.gremlin.server.GremlinServerValidator`) —
   delegate validation to a live graph database via its
   parse-without-executing endpoint (Neo4j ``EXPLAIN``, ArangoDB
-  ``db.aql.validate``). Catches label/collection/property hallucinations
-  in addition to syntactic defects.
+  ``db.aql.validate``, Gremlin Server script submission). Catches
+  label/collection/property hallucinations on schema-aware backends
+  (Neo4j, ArangoDB, JanusGraph); on schemaless TinkerGraph the Gremlin
+  server validator only catches parse / step-compatibility errors.
 * **No-op** (:class:`~rows2graph.validators.noop.NoopValidator`) — always
   reports success, so the loop exits after the first iteration. Used when
   measuring raw single-shot LLM quality.
@@ -23,10 +27,11 @@ The :class:`QueryValidator` Protocol is structural — implementations need
 not inherit from anything in this module — which keeps the extension
 surface clean.
 
-Server-validator configs (:class:`Neo4jConfig`, :class:`ArangoDBConfig`)
-form a Pydantic-discriminated tagged union :data:`ServerConfig`. The
-discriminator field ``type`` selects the matching Pydantic subclass at YAML
-load time, and downstream code dispatches via ``isinstance``.
+Server-validator configs (:class:`Neo4jConfig`, :class:`ArangoDBConfig`,
+:class:`GremlinConfig`) form a Pydantic-discriminated tagged union
+:data:`ServerConfig`. The discriminator field ``type`` selects the
+matching Pydantic subclass at YAML load time, and downstream code
+dispatches via ``isinstance``.
 """
 
 from __future__ import annotations
@@ -50,6 +55,15 @@ from rows2graph.validators.cypher.server import (
     Neo4jConfig,
 )
 from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator, CypherSyntaxValidator
+from rows2graph.validators.gremlin.server import (
+    AsyncGremlinServerValidator,
+    GremlinConfig,
+    GremlinServerValidator,
+)
+from rows2graph.validators.gremlin.syntax import (
+    AsyncGremlinSyntaxValidator,
+    GremlinSyntaxValidator,
+)
 from rows2graph.validators.noop import AsyncNoopValidator, NoopValidator
 
 
@@ -73,13 +87,13 @@ class AsyncQueryValidator(Protocol):
     async def close(self) -> None: ...
 
 
-ServerConfig = Annotated[Neo4jConfig | ArangoDBConfig, Field(discriminator="type")]
+ServerConfig = Annotated[Neo4jConfig | ArangoDBConfig | GremlinConfig, Field(discriminator="type")]
 """Tagged union over every supported server-validator config."""
 
-_SERVER_CONFIG_ADAPTER: TypeAdapter[Neo4jConfig | ArangoDBConfig] = TypeAdapter(ServerConfig)
+_SERVER_CONFIG_ADAPTER: TypeAdapter[Neo4jConfig | ArangoDBConfig | GremlinConfig] = TypeAdapter(ServerConfig)
 
 
-def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig:
+def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig | GremlinConfig:
     """Load and validate a server config YAML file.
 
     Environment-variable references (``${VAR}``) are interpolated before
@@ -96,16 +110,17 @@ def make_validator(
     target: str,
     mode: str,
     *,
-    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None = None,
 ) -> QueryValidator:
     """Construct a :class:`QueryValidator` from a target/mode pair.
 
     Args:
-        target: ``"cypher"`` or ``"aql"``.
+        target: ``"cypher"``, ``"aql"``, or ``"gremlin"``.
         mode: ``"syntax"``, ``"server"``, or ``"none"``.
         server_config: Required iff ``mode == "server"``. Must be a
-            :class:`Neo4jConfig` when ``target == "cypher"`` and an
-            :class:`ArangoDBConfig` when ``target == "aql"``.
+            :class:`Neo4jConfig` when ``target == "cypher"``, an
+            :class:`ArangoDBConfig` when ``target == "aql"``, and a
+            :class:`GremlinConfig` when ``target == "gremlin"``.
     """
     if mode == "none":
         return NoopValidator()
@@ -115,6 +130,8 @@ def make_validator(
             return CypherSyntaxValidator()
         if target == "aql":
             return AqlSyntaxValidator()
+        if target == "gremlin":
+            return GremlinSyntaxValidator()
         raise ValueError(f"Unknown target language: {target!r}")
 
     if mode == "server":
@@ -132,6 +149,12 @@ def make_validator(
                     f"target='aql' with mode='server' requires an ArangoDBConfig, got {type(server_config).__name__}"
                 )
             return AqlServerValidator(server_config)
+        if target == "gremlin":
+            if not isinstance(server_config, GremlinConfig):
+                raise TypeError(
+                    f"target='gremlin' with mode='server' requires a GremlinConfig, got {type(server_config).__name__}"
+                )
+            return GremlinServerValidator(server_config)
         raise ValueError(f"Unknown target language: {target!r}")
 
     raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
@@ -141,7 +164,7 @@ def make_async_validator(
     target: str,
     mode: str,
     *,
-    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None = None,
 ) -> AsyncQueryValidator:
     """Construct an :class:`AsyncQueryValidator` from a target/mode pair.
 
@@ -156,6 +179,8 @@ def make_async_validator(
             return AsyncCypherSyntaxValidator()
         if target == "aql":
             return AsyncAqlSyntaxValidator()
+        if target == "gremlin":
+            return AsyncGremlinSyntaxValidator()
         raise ValueError(f"Unknown target language: {target!r}")
 
     if mode == "server":
@@ -173,6 +198,12 @@ def make_async_validator(
                     f"target='aql' with mode='server' requires an ArangoDBConfig, got {type(server_config).__name__}"
                 )
             return AsyncAqlServerValidator(server_config)
+        if target == "gremlin":
+            if not isinstance(server_config, GremlinConfig):
+                raise TypeError(
+                    f"target='gremlin' with mode='server' requires a GremlinConfig, got {type(server_config).__name__}"
+                )
+            return AsyncGremlinServerValidator(server_config)
         raise ValueError(f"Unknown target language: {target!r}")
 
     raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
@@ -186,10 +217,15 @@ __all__ = [
     "AsyncAqlSyntaxValidator",
     "AsyncCypherServerValidator",
     "AsyncCypherSyntaxValidator",
+    "AsyncGremlinServerValidator",
+    "AsyncGremlinSyntaxValidator",
     "AsyncNoopValidator",
     "AsyncQueryValidator",
     "CypherServerValidator",
     "CypherSyntaxValidator",
+    "GremlinConfig",
+    "GremlinServerValidator",
+    "GremlinSyntaxValidator",
     "Neo4jConfig",
     "NoopValidator",
     "QueryValidator",

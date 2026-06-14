@@ -9,8 +9,8 @@ Public API. The framework exposes three layers:
 2. **Pluggable components** — :class:`LLMClient`, :class:`TargetLanguage`,
    :class:`QueryValidator` (all :class:`~typing.Protocol`-typed). Concrete
    implementations ship for two LLM backends (Ollama, Anthropic on
-   Vertex AI), two target languages (Cypher, AQL), and three validation
-   modes (syntax, server, none). Factories
+   Vertex AI), three target languages (Cypher, AQL, Gremlin), and three
+   validation modes (syntax, server, none). Factories
    (:func:`make_llm`, :func:`make_target`, :func:`make_validator`) build
    the components from their typed config objects.
 3. **Orchestration** — :class:`SQLTranslator` ties the three components
@@ -65,7 +65,7 @@ from rows2graph.llm import (
 )
 from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
 from rows2graph.state import TranslationResult
-from rows2graph.targets import AqlTarget, CypherTarget, TargetLanguage, make_target
+from rows2graph.targets import AqlTarget, CypherTarget, GremlinTarget, TargetLanguage, make_target
 from rows2graph.translator import SQLTranslator
 from rows2graph.validators import (
     AqlServerValidator,
@@ -75,10 +75,15 @@ from rows2graph.validators import (
     AsyncAqlSyntaxValidator,
     AsyncCypherServerValidator,
     AsyncCypherSyntaxValidator,
+    AsyncGremlinServerValidator,
+    AsyncGremlinSyntaxValidator,
     AsyncNoopValidator,
     AsyncQueryValidator,
     CypherServerValidator,
     CypherSyntaxValidator,
+    GremlinConfig,
+    GremlinServerValidator,
+    GremlinSyntaxValidator,
     Neo4jConfig,
     NoopValidator,
     QueryValidator,
@@ -100,6 +105,8 @@ __all__ = [
     "AsyncAqlSyntaxValidator",
     "AsyncCypherServerValidator",
     "AsyncCypherSyntaxValidator",
+    "AsyncGremlinServerValidator",
+    "AsyncGremlinSyntaxValidator",
     "AsyncLLMClient",
     "AsyncNoopValidator",
     "AsyncOllamaLLMClient",
@@ -113,6 +120,10 @@ __all__ = [
     "EventHandler",
     "FixGeneratedEvent",
     "GeneratedEvent",
+    "GremlinConfig",
+    "GremlinServerValidator",
+    "GremlinSyntaxValidator",
+    "GremlinTarget",
     "LLMClient",
     "MaxIterationsReachedEvent",
     "ModelConfig",

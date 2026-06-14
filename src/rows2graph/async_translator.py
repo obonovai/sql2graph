@@ -98,7 +98,7 @@ class AsyncSQLTranslator:
         """
         start_time = perf_counter()
         target_name = self._target.name
-        if target_name not in ("cypher", "aql"):
+        if target_name not in ("cypher", "aql", "gremlin"):
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
         state = TranslationState(
             sql_query=sql_query,

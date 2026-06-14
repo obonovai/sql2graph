@@ -16,10 +16,10 @@ is twofold:
    externally meaningful fields — the original SQL, the final query, the
    final status, the iteration count, and the wall-clock duration.
 
-The ``target_language`` field is declared as ``Literal["cypher", "aql"]`` —
-the same set of target languages supported elsewhere in the framework. A
-third target language would require widening this literal (and the
-counterpart in
+The ``target_language`` field is declared as
+``Literal["cypher", "aql", "gremlin"]`` — the same set of target languages
+supported elsewhere in the framework. A further target language would
+require widening this literal (and the counterpart in
 :class:`rows2graph.validators.QueryValidator` dispatch). The Protocol-based
 extension story documented in ``docs/ARCHITECTURE.md`` notes this as a
 known limitation.
@@ -43,7 +43,7 @@ class TranslationState(BaseModel):
     """
 
     sql_query: str
-    target_language: Literal["cypher", "aql"] = "cypher"
+    target_language: Literal["cypher", "aql", "gremlin"] = "cypher"
     messages: list[dict[str, Any]] = Field(default_factory=list)
     generated_query: str | None = None
     validation_errors: list[str] = Field(default_factory=list)
@@ -73,7 +73,7 @@ class TranslationResult(BaseModel):
 
     sql_query: str
     generated_query: str | None
-    target_language: Literal["cypher", "aql"]
+    target_language: Literal["cypher", "aql", "gremlin"]
     validation_passed: bool
     validation_errors: list[str]
     iterations_used: int

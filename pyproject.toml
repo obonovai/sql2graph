@@ -13,6 +13,7 @@ dependencies = [
     "pyyaml>=6.0",
     "neo4j>=5.28",
     "python-arango>=8.0",
+    "gremlinpython>=3.7",
     "anthropic>=0.96.0",
     "rich>=13",
     "sqlglot>=23",
@@ -65,6 +66,12 @@ namespace_packages = true
 explicit_package_bases = true
 warn_unused_ignores = true
 warn_unreachable = true
+
+# gremlinpython ships no py.typed marker; treat its driver surface as
+# Any rather than block strict-mode compilation across the package.
+[[tool.mypy.overrides]]
+module = "gremlin_python.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 # Integration tests are deselected by default — they call real LLMs and

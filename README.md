@@ -3,11 +3,12 @@
 **LLM-driven SQL-to-graph-database query translator with a validation feedback loop.**
 
 `rows2graph` is a Python framework that translates SQL queries into queries
-for property-graph databases (Cypher for Neo4j, AQL for ArangoDB) by
-prompting a large language model with a user-provided relational-to-graph
-schema mapping. Every generated query is automatically validated; on failure
-the validator's errors are fed back to the LLM for correction, up to a
-configurable number of iterations.
+for property-graph databases (Cypher for Neo4j, AQL for ArangoDB, and
+Gremlin-Groovy for Apache TinkerPop / JanusGraph / Neptune / Cosmos DB
+Gremlin API) by prompting a large language model with a user-provided
+relational-to-graph schema mapping. Every generated query is automatically
+validated; on failure the validator's errors are fed back to the LLM for
+correction, up to a configurable number of iterations.
 
 The framework exposes both a synchronous orchestrator (`SQLTranslator`) and an
 asynchronous sibling (`AsyncSQLTranslator`) so callers can pick the model that
@@ -101,7 +102,7 @@ parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
 operation clusters present — `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
 `CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`. Both the generic
 rules block and the target-language section (see
-`src/rows2graph/targets/cypher.py` and `targets/aql.py`) emit only the rule
+`src/rows2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
 chunks corresponding to features actually in the query, so the LLM is not
 distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
 no string predicates. On any parser failure the function returns
@@ -171,7 +172,7 @@ YAML configs live under `config/`, split by concern:
 |---|---|---|
 | `config/mappings/` | Schema mapping (nodes + edges). | Always — one per relational schema. |
 | `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always — one per backend. |
-| `config/servers/`  | Graph DB connection (`type: neo4j` or `arangodb`). | Only when `--validation server`. |
+| `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only when `--validation server`. |
 
 These categories are orthogonal: the same mapping can be paired with any
 model, the same model drives any mapping, the same server config validates

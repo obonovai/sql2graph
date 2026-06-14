@@ -25,6 +25,9 @@ from rows2graph import (
     CypherSyntaxValidator,
     CypherTarget,
     EdgeMapping,
+    GremlinConfig,
+    GremlinSyntaxValidator,
+    GremlinTarget,
     Neo4jConfig,
     NodeMapping,
     NoopValidator,
@@ -227,6 +230,17 @@ def test_load_server_config_dispatches_to_arangodb(tmp_path: Path, monkeypatch: 
     assert config.graph_name == "g1"
 
 
+def test_load_server_config_dispatches_to_gremlin(tmp_path: Path) -> None:
+    p = tmp_path / "gremlin.yaml"
+    p.write_text(
+        'type: "gremlin"\nurl: "ws://localhost:8182/gremlin"\ntraversal_source: "g"\n'
+    )
+    config = load_server_config(p)
+    assert isinstance(config, GremlinConfig)
+    assert config.url == "ws://localhost:8182/gremlin"
+    assert config.traversal_source == "g"
+
+
 def test_load_server_config_rejects_unknown_type(tmp_path: Path) -> None:
     p = tmp_path / "bad.yaml"
     p.write_text('type: "redis"\npassword: "x"\n')
@@ -266,9 +280,22 @@ def test_make_target_aql_without_graph_name_falls_back() -> None:
     assert "configured named graph" in t.system_prompt_section(frozenset())
 
 
+def test_make_target_gremlin() -> None:
+    t = make_target("gremlin")
+    assert isinstance(t, GremlinTarget)
+    assert t.name == "gremlin"
+
+
+def test_make_target_gremlin_ignores_graph_name() -> None:
+    # graph_name is only meaningful for AQL; Gremlin should accept the
+    # argument (uniform factory signature) but ignore it.
+    t = make_target("gremlin", graph_name="ignored")
+    assert isinstance(t, GremlinTarget)
+
+
 def test_make_target_rejects_unknown_name() -> None:
     with pytest.raises(ValueError, match="Unknown target language"):
-        make_target("gremlin")
+        make_target("sparql")
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +316,11 @@ def test_make_validator_cypher_syntax() -> None:
 def test_make_validator_aql_syntax() -> None:
     v = make_validator("aql", "syntax")
     assert isinstance(v, AqlSyntaxValidator)
+
+
+def test_make_validator_gremlin_syntax() -> None:
+    v = make_validator("gremlin", "syntax")
+    assert isinstance(v, GremlinSyntaxValidator)
 
 
 def test_make_validator_cypher_server_requires_neo4j_config() -> None:
@@ -332,6 +364,34 @@ def test_make_validator_aql_server_constructs_with_arangodb() -> None:
         from rows2graph.validators.aql.server import AqlServerValidator
 
         assert isinstance(v, AqlServerValidator)
+        mock_client.assert_called_once()
+
+
+def test_make_validator_gremlin_server_requires_gremlin_config() -> None:
+    with pytest.raises(ValueError, match="requires a server_config"):
+        make_validator("gremlin", "server")
+
+
+def test_make_validator_gremlin_server_rejects_neo4j_config() -> None:
+    with pytest.raises(TypeError, match="GremlinConfig"):
+        make_validator("gremlin", "server", server_config=Neo4jConfig(password="p"))
+
+
+def test_make_validator_cypher_server_rejects_gremlin_config() -> None:
+    with pytest.raises(TypeError, match="Neo4jConfig"):
+        make_validator("cypher", "server", server_config=GremlinConfig())
+
+
+def test_make_validator_gremlin_server_constructs_with_gremlin_config() -> None:
+    with patch("rows2graph.validators.gremlin.server.Client") as mock_client:
+        v = make_validator(
+            "gremlin",
+            "server",
+            server_config=GremlinConfig(),
+        )
+        from rows2graph.validators.gremlin.server import GremlinServerValidator
+
+        assert isinstance(v, GremlinServerValidator)
         mock_client.assert_called_once()
 
 
@@ -542,6 +602,25 @@ def test_extract_aql_fallback_returns_stripped() -> None:
     assert AqlTarget(graph_name="g").extract_query("  nothing here  ") == "nothing here"
 
 
+def test_extract_gremlin_from_gremlin_fence() -> None:
+    text = "Here you go:\n```gremlin\ng.V().hasLabel('Person').valueMap()\n```\nDone."
+    assert GremlinTarget().extract_query(text) == "g.V().hasLabel('Person').valueMap()"
+
+
+def test_extract_gremlin_from_groovy_fence() -> None:
+    text = "```groovy\ng.V().has('Person', 'id', 933).valueMap()\n```"
+    assert GremlinTarget().extract_query(text) == "g.V().has('Person', 'id', 933).valueMap()"
+
+
+def test_extract_gremlin_from_keyword() -> None:
+    text = "Sure!\ng.V().hasLabel('Person').count()"
+    assert GremlinTarget().extract_query(text) == "g.V().hasLabel('Person').count()"
+
+
+def test_extract_gremlin_fallback_returns_stripped() -> None:
+    assert GremlinTarget().extract_query("  not a query  ") == "not a query"
+
+
 # ---------------------------------------------------------------------------
 # Syntax validators
 # ---------------------------------------------------------------------------
@@ -584,6 +663,44 @@ def test_aql_syntax_flags_unbalanced_brackets() -> None:
     assert any("Unbalanced square brackets" in e for e in errors)
 
 
+def test_gremlin_syntax_passes_valid_query() -> None:
+    assert GremlinSyntaxValidator().validate("g.V().hasLabel('Person').valueMap()") == []
+
+
+def test_gremlin_syntax_passes_with_anonymous_traversal() -> None:
+    query = "g.V().hasLabel('Person').where(__.out('KNOWS')).valueMap()"
+    assert GremlinSyntaxValidator().validate(query) == []
+
+
+def test_gremlin_syntax_flags_bad_start() -> None:
+    errors = GremlinSyntaxValidator().validate("MATCH (n) RETURN n")
+    assert any("Gremlin entry point" in e for e in errors)
+
+
+def test_gremlin_syntax_flags_unbalanced_parens() -> None:
+    errors = GremlinSyntaxValidator().validate("g.V().hasLabel('Person'.valueMap()")
+    assert any("Unbalanced parentheses" in e for e in errors)
+
+
+def test_gremlin_syntax_flags_unbalanced_brackets() -> None:
+    errors = GremlinSyntaxValidator().validate("g.V().has('age', P.within([1, 2).count()")
+    assert any("Unbalanced square brackets" in e for e in errors)
+
+
+def test_gremlin_syntax_flags_trailing_dot() -> None:
+    errors = GremlinSyntaxValidator().validate("g.V().hasLabel('Person').")
+    assert any("incomplete" in e for e in errors)
+
+
+def test_gremlin_syntax_flags_empty_query() -> None:
+    assert GremlinSyntaxValidator().validate("   ") == ["Query is empty"]
+
+
+def test_gremlin_syntax_flags_unbalanced_quotes() -> None:
+    errors = GremlinSyntaxValidator().validate("g.V().has('label, 'x').count()")
+    assert any("Unbalanced single quotes" in e for e in errors)
+
+
 # ---------------------------------------------------------------------------
 # Prompt assembly
 # ---------------------------------------------------------------------------
@@ -608,6 +725,13 @@ def test_build_system_prompt_aql_includes_graph_name() -> None:
 def test_build_system_prompt_aql_without_graph_name_falls_back() -> None:
     prompt = build_system_prompt(_schema(), AqlTarget(graph_name=None), frozenset())
     assert "configured named graph" in prompt
+
+
+def test_build_system_prompt_gremlin() -> None:
+    prompt = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert "gremlin" in prompt
+    assert "g.V()" in prompt
+    assert "Person" in prompt  # schema is embedded
 
 
 def test_build_generate_prompt_includes_sql() -> None:
@@ -722,6 +846,24 @@ def test_translator_context_manager_closes_components() -> None:
     ) as translator:
         translator.translate("SELECT 1")
     assert fake.closed is True
+
+
+def test_translator_returns_result_for_gremlin_target() -> None:
+    fake = _FakeLLM(["```gremlin\ng.V().hasLabel('Person').valueMap()\n```"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=GremlinTarget(),
+        validator=GremlinSyntaxValidator(),
+        max_iterations=3,
+    ) as translator:
+        result = translator.translate("SELECT * FROM persons")
+
+    assert isinstance(result, TranslationResult)
+    assert result.validation_passed is True
+    assert result.status == "success"
+    assert result.target_language == "gremlin"
+    assert result.generated_query == "g.V().hasLabel('Person').valueMap()"
 
 
 # ---------------------------------------------------------------------------
@@ -972,6 +1114,22 @@ def test_aql_prompt_includes_collect_only_when_aggregation_detected() -> None:
     )
     assert "COLLECT" in with_agg
     assert "COLLECT" not in without_agg
+
+
+def test_gremlin_prompt_includes_textp_only_when_like_detected() -> None:
+    with_like = build_system_prompt(_schema(), GremlinTarget(), frozenset({SqlFeature.LIKE}))
+    without_like = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert "TextP.containing" in with_like
+    assert "TextP.containing" not in without_like
+
+
+def test_gremlin_prompt_includes_dedup_only_when_distinct_detected() -> None:
+    with_distinct = build_system_prompt(
+        _schema(), GremlinTarget(), frozenset({SqlFeature.DISTINCT})
+    )
+    without_distinct = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert ".dedup()" in with_distinct
+    assert ".dedup()" not in without_distinct
 
 
 def test_generic_join_rule_is_feature_gated() -> None:

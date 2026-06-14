@@ -1,0 +1,35 @@
+# Apache TinkerPop Gremlin Server connection — used only when running the
+# demo with --validation server --target gremlin.
+#
+# The framework validates each candidate Gremlin-Groovy script by
+# submitting it to the server and consuming the result. Any parse or
+# step-compatibility error surfaces as an exception that is captured as
+# a validation message.
+#
+# Recommended local backend for development / CI / thesis evaluation:
+#   docker run --rm -p 8182:8182 tinkerpop/gremlin-server
+# This launches an empty TinkerGraph instance — *schemaless*. Validation
+# catches script-level parse errors and unsupported steps but NOT label /
+# property hallucinations (TinkerGraph accepts `.hasLabel('Doesnotexist')`
+# against an empty graph and returns an empty result). For schema-aware
+# validation comparable to Neo4j's EXPLAIN, point `url` at a JanusGraph
+# instance with a registered schema.
+#
+# Other compatible backends (same `type: "gremlin"` discriminator and
+# the same WebSocket protocol):
+# - JanusGraph (production, distributed, schema-aware when configured)
+# - Amazon Neptune (managed AWS; switch `url` to the Neptune endpoint
+#   and supply IAM credentials via the username/password fields)
+# - Azure Cosmos DB Gremlin API (managed Azure; partial Gremlin support
+#   means script-level validation may pass while the server rejects
+#   unsupported steps at execution time)
+#
+# Secrets: the `password` field supports environment-variable
+# interpolation. Keep the literal `${GREMLIN_PASSWORD}` here and
+# `export GREMLIN_PASSWORD=...` in your shell before invoking the demo.
+
+type: "gremlin"
+url: "ws://localhost:8182/gremlin"
+traversal_source: "g"
+# username: "..."
+# password: "${GREMLIN_PASSWORD}"

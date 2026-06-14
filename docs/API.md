@@ -88,8 +88,17 @@ class TargetLanguage(Protocol):
 def make_target(name: str, *, graph_name: str | None = None) -> TargetLanguage
 ```
 
-`name` ∈ `{"cypher", "aql"}`. `graph_name` is only meaningful for
-`"aql"`.
+`name` ∈ `{"cypher", "aql", "gremlin"}`. `graph_name` is only meaningful
+for `"aql"`.
+
+For the `"gremlin"` target the framework emits Gremlin-Groovy script form
+(e.g. `g.V().hasLabel('Person').valueMap()`) — portable across Apache
+TinkerPop Gremlin Server / TinkerGraph (the recommended local backend),
+JanusGraph, Amazon Neptune, and Azure Cosmos DB Gremlin API. Server-side
+validation against schemaless TinkerGraph catches script-level parse
+errors and unsupported steps but NOT label / property hallucinations —
+use JanusGraph with a registered schema for schema-aware validation
+comparable to Neo4j's `EXPLAIN`.
 
 ### Validator components
 
@@ -104,20 +113,20 @@ class AsyncQueryValidator(Protocol):
     async def close(self) -> None: ...
 
 
-ServerConfig = Neo4jConfig | ArangoDBConfig    # discriminated on .type
+ServerConfig = Neo4jConfig | ArangoDBConfig | GremlinConfig   # discriminated on .type
 
-def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig
+def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig | GremlinConfig
 def make_validator(
-    target: str,                                     # "cypher" | "aql"
+    target: str,                                     # "cypher" | "aql" | "gremlin"
     mode: str,                                       # "syntax" | "server" | "none"
     *,
-    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None = None,
 ) -> QueryValidator
 def make_async_validator(
     target: str,
     mode: str,
     *,
-    server_config: Neo4jConfig | ArangoDBConfig | None = None,
+    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None = None,
 ) -> AsyncQueryValidator
 ```
 
@@ -127,10 +136,14 @@ does not match `target`.
 
 Concrete async classes (also exported from the top-level package):
 `AsyncCypherSyntaxValidator`, `AsyncAqlSyntaxValidator`,
-`AsyncNoopValidator`, `AsyncCypherServerValidator` (uses
-`neo4j.AsyncGraphDatabase`), `AsyncAqlServerValidator` (wraps
-python-arango calls in `asyncio.to_thread` — the underlying SDK has no
-async driver). Same constructor signatures as their sync siblings.
+`AsyncGremlinSyntaxValidator`, `AsyncNoopValidator`,
+`AsyncCypherServerValidator` (uses `neo4j.AsyncGraphDatabase`),
+`AsyncAqlServerValidator` (wraps python-arango calls in
+`asyncio.to_thread` — the underlying SDK has no async driver), and
+`AsyncGremlinServerValidator` (wraps `gremlinpython`'s `Client` in
+`asyncio.to_thread` for the same reason — the async surface area of
+`gremlinpython` is inconsistent across releases). Same constructor
+signatures as their sync siblings.
 
 ### Orchestrator: `SQLTranslator` (sync) and `AsyncSQLTranslator` (async)
 
@@ -190,7 +203,7 @@ contract.
 class TranslationResult(BaseModel):
     sql_query: str
     generated_query: str | None        # last attempt, even on failure
-    target_language: Literal["cypher", "aql"]
+    target_language: Literal["cypher", "aql", "gremlin"]
     validation_passed: bool
     validation_errors: list[str]       # from the final iteration
     iterations_used: int               # validate calls performed
@@ -455,6 +468,35 @@ graph_name: "ldbc"                   # named graph used in AQL traversals
 The validator runs `db.aql.validate(query)`. `graph_name` here also feeds
 the AQL target-language prompt unless the demo's `--aql-graph-name` flag
 overrides it.
+
+#### Gremlin (`type: "gremlin"`)
+
+```yaml
+type: "gremlin"
+url: "ws://localhost:8182/gremlin"
+traversal_source: "g"
+# username: "..."                      # optional; required for IAM / SASL backends
+# password: "${GREMLIN_PASSWORD}"
+```
+
+The validator submits each candidate script via the `gremlinpython`
+`Client` and consumes the result; any parse / step-compatibility error
+surfaces as an exception that is captured as a validation message.
+
+Recommended local backend: Apache TinkerPop Gremlin Server with
+TinkerGraph, runnable in one line:
+
+```bash
+docker run --rm -p 8182:8182 tinkerpop/gremlin-server
+```
+
+TinkerGraph is *schemaless*: this catches script-level parse errors and
+unsupported steps but NOT label / property hallucinations. Point `url`
+at JanusGraph with a registered schema for schema-aware validation
+comparable to Neo4j's `EXPLAIN`. The same `type: "gremlin"`
+discriminator also works for Amazon Neptune and Azure Cosmos DB Gremlin
+API endpoints (set `url` and provide `username` / `password` per the
+backend's auth scheme).
 
 ---
 

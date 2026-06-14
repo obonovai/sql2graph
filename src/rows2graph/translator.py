@@ -104,8 +104,8 @@ class SQLTranslator:
         """
         start_time = perf_counter()
         target_name = self._target.name
-        if target_name not in ("cypher", "aql"):
-            # TranslationState's Literal currently restricts to these two.
+        if target_name not in ("cypher", "aql", "gremlin"):
+            # TranslationState's Literal currently restricts to these three.
             # See note in src/rows2graph/state.py about widening it.
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
         state = TranslationState(

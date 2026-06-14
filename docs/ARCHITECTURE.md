@@ -351,12 +351,14 @@ The feature set flows through two layers:
    emits each line only if its feature is in the detected set.
 2. **Target-specific rule chunks.**
    `TargetLanguage.system_prompt_section` now takes the feature set as
-   an argument. Both `CypherTarget` and `AqlTarget` keep a private
-   `_FEATURE_RULES: dict[SqlFeature, str]` mapping (see
-   `targets/cypher.py` and `targets/aql.py`) holding the multi-line rule
-   chunks per operation, and append only the chunks for features present.
-   The always-on base block (`MATCH`/`CREATE`/keyword list for Cypher,
-   the `FOR ... GRAPH` traversal idiom for AQL) is emitted unconditionally.
+   an argument. `CypherTarget`, `AqlTarget`, and `GremlinTarget` each
+   keep a private `_FEATURE_RULES: dict[SqlFeature, str]` mapping (see
+   `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) holding
+   the multi-line rule chunks per operation, and append only the chunks
+   for features present. The always-on base block (`MATCH`/`CREATE`/
+   keyword list for Cypher, the `FOR ... GRAPH` traversal idiom for AQL,
+   the `g.V()` / `.hasLabel(...)` / `.out(...)` traversal idiom for
+   Gremlin) is emitted unconditionally.
 
 ### Trade-off
 
@@ -472,9 +474,9 @@ overhead.
 
 ## Known limitations
 
-* **`TranslationState.target_language` is a `Literal["cypher", "aql"]`.**
-  Adding a third target language requires widening this literal (and the
-  analogous `Literal` in `TranslationResult`). The `TargetLanguage`
+* **`TranslationState.target_language` is a `Literal["cypher", "aql", "gremlin"]`.**
+  Adding a further target language requires widening this literal (and
+  the analogous `Literal` in `TranslationResult`). The `TargetLanguage`
   Protocol itself is extensible; the literal is a separate, narrower
   declaration that exists to keep typed access to `state.target_language`
   precise through the loop. This is a deliberate trade-off between
