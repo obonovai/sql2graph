@@ -8,7 +8,7 @@
 # (see README.md) and leave `host` as-is.
 
 provider: "ollama"
-model: "llama3.2"
+model: "qwen2.5-coder:7b"
 host: "http://localhost:11434"
 temperature: 0.1
 # num_ctx is the model's working-context window in tokens. The framework

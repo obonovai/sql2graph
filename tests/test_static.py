@@ -790,6 +790,31 @@ def test_build_system_prompt_gremlin() -> None:
     assert "Person" in prompt  # schema is embedded
 
 
+def test_gremlin_base_rules_teach_projection_and_forbidden_patterns() -> None:
+    # A plain SELECT detects no SqlFeature, so the always-on base block must
+    # itself carry the read/projection guidance and the anti-hallucination
+    # list — the two failure modes seen in the captured error logs.
+    prompt = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    # Reading + projecting columns into one traversal.
+    assert ".project(" in prompt
+    assert ".values(" in prompt
+    # id COLUMN vs the graph's internal element id.
+    assert "internal element id" in prompt
+    # Anonymous steps are method calls (`__.id()`, not `__.id`).
+    assert "__.id()" in prompt
+    # Explicit forbidden list that names the hallucinated read steps.
+    assert "NOT valid Gremlin" in prompt
+    assert "WRITES a property" in prompt
+
+
+def test_gremlin_base_rules_demand_single_traversal_no_prose() -> None:
+    # The model tends to emit the right query, then keep talking with prose and
+    # alternative versions; the base block must forbid that explicitly.
+    prompt = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert "Output EXACTLY ONE traversal" in prompt
+    assert "no alternative versions" in prompt
+
+
 def test_build_generate_prompt_includes_sql() -> None:
     assert "SELECT 1" in build_generate_prompt("SELECT 1")
 
@@ -1183,6 +1208,16 @@ def test_generic_join_rule_is_feature_gated() -> None:
     without_join = build_system_prompt(_schema(), CypherTarget(), frozenset())
     assert "Map SQL JOINs" in with_join
     assert "Map SQL JOINs" not in without_join
+
+
+def test_gremlin_join_projection_guidance_only_when_join_detected() -> None:
+    # The "label-as-you-go then select(...).by(...), walk the path once"
+    # pattern is the fix for multi-table SELECT joins; it should appear only
+    # when a JOIN is present, not on a single-table query.
+    with_join = build_system_prompt(_schema(), GremlinTarget(), frozenset({SqlFeature.JOIN}))
+    without_join = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert "Walk the path ONCE" in with_join
+    assert "Walk the path ONCE" not in without_join
 
 
 def test_translator_omits_unused_rules_from_system_message() -> None:
