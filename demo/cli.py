@@ -34,6 +34,12 @@ matching server config file::
         --validation server \\
         --server  config/servers/neo4j.yaml
 
+Managed validation provisions a throwaway database automatically — select
+``--validation server`` and omit ``--server`` (requires a running Docker
+daemon; the container starts on first validation and is removed at exit)::
+
+    uv run python demo/cli.py --sql "..." --mapping config/mappings/tpch.yaml --model config/models/anthropic.yaml --target cypher --validation server
+
 Exit codes:
     0 — translation succeeded (validator returned no errors).
     1 — translation reached ``--max-iterations`` without passing validation.
@@ -43,31 +49,34 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import sys
 from pathlib import Path
 from typing import NoReturn
 
 from rich.console import Console
+from rich.live import Live
 from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
 
 from rows2graph import (
     AnthropicConfig,
     ArangoDBConfig,
+    AsyncSQLTranslator,
     GremlinConfig,
     Neo4jConfig,
     OllamaConfig,
     SchemaMapping,
-    SQLTranslator,
     TranslationResult,
     load_model_config,
     load_server_config,
-    make_llm,
+    make_async_llm,
+    make_async_validator,
     make_target,
-    make_validator,
 )
 
 # Two consoles: pretty output (stdout) and logs/errors (stderr). Splitting
@@ -139,13 +148,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--validation",
         choices=("syntax", "server", "none"),
         default="syntax",
-        help=("Validation mode (default: syntax). 'server' requires --server."),
+        help=(
+            "Validation mode (default: syntax). With 'server', pass --server to use "
+            "your own database, or omit it to auto-provision a throwaway one."
+        ),
     )
     validation_group.add_argument(
         "--server",
         type=Path,
         default=None,
-        help=("Path to a server-config YAML (config/servers/*.yaml). Required when --validation=server."),
+        help=(
+            "Path to a server-config YAML (config/servers/*.yaml). Optional: with "
+            "--validation=server and no --server, a throwaway database is provisioned "
+            "automatically (requires Docker)."
+        ),
     )
     validation_group.add_argument(
         "--max-iterations",
@@ -197,6 +213,18 @@ def _resolve_aql_graph_name(
     return None
 
 
+def _resolve_validation_mode(args: argparse.Namespace) -> str:
+    """Map CLI flags to an effective validation mode.
+
+    ``--validation server`` with no ``--server`` means *managed*: the library
+    provisions a throwaway database. With ``--server PATH`` it stays plain
+    ``server`` (bring-your-own).
+    """
+    if args.validation == "server" and args.server is None:
+        return "managed"
+    return str(args.validation)
+
+
 def _load_server_config_or_die(
     args: argparse.Namespace,
 ) -> Neo4jConfig | ArangoDBConfig | GremlinConfig | None:
@@ -204,7 +232,8 @@ def _load_server_config_or_die(
     if args.validation != "server":
         return None
     if args.server is None:
-        _die("--validation=server requires --server <path-to-server.yaml>")
+        # No config provided: managed mode provisions its own database.
+        return None
     server_config = load_server_config(args.server)
     if args.target == "cypher" and not isinstance(server_config, Neo4jConfig):
         _die(
@@ -323,6 +352,44 @@ def _print_input_sql(sql: str) -> None:
     )
 
 
+# Per-role styling for the conversation transcript.
+_ROLE_STYLE: dict[str, str] = {
+    "system": "dim",
+    "user": "bold cyan",
+    "assistant": "bold green",
+}
+
+
+def _conversation_panel(messages: list[dict[str, str]]) -> Panel:
+    """Build a panel of the system↔model exchange for the live display.
+
+    Shows each turn so the reader can follow the generate-validate-fix loop: the
+    model's attempts stream in live and each fix request carries the validation
+    errors. The system prompt (schema + rules) is long and static, so it is
+    shown as a one-line summary to keep the live view focused on the exchange.
+    """
+    body = Text()
+    if not messages:
+        body.append("(waiting for the model…)", style="dim")
+    for index, message in enumerate(messages):
+        role = message.get("role", "?")
+        content = message.get("content", "")
+        if index:
+            body.append("\n\n")
+        body.append(f"▸ {role}\n", style=_ROLE_STYLE.get(role, "bold"))
+        if role == "system":
+            body.append(f"({len(content)} chars — schema + translation rules)", style="dim")
+        else:
+            body.append(content)
+    return Panel(
+        body,
+        title="[bold]Conversation (system ↔ model)[/bold]",
+        title_align="left",
+        border_style="magenta",
+        padding=(1, 2),
+    )
+
+
 def _print_generated(query: str | None, target_language: str) -> None:
     renderable: str | Syntax
     if not query:
@@ -381,6 +448,26 @@ def _print_result(result: TranslationResult) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _run_live(translator: AsyncSQLTranslator, sql_query: str) -> TranslationResult:
+    """Drive the async translator, streaming the conversation into a live panel.
+
+    The Live region updates in place as the model "types" and each turn is added;
+    on exit it leaves the final conversation rendered between the Input SQL and
+    Generated panels.
+    """
+    async with translator:
+        with Live(
+            _conversation_panel([]),
+            console=console,
+            refresh_per_second=12,
+            vertical_overflow="visible",
+        ) as live:
+            return await translator.translate(
+                sql_query,
+                on_conversation=lambda snapshot: live.update(_conversation_panel(snapshot)),
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -392,12 +479,18 @@ def main(argv: list[str] | None = None) -> int:
         format="%(message)s",
         handlers=[RichHandler(console=err_console, show_path=False, rich_tracebacks=True, markup=False)],
     )
+    # Silence the graph-DB drivers' own console logging. The validators already
+    # capture DB errors and feed them to the LLM (and into the Result panel), so
+    # the drivers' redundant warning/error lines are pure noise in the demo.
+    for _noisy_logger in ("neo4j", "gremlinpython"):
+        logging.getLogger(_noisy_logger).setLevel(logging.CRITICAL)
 
     sql_query = _read_sql(args.sql)
 
     mapping = SchemaMapping.from_yaml(args.mapping)
     model_config = _load_model_config_or_die(args)
     server_config = _load_server_config_or_die(args)
+    validation_mode = _resolve_validation_mode(args)
     aql_graph_name = _resolve_aql_graph_name(args, server_config)
 
     _print_settings(
@@ -406,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         model_path=args.model,
         model_config=model_config,
         target=args.target,
-        validation=args.validation,
+        validation=validation_mode,
         server_path=args.server,
         server_config=server_config,
         max_iterations=args.max_iterations,
@@ -414,18 +507,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     _print_input_sql(sql_query)
 
-    llm = make_llm(model_config)
+    llm = make_async_llm(model_config)
     target = make_target(args.target, graph_name=aql_graph_name)
-    validator = make_validator(args.target, args.validation, server_config=server_config)
-
-    with SQLTranslator(
+    validator = make_async_validator(args.target, validation_mode, server_config=server_config)
+    translator = AsyncSQLTranslator(
         schema_mapping=mapping,
         llm=llm,
         target=target,
         validator=validator,
         max_iterations=args.max_iterations,
-    ) as translator:
-        result = translator.translate(sql_query)
+    )
+
+    try:
+        result = asyncio.run(_run_live(translator, sql_query))
+    except RuntimeError as e:
+        # e.g. managed mode could not reach the Docker daemon.
+        _die(str(e))
 
     _print_generated(result.generated_query, result.target_language)
     _print_result(result)

@@ -23,6 +23,7 @@ from typing import Any, Self
 
 from rows2graph.events import (
     CompletedEvent,
+    ConversationCallback,
     EventHandler,
     FixGeneratedEvent,
     GeneratedEvent,
@@ -64,6 +65,8 @@ class AsyncSQLTranslator:
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
+        # See SQLTranslator.last_messages — same contract, async sibling.
+        self.last_messages: list[dict[str, str]] = []
 
     async def __aenter__(self) -> Self:
         return self
@@ -81,6 +84,7 @@ class AsyncSQLTranslator:
         sql_query: str,
         on_event: EventHandler | None = None,
         stream_to: StreamCallback | None = None,
+        on_conversation: ConversationCallback | None = None,
     ) -> TranslationResult:
         """Translate a SQL query through the full feedback loop.
 
@@ -95,11 +99,25 @@ class AsyncSQLTranslator:
         feeds the validator after each call completes. The callback is
         invoked many times per LLM call — once per text delta — and runs
         on the same task as the translator itself.
+
+        When ``on_conversation`` is set, the handler receives a snapshot of the
+        full message list each time the conversation changes — after each prompt
+        and per-token while an assistant turn streams — which drives live
+        conversation displays. Setting it implies streaming from the LLM even
+        when ``stream_to`` is ``None``.
         """
-        start_time = perf_counter()
         target_name = self._target.name
         if target_name not in ("cypher", "aql", "gremlin"):
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
+
+        # Provision the validator (e.g. boot a managed throwaway database) before
+        # the timer starts, so duration_seconds measures only the LLM + validation
+        # loop rather than one-off database setup.
+        warmup = getattr(self._validator, "warmup", None)
+        if callable(warmup):
+            await warmup()
+
+        start_time = perf_counter()
         state = TranslationState(
             sql_query=sql_query,
             target_language=target_name,  # type: ignore[arg-type]
@@ -109,12 +127,17 @@ class AsyncSQLTranslator:
         logger.info("Detected SQL features: %s", sorted(f.value for f in features))
         system_prompt = build_system_prompt(self._schema_mapping, self._target, features)
         state.messages.append(_msg("system", system_prompt))
+        _emit_conversation(on_conversation, state.messages)
 
         user_msg = build_generate_prompt(sql_query)
         state.messages.append(_msg("user", user_msg))
+        _emit_conversation(on_conversation, state.messages)
 
-        raw_content = await self._llm.chat(state.messages, stream_to=stream_to)
+        raw_content = await self._llm.chat(
+            state.messages, stream_to=_stream_with_conversation(state, on_conversation, stream_to)
+        )
         state.messages.append(_msg("assistant", raw_content))
+        _emit_conversation(on_conversation, state.messages)
         state.generated_query = self._target.extract_query(raw_content)
 
         logger.info("Initial query generated:\n%s", state.generated_query)
@@ -178,9 +201,13 @@ class AsyncSQLTranslator:
                 errors=errors,
             )
             state.messages.append(_msg("user", fix_msg))
+            _emit_conversation(on_conversation, state.messages)
 
-            raw_content = await self._llm.chat(state.messages, stream_to=stream_to)
+            raw_content = await self._llm.chat(
+                state.messages, stream_to=_stream_with_conversation(state, on_conversation, stream_to)
+            )
             state.messages.append(_msg("assistant", raw_content))
+            _emit_conversation(on_conversation, state.messages)
             state.generated_query = self._target.extract_query(raw_content)
 
             logger.info("Fix iteration %d produced:\n%s", state.validation_iteration, state.generated_query)
@@ -194,6 +221,7 @@ class AsyncSQLTranslator:
 
         state.iterations_used = state.validation_iteration
         state.duration_seconds = perf_counter() - start_time
+        self.last_messages = [{"role": str(m["role"]), "content": str(m["content"])} for m in state.messages]
 
         result = TranslationResult(
             sql_query=state.sql_query,
@@ -222,6 +250,50 @@ class AsyncSQLTranslator:
 
 def _msg(role: str, content: str) -> dict[str, Any]:
     return {"role": role, "content": content}
+
+
+def _snapshot(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [{"role": str(m["role"]), "content": str(m["content"])} for m in messages]
+
+
+def _emit_conversation(handler: ConversationCallback | None, messages: list[dict[str, Any]]) -> None:
+    """Invoke an ``on_conversation`` handler with a message snapshot, isolating its errors.
+
+    Mirrors :func:`_emit`: a misbehaving handler must not abort the translation.
+    """
+    if handler is None:
+        return
+    try:
+        handler(_snapshot(messages))
+    except Exception:  # noqa: BLE001 — the whole point is to swallow user errors
+        logger.warning("Conversation handler raised", exc_info=True)
+
+
+def _stream_with_conversation(
+    state: TranslationState,
+    on_conversation: ConversationCallback | None,
+    stream_to: StreamCallback | None,
+) -> StreamCallback | None:
+    """Build the per-delta stream callback that also emits live conversation snapshots.
+
+    When ``on_conversation`` is set, the returned callback streams the assembling
+    assistant turn into the snapshot (so consumers see the model "typing") and
+    still forwards deltas to ``stream_to`` if the caller supplied one. When
+    ``on_conversation`` is ``None`` it returns ``stream_to`` unchanged — so
+    non-live callers keep their behaviour, including no streaming when
+    ``stream_to`` is also ``None``.
+    """
+    if on_conversation is None:
+        return stream_to
+    parts: list[str] = []
+
+    def _cb(delta: str) -> None:
+        parts.append(delta)
+        if stream_to is not None:
+            stream_to(delta)
+        _emit_conversation(on_conversation, [*state.messages, _msg("assistant", "".join(parts))])
+
+    return _cb
 
 
 def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:

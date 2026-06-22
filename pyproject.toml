@@ -17,6 +17,7 @@ dependencies = [
     "anthropic>=0.96.0",
     "rich>=13",
     "sqlglot>=23",
+    "testcontainers[neo4j,arangodb]>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +72,12 @@ warn_unreachable = true
 # Any rather than block strict-mode compilation across the package.
 [[tool.mypy.overrides]]
 module = "gremlin_python.*"
+ignore_missing_imports = true
+
+# testcontainers and the docker SDK ship no py.typed marker; treat their
+# driver surface as Any rather than block strict-mode compilation.
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "docker.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

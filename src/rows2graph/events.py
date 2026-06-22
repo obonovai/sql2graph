@@ -106,13 +106,7 @@ class CompletedEvent:
     result: TranslationResult
 
 
-TranslationEvent = (
-    GeneratedEvent
-    | ValidatedEvent
-    | FixGeneratedEvent
-    | MaxIterationsReachedEvent
-    | CompletedEvent
-)
+TranslationEvent = GeneratedEvent | ValidatedEvent | FixGeneratedEvent | MaxIterationsReachedEvent | CompletedEvent
 """Discriminated union of every event the translator emits."""
 
 
@@ -120,8 +114,19 @@ EventHandler = Callable[[TranslationEvent], None]
 """Type alias for the ``on_event`` callback signature."""
 
 
+ConversationCallback = Callable[[list[dict[str, str]]], None]
+"""Signature for the ``on_conversation`` callback.
+
+Receives a snapshot of the full system↔LLM message list (``{"role", "content"}``
+dicts) each time the conversation changes — after each prompt is appended and
+per-token while an assistant turn streams. Consumers typically re-render the
+snapshot for a live display.
+"""
+
+
 __all__ = [
     "CompletedEvent",
+    "ConversationCallback",
     "EventHandler",
     "FixGeneratedEvent",
     "GeneratedEvent",

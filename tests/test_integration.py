@@ -25,16 +25,19 @@ import pytest
 from rows2graph import (
     AnthropicConfig,
     AnthropicLLMClient,
+    AsyncManagedServerValidator,
     AsyncSQLTranslator,
     CypherSyntaxValidator,
     CypherTarget,
     EdgeMapping,
+    ManagedServerValidator,
     Neo4jConfig,
     NodeMapping,
     SchemaMapping,
     SQLTranslator,
     make_async_llm,
     make_async_validator,
+    make_validator,
 )
 from rows2graph.validators.cypher.server import (
     AsyncCypherServerValidator,
@@ -74,6 +77,29 @@ def neo4j_config() -> Neo4jConfig:
         password=password,
         database=os.environ.get("NEO4J_DATABASE", "neo4j"),
     )
+
+
+@pytest.fixture
+def docker_available() -> None:
+    """Skip the test unless a Docker daemon is reachable (managed mode needs it).
+
+    Retries a few times so a cold daemon (e.g. Docker Desktop still warming up)
+    does not spuriously skip the first managed test in a run.
+    """
+    import time
+
+    import docker
+
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            docker.from_env(timeout=120).ping()
+            return
+        except Exception as e:
+            last_exc = e
+            if attempt < 2:
+                time.sleep(3)
+    pytest.skip(f"Docker daemon not available: {last_exc}")
 
 
 @pytest.fixture
@@ -259,3 +285,73 @@ def test_real_full_loop_anthropic_with_neo4j_server_validation(
     )
     assert result.generated_query is not None
     assert result.iterations_used >= 1
+
+
+# ---------------------------------------------------------------------------
+# Managed validation: auto-provisioned throwaway databases (need Docker only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_cypher_validator_accepts_and_rejects() -> None:
+    """Managed Cypher provisions Neo4j, then accepts a valid query and rejects a bad one."""
+    validator = ManagedServerValidator("cypher")
+    try:
+        bad = validator.validate("MATCH (n RETURN n")
+        good = validator.validate("MATCH (n) RETURN n LIMIT 1")
+    finally:
+        validator.close()
+    assert bad, "managed Cypher validator should reject a malformed query"
+    assert good == [], f"managed Cypher validator should accept a valid query, got: {good}"
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_aql_validator_accepts_and_rejects() -> None:
+    """Managed AQL provisions ArangoDB, then accepts valid AQL and rejects malformed."""
+    validator = ManagedServerValidator("aql")
+    try:
+        bad = validator.validate("FOR x IN RETURN x")
+        good = validator.validate("RETURN 1")
+    finally:
+        validator.close()
+    assert bad, "managed AQL validator should reject a malformed query"
+    assert good == [], f"managed AQL validator should accept a valid query, got: {good}"
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_gremlin_validator_accepts_and_rejects() -> None:
+    """Managed Gremlin provisions a Gremlin Server, then accepts a valid traversal."""
+    validator = ManagedServerValidator("gremlin")
+    try:
+        good = validator.validate("g.V().limit(1)")
+        bad = validator.validate("g.V(.limit(1)")
+    finally:
+        validator.close()
+    assert good == [], f"managed Gremlin validator should accept a valid traversal, got: {good}"
+    assert bad, "managed Gremlin validator should reject a malformed traversal"
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_validator_via_factory() -> None:
+    """make_validator(..., 'managed') provisions and validates end-to-end."""
+    validator = make_validator("cypher", "managed")
+    assert isinstance(validator, ManagedServerValidator)
+    try:
+        assert validator.validate("MATCH (n) RETURN n LIMIT 1") == []
+    finally:
+        validator.close()
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_async_validator_matches_sync() -> None:
+    """The async managed validator provisions and validates like the sync one."""
+
+    async def run() -> list[str]:
+        v = make_async_validator("cypher", "managed")
+        assert isinstance(v, AsyncManagedServerValidator)
+        try:
+            return await v.validate("MATCH (n) RETURN n LIMIT 1")
+        finally:
+            await v.close()
+
+    assert asyncio.run(run()) == []

@@ -130,9 +130,10 @@ backend. Python 3.12+ is required.
 
 ## Quick start
 
-The demo CLI takes three YAML config files: a schema mapping, an LLM model
-config, and (optionally) a server config for validation against a live
-database.
+The demo CLI takes two required YAML configs — a schema mapping and an LLM
+model config — plus an optional server config for validation against a live
+database. Under `--validation server` you either pass `--server` (your own
+database) or omit it to auto-provision a throwaway one (see below).
 
 ```bash
 uv run python demo/cli.py \
@@ -162,7 +163,7 @@ uv run python demo/cli.py \
 ```
 
 See `demo/README.md` for the full flag reference and more examples (LDBC SNB,
-AQL/ArangoDB, server-side validation, stdin input).
+AQL/ArangoDB, server-side and zero-config managed validation, stdin input).
 
 ## Configuration
 
@@ -172,7 +173,7 @@ YAML configs live under `config/`, split by concern:
 |---|---|---|
 | `config/mappings/` | Schema mapping (nodes + edges). | Always — one per relational schema. |
 | `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always — one per backend. |
-| `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only when `--validation server`. |
+| `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only for `--validation server` against *your own* database; omit `--server` to auto-provision a throwaway one (needs Docker). |
 
 These categories are orthogonal: the same mapping can be paired with any
 model, the same model drives any mapping, the same server config validates

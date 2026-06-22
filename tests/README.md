@@ -65,6 +65,21 @@ export NEO4J_PASSWORD=testpassword
 uv run pytest -m integration
 ```
 
+### Managed-validation tests (Docker only)
+
+The `test_managed_*` tests need **no env vars and no pre-running database** — they
+provision throwaway Neo4j / ArangoDB / Gremlin containers via `testcontainers`
+and tear them down afterwards. They require a running **Docker daemon** and skip
+themselves when one is not reachable. The first run pulls the database images
+(`neo4j:5.26`, `arangodb:3.11`, `tinkerpop/gremlin-server:3.8.1`), so it is slow;
+later runs reuse the cached images. `testcontainers` ships with the library, so
+no extra install is needed.
+
+```bash
+# Any Docker daemon running; no env vars required:
+uv run pytest -m integration -k managed
+```
+
 ### What gets exercised
 
 - `test_real_anthropic_translates_simple_select_to_cypher` — Anthropic
@@ -81,6 +96,13 @@ uv run pytest -m integration
   validator returns the same shape of result as the sync sibling.
 - `test_real_full_loop_anthropic_with_neo4j_server_validation` — full
   end-to-end against real Anthropic and real Neo4j.
+- `test_managed_cypher_validator_accepts_and_rejects` /
+  `test_managed_aql_validator_accepts_and_rejects` /
+  `test_managed_gremlin_validator_accepts_and_rejects` — managed mode
+  auto-provisions each engine, accepts a valid query and rejects a bad one.
+- `test_managed_validator_via_factory` /
+  `test_managed_async_validator_matches_sync` — `make_validator` /
+  `make_async_validator` drive managed mode end-to-end (sync and async).
 
 Approximate cost per full integration run: a few cents on Anthropic, no
 cost on Neo4j (local Docker). Each test takes ~5–30 s depending on LLM

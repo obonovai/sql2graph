@@ -65,6 +65,7 @@ from rows2graph.validators.gremlin.syntax import (
     GremlinSyntaxValidator,
 )
 from rows2graph.validators.noop import AsyncNoopValidator, NoopValidator
+from rows2graph.validators.provision import AsyncManagedServerValidator, ManagedServerValidator
 
 
 class QueryValidator(Protocol):
@@ -116,8 +117,9 @@ def make_validator(
 
     Args:
         target: ``"cypher"``, ``"aql"``, or ``"gremlin"``.
-        mode: ``"syntax"``, ``"server"``, or ``"none"``.
-        server_config: Required iff ``mode == "server"``. Must be a
+        mode: ``"syntax"``, ``"server"``, ``"managed"``, or ``"none"``.
+        server_config: Required iff ``mode == "server"`` (ignored when
+            ``mode == "managed"``, which provisions its own database). Must be a
             :class:`Neo4jConfig` when ``target == "cypher"``, an
             :class:`ArangoDBConfig` when ``target == "aql"``, and a
             :class:`GremlinConfig` when ``target == "gremlin"``.
@@ -157,7 +159,13 @@ def make_validator(
             return GremlinServerValidator(server_config)
         raise ValueError(f"Unknown target language: {target!r}")
 
-    raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
+    if mode == "managed":
+        if target not in ("cypher", "aql", "gremlin"):
+            raise ValueError(f"Unknown target language: {target!r}")
+        # server_config is intentionally ignored: managed mode provisions its own.
+        return ManagedServerValidator(target)
+
+    raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'managed', 'none'.")
 
 
 def make_async_validator(
@@ -206,7 +214,13 @@ def make_async_validator(
             return AsyncGremlinServerValidator(server_config)
         raise ValueError(f"Unknown target language: {target!r}")
 
-    raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'none'.")
+    if mode == "managed":
+        if target not in ("cypher", "aql", "gremlin"):
+            raise ValueError(f"Unknown target language: {target!r}")
+        # server_config is intentionally ignored: managed mode provisions its own.
+        return AsyncManagedServerValidator(target)
+
+    raise ValueError(f"Unknown validation mode: {mode!r}. Supported: 'syntax', 'server', 'managed', 'none'.")
 
 
 __all__ = [
@@ -219,6 +233,7 @@ __all__ = [
     "AsyncCypherSyntaxValidator",
     "AsyncGremlinServerValidator",
     "AsyncGremlinSyntaxValidator",
+    "AsyncManagedServerValidator",
     "AsyncNoopValidator",
     "AsyncQueryValidator",
     "CypherServerValidator",
@@ -226,6 +241,7 @@ __all__ = [
     "GremlinConfig",
     "GremlinServerValidator",
     "GremlinSyntaxValidator",
+    "ManagedServerValidator",
     "Neo4jConfig",
     "NoopValidator",
     "QueryValidator",

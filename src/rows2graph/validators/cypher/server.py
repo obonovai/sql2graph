@@ -17,7 +17,7 @@ component that interprets it*.
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from neo4j import AsyncGraphDatabase, GraphDatabase
 from pydantic import BaseModel, ConfigDict
@@ -45,15 +45,24 @@ class Neo4jConfig(BaseModel):
     username: str = "neo4j"
     password: str
     database: str = "neo4j"
+    # Server-side notification filter forwarded to the driver. ``"OFF"`` stops
+    # the server sending advisory notifications (e.g. unknown-label/property
+    # warnings against an empty database) — managed validation sets this to keep
+    # output clean. ``None`` leaves the driver default (notifications enabled).
+    notifications_min_severity: Literal["OFF", "INFORMATION", "WARNING"] | None = None
 
 
 class CypherServerValidator:
     """Validate Cypher queries by running ``EXPLAIN`` against a Neo4j server."""
 
     def __init__(self, config: Neo4jConfig) -> None:
+        kwargs: dict[str, Any] = {}
+        if config.notifications_min_severity is not None:
+            kwargs["notifications_min_severity"] = config.notifications_min_severity
         self._driver = GraphDatabase.driver(
             config.uri,
             auth=(config.username, config.password),
+            **kwargs,
         )
         self._database = config.database
 
@@ -80,9 +89,13 @@ class AsyncCypherServerValidator:
     """
 
     def __init__(self, config: Neo4jConfig) -> None:
+        kwargs: dict[str, Any] = {}
+        if config.notifications_min_severity is not None:
+            kwargs["notifications_min_severity"] = config.notifications_min_severity
         self._driver = AsyncGraphDatabase.driver(
             config.uri,
             auth=(config.username, config.password),
+            **kwargs,
         )
         self._database = config.database
 

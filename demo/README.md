@@ -24,9 +24,12 @@ You also need *one* LLM backend reachable:
   no fields need to be filled into `config/models/anthropic.yaml` unless
   you want to pin a non-default model.
 
-`--validation server` additionally requires a running Neo4j (for Cypher) or
-ArangoDB (for AQL) instance. The demo runs fine without one as long as you
-stick to `--validation syntax` or `--validation none`.
+`--validation server` validates against a live database. Pass `--server
+config/servers/<engine>.yaml` to use your own instance, or **omit `--server`
+to auto-provision a throwaway one** — the library starts a disposable Neo4j /
+ArangoDB / Gremlin container (via `testcontainers`) and removes it at exit.
+Managed provisioning needs a running Docker daemon; `--validation syntax` and
+`--validation none` need neither a database nor Docker.
 
 ## Basic invocation
 
@@ -46,6 +49,12 @@ MATCH (s:Supplier {suppkey: 1337})
 RETURN s.name, s.address
 ```
 
+The demo prints, in order: a settings header, **Input SQL**, the
+**Conversation (system ↔ model)** transcript (streamed live as the model responds), the **Generated** query, and a
+**Result** summary. Graph-DB driver warnings/errors are silenced from the
+console; validation errors still appear in the Result panel and are fed back to
+the model during the fix loop.
+
 ## Flag reference
 
 ```
@@ -57,12 +66,13 @@ LLM:
   --model PATH            Model-config YAML (provider field selects Ollama or Anthropic)
 
 Target language:
-  --target {cypher,aql}   Default: cypher
+  --target {cypher,aql,gremlin}  Default: cypher
   --aql-graph-name NAME   Named graph for AQL traversals; defaults to server config
 
 Validation:
   --validation {syntax,server,none}  Default: syntax
-  --server PATH           Server-config YAML; required iff --validation=server
+  --server PATH           Server-config YAML. Optional under --validation=server:
+                          omit it to auto-provision a throwaway database (needs Docker)
   --max-iterations N      Default: 3
 
 Logging:
@@ -93,6 +103,22 @@ uv run python demo/cli.py \
     --target  cypher \
     --validation server \
     --server  config/servers/neo4j.yaml \
+    -v
+```
+
+### TPC-H, managed validation (zero-config, auto-provisioned Neo4j)
+
+No database setup and no `--server`: the library starts a throwaway Neo4j
+container, validates against it, and tears it down. Requires a running Docker
+daemon.
+
+```bash
+uv run python demo/cli.py \
+    --sql "SELECT name FROM supplier WHERE suppkey = 1337" \
+    --mapping config/mappings/tpch.yaml \
+    --model   config/models/anthropic.yaml \
+    --target  cypher \
+    --validation server \
     -v
 ```
 

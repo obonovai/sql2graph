@@ -118,7 +118,7 @@ ServerConfig = Neo4jConfig | ArangoDBConfig | GremlinConfig   # discriminated on
 def load_server_config(path: Path | str) -> Neo4jConfig | ArangoDBConfig | GremlinConfig
 def make_validator(
     target: str,                                     # "cypher" | "aql" | "gremlin"
-    mode: str,                                       # "syntax" | "server" | "none"
+    mode: str,                                       # "syntax" | "server" | "managed" | "none"
     *,
     server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None = None,
 ) -> QueryValidator
@@ -133,6 +133,16 @@ def make_async_validator(
 Both factories raise `ValueError` if `mode == "server"` and
 `server_config` is missing, and `TypeError` if the `server_config`'s type
 does not match `target`.
+
+`mode == "managed"` needs no `server_config`: it returns a
+`ManagedServerValidator` (async: `AsyncManagedServerValidator`) that
+provisions a throwaway database for `target` via `testcontainers` on the
+first `validate()` and tears it down on `close()`. It requires a running
+Docker daemon and raises `RuntimeError` from `validate()` if none is
+reachable. For Cypher, the managed Neo4j connection sets
+`Neo4jConfig.notifications_min_severity="OFF"` (an optional config field) so the
+empty database's advisory notifications (e.g. unknown label/property) are not
+logged — this does not change which queries pass or fail.
 
 Concrete async classes (also exported from the top-level package):
 `AsyncCypherSyntaxValidator`, `AsyncAqlSyntaxValidator`,
@@ -183,6 +193,7 @@ class AsyncSQLTranslator:
         sql_query: str,
         on_event: EventHandler | None = None,
         stream_to: StreamCallback | None = None,
+        on_conversation: ConversationCallback | None = None,
     ) -> TranslationResult: ...
     async def close(self) -> None: ...
     async def __aenter__(self) -> AsyncSQLTranslator: ...
@@ -192,6 +203,19 @@ class AsyncSQLTranslator:
 Both translators are context managers: use `with SQLTranslator(...)` or
 `async with AsyncSQLTranslator(...)` to ensure the LLM client and
 validator are closed even on exception.
+
+After each `translate()` call, `translator.last_messages` holds the full
+system↔LLM conversation for that call — a `list[dict[str, str]]` of
+`{"role", "content"}` turns (system prompt, generate prompt, raw model
+responses, and each fix prompt). It is overwritten on the next call;
+`TranslationResult` itself deliberately omits the chat history.
+
+For a *live* view, `AsyncSQLTranslator.translate(on_conversation=...)` takes a
+`ConversationCallback` (`Callable[[list[dict[str, str]]], None]`) that receives the
+growing message snapshot as it changes — after each prompt and per-token while an
+assistant turn streams. Setting it implies streaming from the LLM even without
+`stream_to`. (Only the async translator exposes it; the sync `SQLTranslator` keeps
+just `last_messages`.)
 
 Same `TranslationResult`, same iteration semantics, same prompts — see
 `docs/ARCHITECTURE.md` § "Async path" for the rationale and the parity

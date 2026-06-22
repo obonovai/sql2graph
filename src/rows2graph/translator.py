@@ -71,6 +71,11 @@ class SQLTranslator:
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
+        # Full system↔LLM conversation from the most recent translate() call
+        # (system + user/assistant turns), overwritten each call. Exposed for
+        # callers that want to display the exchange; TranslationResult itself
+        # deliberately omits the chat history.
+        self.last_messages: list[dict[str, str]] = []
 
     def __enter__(self) -> Self:
         return self
@@ -102,12 +107,20 @@ class SQLTranslator:
                 :mod:`rows2graph.events`. Handler exceptions are caught,
                 logged at WARNING, and do not abort the translation.
         """
-        start_time = perf_counter()
         target_name = self._target.name
         if target_name not in ("cypher", "aql", "gremlin"):
             # TranslationState's Literal currently restricts to these three.
             # See note in src/rows2graph/state.py about widening it.
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
+
+        # Provision the validator (e.g. boot a managed throwaway database) before
+        # the timer starts, so duration_seconds measures only the LLM + validation
+        # loop rather than one-off database setup.
+        warmup = getattr(self._validator, "warmup", None)
+        if callable(warmup):
+            warmup()
+
+        start_time = perf_counter()
         state = TranslationState(
             sql_query=sql_query,
             target_language=target_name,  # type: ignore[arg-type]
@@ -202,6 +215,7 @@ class SQLTranslator:
 
         state.iterations_used = state.validation_iteration
         state.duration_seconds = perf_counter() - start_time
+        self.last_messages = [{"role": str(m["role"]), "content": str(m["content"])} for m in state.messages]
 
         result = TranslationResult(
             sql_query=state.sql_query,

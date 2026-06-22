@@ -232,9 +232,7 @@ def test_load_server_config_dispatches_to_arangodb(tmp_path: Path, monkeypatch: 
 
 def test_load_server_config_dispatches_to_gremlin(tmp_path: Path) -> None:
     p = tmp_path / "gremlin.yaml"
-    p.write_text(
-        'type: "gremlin"\nurl: "ws://localhost:8182/gremlin"\ntraversal_source: "g"\n'
-    )
+    p.write_text('type: "gremlin"\nurl: "ws://localhost:8182/gremlin"\ntraversal_source: "g"\n')
     config = load_server_config(p)
     assert isinstance(config, GremlinConfig)
     assert config.url == "ws://localhost:8182/gremlin"
@@ -354,6 +352,31 @@ def test_make_validator_cypher_server_constructs_with_neo4j() -> None:
         mock_gdb.driver.assert_called_once()
 
 
+def test_neo4j_config_notifications_min_severity_defaults_to_none() -> None:
+    assert Neo4jConfig(password="x").notifications_min_severity is None
+
+
+def test_neo4j_config_rejects_invalid_notifications_min_severity() -> None:
+    with pytest.raises(ValidationError):
+        Neo4jConfig(password="x", notifications_min_severity="LOUD")  # type: ignore[arg-type]
+
+
+def test_cypher_server_validator_forwards_notifications_min_severity() -> None:
+    from rows2graph.validators.cypher.server import CypherServerValidator
+
+    with patch("rows2graph.validators.cypher.server.GraphDatabase") as mock_gdb:
+        CypherServerValidator(Neo4jConfig(password="secret", notifications_min_severity="OFF"))
+        assert mock_gdb.driver.call_args.kwargs.get("notifications_min_severity") == "OFF"
+
+
+def test_cypher_server_validator_omits_notifications_min_severity_when_unset() -> None:
+    from rows2graph.validators.cypher.server import CypherServerValidator
+
+    with patch("rows2graph.validators.cypher.server.GraphDatabase") as mock_gdb:
+        CypherServerValidator(Neo4jConfig(password="secret"))
+        assert "notifications_min_severity" not in mock_gdb.driver.call_args.kwargs
+
+
 def test_make_validator_aql_server_constructs_with_arangodb() -> None:
     with patch("rows2graph.validators.aql.server.ArangoClient") as mock_client:
         v = make_validator(
@@ -398,6 +421,39 @@ def test_make_validator_gremlin_server_constructs_with_gremlin_config() -> None:
 def test_make_validator_unknown_mode_raises() -> None:
     with pytest.raises(ValueError, match="Unknown validation mode"):
         make_validator("cypher", "telepathy")
+
+
+def test_make_validator_managed_dispatches_without_docker() -> None:
+    """managed mode returns a ManagedServerValidator without touching Docker."""
+    from rows2graph.validators.provision import ManagedServerValidator
+
+    v = make_validator("cypher", "managed")
+    assert isinstance(v, ManagedServerValidator)
+    # No container is started until the first validate(); closing an unstarted
+    # validator must be a no-op and idempotent.
+    v.close()
+    v.close()
+
+
+def test_make_validator_managed_ignores_server_config() -> None:
+    """managed mode ignores server_config rather than type-checking it."""
+    from rows2graph.validators.provision import ManagedServerValidator
+
+    v = make_validator("cypher", "managed", server_config=GremlinConfig())
+    assert isinstance(v, ManagedServerValidator)
+    v.close()
+
+
+def test_make_validator_managed_rejects_unknown_target() -> None:
+    with pytest.raises(ValueError, match="Unknown target language"):
+        make_validator("sparql", "managed")
+
+
+def test_make_async_validator_managed_dispatches() -> None:
+    from rows2graph import make_async_validator
+    from rows2graph.validators.provision import AsyncManagedServerValidator
+
+    assert isinstance(make_async_validator("gremlin", "managed"), AsyncManagedServerValidator)
 
 
 # ---------------------------------------------------------------------------
@@ -1024,9 +1080,7 @@ def test_detect_features_aggregate_without_group_by() -> None:
 
 
 def test_detect_features_having_implies_aggregation() -> None:
-    assert SqlFeature.AGGREGATION in detect_features(
-        "SELECT k, COUNT(*) c FROM t GROUP BY k HAVING COUNT(*) > 5"
-    )
+    assert SqlFeature.AGGREGATION in detect_features("SELECT k, COUNT(*) c FROM t GROUP BY k HAVING COUNT(*) > 5")
 
 
 def test_detect_features_order_limit() -> None:
@@ -1067,9 +1121,7 @@ def test_detect_features_in_subquery() -> None:
 
 
 def test_detect_features_exists_subquery() -> None:
-    feats = detect_features(
-        "SELECT a FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = t.x)"
-    )
+    feats = detect_features("SELECT a FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.x = t.x)")
     assert SqlFeature.SUBQUERY in feats
 
 
@@ -1106,12 +1158,8 @@ def test_cypher_prompt_includes_window_chunk_when_detected() -> None:
 
 
 def test_aql_prompt_includes_collect_only_when_aggregation_detected() -> None:
-    with_agg = build_system_prompt(
-        _schema(), AqlTarget(graph_name="g"), frozenset({SqlFeature.AGGREGATION})
-    )
-    without_agg = build_system_prompt(
-        _schema(), AqlTarget(graph_name="g"), frozenset()
-    )
+    with_agg = build_system_prompt(_schema(), AqlTarget(graph_name="g"), frozenset({SqlFeature.AGGREGATION}))
+    without_agg = build_system_prompt(_schema(), AqlTarget(graph_name="g"), frozenset())
     assert "COLLECT" in with_agg
     assert "COLLECT" not in without_agg
 
@@ -1124,9 +1172,7 @@ def test_gremlin_prompt_includes_textp_only_when_like_detected() -> None:
 
 
 def test_gremlin_prompt_includes_dedup_only_when_distinct_detected() -> None:
-    with_distinct = build_system_prompt(
-        _schema(), GremlinTarget(), frozenset({SqlFeature.DISTINCT})
-    )
+    with_distinct = build_system_prompt(_schema(), GremlinTarget(), frozenset({SqlFeature.DISTINCT}))
     without_distinct = build_system_prompt(_schema(), GremlinTarget(), frozenset())
     assert ".dedup()" in with_distinct
     assert ".dedup()" not in without_distinct
@@ -1404,3 +1450,137 @@ def test_async_translator_omits_stream_to_by_default() -> None:
 
     fake = asyncio.run(run())
     assert fake.stream_calls == 0
+
+
+def test_translator_exposes_last_messages_conversation() -> None:
+    """last_messages captures the full system↔model exchange (incl. a fix loop)."""
+    fake = _FakeLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])  # fail, then fix
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        translator.translate("SELECT * FROM persons")
+
+    roles = [m["role"] for m in translator.last_messages]
+    assert roles == ["system", "user", "assistant", "user", "assistant"]
+    assert translator.last_messages[-1]["content"] == "MATCH (p:Person) RETURN p"
+    assert all(set(m) == {"role", "content"} for m in translator.last_messages)
+
+
+def test_async_translator_exposes_last_messages_conversation() -> None:
+    """The async translator exposes the same last_messages conversation."""
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> list[dict[str, str]]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            await translator.translate("SELECT * FROM persons")
+        return translator.last_messages
+
+    messages = asyncio.run(run())
+    assert [m["role"] for m in messages] == ["system", "user", "assistant"]
+    assert messages[-1]["content"] == "MATCH (p:Person) RETURN p"
+
+
+def test_async_translator_on_conversation_streams_snapshots() -> None:
+    """on_conversation fires growing snapshots, including a partial assistant turn."""
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> tuple[list[list[dict[str, str]]], list[dict[str, str]]]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])  # fail, then fix
+        snaps: list[list[dict[str, str]]] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            await translator.translate("SELECT * FROM persons", on_conversation=snaps.append)
+        return snaps, translator.last_messages
+
+    snaps, last = asyncio.run(run())
+    # The final snapshot is the full conversation and matches last_messages.
+    assert snaps[-1] == last
+    assert [m["role"] for m in snaps[-1]] == ["system", "user", "assistant", "user", "assistant"]
+    # Per-token streaming produces many more snapshots than there are turns.
+    assert len(snaps) > len(last)
+    # At least one snapshot shows a *partial* assistant turn (mid-stream).
+    partials = [s[-1]["content"] for s in snaps if s and s[-1]["role"] == "assistant"]
+    assert any(0 < len(p) < len("MATCH (p:Person)") for p in partials)
+
+
+def test_translator_warms_up_validator_before_validation() -> None:
+    """A validator exposing warmup() is warmed up exactly once, before the first validate."""
+    calls: list[str] = []
+
+    class _WarmupValidator:
+        def warmup(self) -> None:
+            calls.append("warmup")
+
+        def validate(self, _query: str) -> list[str]:
+            calls.append("validate")
+            return []
+
+        def close(self) -> None:
+            calls.append("close")
+
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=_WarmupValidator(),
+    ) as translator:
+        translator.translate("SELECT * FROM persons")
+
+    assert calls[0] == "warmup"
+    assert calls.count("warmup") == 1
+    assert calls.index("warmup") < calls.index("validate")
+
+
+def test_async_translator_warms_up_validator_before_validation() -> None:
+    """The async translator awaits the validator's warmup before the first validate."""
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+
+    calls: list[str] = []
+
+    class _AsyncWarmupValidator:
+        async def warmup(self) -> None:
+            calls.append("warmup")
+
+        async def validate(self, _query: str) -> list[str]:
+            calls.append("validate")
+            return []
+
+        async def close(self) -> None:
+            calls.append("close")
+
+    async def run() -> None:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=_AsyncWarmupValidator(),
+        ) as translator:
+            await translator.translate("SELECT * FROM persons")
+
+    asyncio.run(run())
+    assert calls[0] == "warmup"
+    assert calls.count("warmup") == 1
+    assert calls.index("warmup") < calls.index("validate")
