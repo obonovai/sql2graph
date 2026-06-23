@@ -85,11 +85,10 @@ class TargetLanguage(Protocol):
     def system_prompt_section(self) -> str: ...
     def extract_query(self, llm_response: str) -> str: ...
 
-def make_target(name: str, *, graph_name: str | None = None) -> TargetLanguage
+def make_target(name: str) -> TargetLanguage
 ```
 
-`name` ∈ `{"cypher", "aql", "gremlin"}`. `graph_name` is only meaningful
-for `"aql"`.
+`name` ∈ `{"cypher", "aql", "gremlin"}`.
 
 For the `"gremlin"` target the framework emits Gremlin-Groovy script form
 (e.g. `g.V().hasLabel('Person').valueMap()`) — portable across Apache
@@ -486,12 +485,11 @@ url: "http://localhost:8529"
 username: "root"
 password: "${ARANGO_PASSWORD}"
 database: "ldbc"
-graph_name: "ldbc"                   # named graph used in AQL traversals
 ```
 
-The validator runs `db.aql.validate(query)`. `graph_name` here also feeds
-the AQL target-language prompt unless the demo's `--aql-graph-name` flag
-overrides it.
+The validator runs `db.aql.validate(query)`. Generated AQL uses bare
+edge-collection traversals (`FOR v IN OUTBOUND <doc> <EdgeCollection>`),
+so no named graph is referenced or configured.
 
 #### Gremlin (`type: "gremlin"`)
 

@@ -4,23 +4,24 @@ Provides :class:`AqlTarget`, which contributes the AQL-specific section of
 the system prompt and extracts an AQL query from a (possibly noisy) LLM
 response.
 
-AQL differs structurally from Cypher in three ways that matter for prompt
-engineering:
+The framework adopts the convention that vertex-collection names equal node
+labels and edge-collection names equal edge types from the user's schema
+mapping. Crucially, this target uses the **edge-collection (anonymous)**
+traversal form — ``FOR v IN OUTBOUND <startDoc> <EdgeCollection>`` — and
+never the named-graph form. Edge collections always exist physically, so a
+traversal needs no registered named graph, and dropping ``GRAPH "<name>"``
+removes the failure modes small models fall into: combining ``GRAPH`` with a
+bare edge collection (``unexpected GRAPH keyword``), leaving a dangling
+quoted graph name, or hallucinating a graph name outright.
 
-1. *Nodes* are documents in named *vertex collections*; *edges* are documents
-   in named *edge collections*. The framework adopts the convention that
-   vertex collection names equal node labels and edge collection names equal
-   edge types from the user's schema mapping.
-2. *Graph traversals* go through a named graph: ``FOR v, e, p IN <min>..<max>
-   OUTBOUND/INBOUND/ANY <startVertex> GRAPH "<graph>"``. The graph name is a
-   property of the deployment and must be threaded into the prompt; this is
-   the role of the :attr:`graph_name` constructor argument.
-3. *Predicate* and *output* keywords are ``FILTER`` and ``RETURN``, not
-   ``WHERE`` and ``RETURN``.
-
-The prompt section is assembled from a fixed base block (always emitted) and
-a dictionary of per-:class:`~rows2graph.sql_features.SqlFeature` rule chunks
-(emitted only for features detected in the input SQL).
+Like the Cypher and Gremlin targets, the prompt section is a fixed
+``_BASE_RULES`` block (always emitted) plus per-:class:`~rows2graph.sql_features.SqlFeature`
+chunks appended only for features detected in the input SQL. The base block
+deliberately mirrors :mod:`rows2graph.targets.gremlin`: concrete syntax, a
+"these are NOT valid AQL" anti-pattern block with verbatim bad→good
+rewrites, worked examples, and an output-format mandate — the structure that
+keeps small local models (llama3.2, qwen2.5-coder:7b) on the rails rather
+than emitting Cypher-flavoured guesses.
 """
 
 from __future__ import annotations
@@ -41,47 +42,176 @@ _START_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# The base block keeps the vertex/edge-collection convention and the
-# FOR ... GRAPH traversal — these are universal AQL idioms, not specific to
-# any one SQL operation. Without them the LLM cannot produce any working
-# query against the target ArangoDB instance.
-_BASE_RULES_TEMPLATE = (
-    "Generate valid AQL (ArangoDB Query Language) queries.\n"
-    "- Treat each node label from the schema as a vertex collection name.\n"
-    "- Treat each edge type from the schema as an edge collection name.\n"
-    "- {graph_hint}\n"
-    "- Use `FOR v, e, p IN <min>..<max> OUTBOUND/INBOUND/ANY "
-    '<startVertex> GRAPH "<graph>"` for graph traversals; '
-    "do NOT use Cypher-style `MATCH (a)-[:REL]->(b)` patterns.\n"
-    "- Use `FILTER` (not `WHERE`) for predicates.\n"
-    "- Use `RETURN` for output (terminates each query level).\n"
-    "- Start the query with one of: FOR, LET, INSERT, UPDATE, REPLACE, "
-    "REMOVE, UPSERT, WITH, RETURN."
+# Always emitted. Covers the AQL data model, the single traversal form this
+# project uses (bare edge collections, no GRAPH), an explicit anti-pattern
+# block that names the exact mistakes small models make, and three worked
+# SQL→AQL examples against the schema. The example queries were verified
+# against the documented ArangoDB AQL grammar.
+_BASE_RULES = (
+    "Generate ONE valid AQL (ArangoDB Query Language) query for the schema "
+    "above. Output ONLY the query — no prose, no explanation, no markdown "
+    "fences, no alternative versions, and nothing before or after the "
+    "query.\n"
+    "\n"
+    "Data model:\n"
+    "- Each NODE label is a vertex collection (e.g. `Customer`, `Order`). "
+    "Read its documents with `FOR x IN Customer`.\n"
+    "- Each EDGE type is an edge collection (e.g. `PLACED`, `CONTAINS`). "
+    "Edges connect documents; they are not fields on a document.\n"
+    "- The schema above prints each edge as `[:PLACED]` for readability. "
+    "That `[: ]` is Cypher notation, NOT AQL — in a query you write the "
+    "edge collection name BARE (`PLACED`), never `[:PLACED]`.\n"
+    "\n"
+    "Traversal — this is how you JOIN:\n"
+    "- A traversal starts FROM a document and names one or more bare edge "
+    "collections (depth defaults to 1):\n"
+    "    FOR v IN OUTBOUND startDoc EdgeCollection\n"
+    "  * `startDoc` is a document variable bound by an enclosing `FOR` "
+    "(e.g. `c` from `FOR c IN Customer`), or a document id string like "
+    '`"Customer/123"`. It is NEVER a collection name and NEVER a quoted '
+    "collection name.\n"
+    "  * `EdgeCollection` is written bare: no brackets, no colons, no "
+    'quotes — `PLACED`, never `[:PLACED]` and never `"PLACED"`.\n'
+    "  * This project does NOT use named graphs: never emit the `GRAPH` "
+    "keyword. A traversal ends at the edge collection — nothing (no "
+    "`GRAPH`, no quoted string) may follow it except `FILTER`, a nested "
+    "`FOR`, or `RETURN`.\n"
+    "- Follow the edge DIRECTION from the schema: for `[:PLACED] from "
+    "Customer to Order`, go OUTBOUND from a Customer to reach its Orders, or "
+    "INBOUND from an Order to reach its Customer. Use ANY only when "
+    "direction does not matter.\n"
+    "- To read an EDGE property, also bind the edge variable: "
+    "`FOR p, e IN OUTBOUND s SUPPLIES RETURN { part: p.name, cost: "
+    "e.supplycost }`.\n"
+    "- Express a chain of SQL JOINs as NESTED `FOR` loops, one per edge hop "
+    "(see the examples). Do NOT build nested `FILTER x IN (FOR ...)` "
+    "comparisons on key columns — the edge already encodes the join, and "
+    "foreign-key columns are not stored on the documents.\n"
+    "\n"
+    "Predicates and output:\n"
+    "- Use `FILTER` (never `WHERE`). Sort with `SORT expr ASC|DESC`. Page "
+    "with `LIMIT n` or `LIMIT offset, n` (offset first, unlike SQL "
+    "`OFFSET`).\n"
+    "- `RETURN` produces output. To return several columns, RETURN an "
+    "object: `RETURN { alias: expr, ... }`. A SQL alias (`col AS name`) "
+    "becomes the object key.\n"
+    "- Take a scalar from a subquery with `xs[0]` (null if empty); "
+    "`FIRST(xs)` is equivalent. Test SQL `EXISTS` with `LENGTH(xs) > 0`.\n"
+    "- Use the graph PROPERTY names from the schema, not the original SQL "
+    "column names.\n"
+    "- A translated SELECT almost always starts with `FOR`. Use a leading "
+    "`LET` only to define a value used by a following `FOR`, and a bare "
+    "leading `RETURN` only for a constant/scalar. Writes start with INSERT, "
+    "UPDATE, REPLACE, REMOVE, or UPSERT.\n"
+    "\n"
+    "These are NOT valid AQL — never generate them:\n"
+    "- `[:PLACED]` or `-[:REL]->` : Cypher edge syntax (AQL has no `[:`). "
+    "Name the edge collection bare after the start vertex.\n"
+    '    BAD:  FOR v, e, p IN OUTBOUND[:LOCATED_IN]("Nation") GRAPH '
+    '"named_graph"\n'
+    "    GOOD: FOR s IN Supplier FOR n IN OUTBOUND s LOCATED_IN RETURN "
+    "{ supplier: s.name, nation: n.name }\n"
+    '- `OUTBOUND "Customer"` or `OUTBOUND("Customer")` : a collection '
+    "name (or a function call) as the start vertex. Start from a document "
+    "variable bound by an enclosing `FOR`, or a document id string "
+    '`"Customer/123"`.\n'
+    '- `OUTBOUND c PLACED GRAPH "..."` : an edge collection AND `GRAPH` '
+    'together is illegal. Likewise `OUTBOUND c PLACED "name"` : a '
+    "trailing quoted string (a leftover graph name) after the edge "
+    "collection is invalid.\n"
+    '    BAD:  FOR o IN OUTBOUND c PLACED GRAPH "your_graph_name"\n'
+    "    GOOD: FOR o IN OUTBOUND c PLACED RETURN o\n"
+    "- `WHERE ...` : use `FILTER`.\n"
+    "- `STARTS WITH` / `ENDS WITH` (Cypher, written with a space) : use the "
+    "AQL `LIKE(text, pattern[, true])` function.\n"
+    "- `CASE WHEN ... END` : use the ternary `cond ? a : b`.\n"
+    "- `MATCH (a)-[:R]->(b)` : Cypher. Read with `FOR x IN Collection` and "
+    "traverse with `FOR y IN OUTBOUND x EdgeColl`.\n"
+    "\n"
+    "Examples:\n"
+    "- single join + filter (`SELECT s.name, n.name AS nation FROM supplier "
+    "s JOIN nation n ON n.nationkey = s.nationkey WHERE s.acctbal > "
+    "5000`):\n"
+    "    FOR s IN Supplier\n"
+    "      FILTER s.acctbal > 5000\n"
+    "      FOR n IN OUTBOUND s LOCATED_IN\n"
+    "        RETURN { name: s.name, nation: n.name }\n"
+    "- multi-hop join — a chain of JOINs becomes nested `FOR` loops "
+    "(`FROM customer c JOIN orders o ... JOIN lineitem li ... JOIN part "
+    "p ...`):\n"
+    "    FOR c IN Customer\n"
+    "      FOR o IN OUTBOUND c PLACED\n"
+    "        FOR li IN OUTBOUND o CONTAINS\n"
+    "          FOR p IN OUTBOUND li OF_PART\n"
+    "            RETURN { customer_name: c.name, orderkey: o.orderkey, "
+    "quantity: li.quantity, part_name: p.name }\n"
+    "- GROUP BY + HAVING via a correlated subquery and `FILTER` "
+    "(`... COUNT(o.orderkey) AS order_count ... GROUP BY ... HAVING "
+    "COUNT(o.orderkey) > 1`):\n"
+    "    FOR c IN Customer\n"
+    "      LET orders = (FOR o IN OUTBOUND c PLACED RETURN o)\n"
+    "      FILTER LENGTH(orders) > 1\n"
+    "      FOR n IN OUTBOUND c LOCATED_IN\n"
+    "        RETURN { custkey: c.custkey, customer_name: c.name, "
+    "mktsegment: c.mktsegment, nation_name: n.name, order_count: "
+    "LENGTH(orders) }"
 )
 
 _LIKE_RULES = (
-    "SQL LIKE patterns: use the `LIKE(text, pattern, case_insensitive)` "
-    "function — e.g. `FILTER LIKE(p.name, \"%foo%\")` for "
-    "`name LIKE '%foo%'`. For `ILIKE`, pass `true` as the third argument: "
-    "`LIKE(p.name, \"%foo%\", true)`. Do NOT use Cypher's "
-    "`CONTAINS`/`STARTS WITH`/`ENDS WITH` keywords — they are not AQL."
+    "SQL LIKE patterns: use the `LIKE(text, pattern, caseInsensitive)` "
+    'function — e.g. `FILTER LIKE(p.name, "%foo%")` for `name LIKE '
+    "'%foo%'`. For `ILIKE`, pass `true` as the third argument: "
+    '`LIKE(p.name, "%foo%", true)`. AQL keeps SQL\'s `%` and `_` '
+    "wildcards. Do NOT use Cypher's `STARTS WITH` / `ENDS WITH` (written "
+    "with a space) — they are not AQL."
 )
 
 _JOIN_RULES = (
-    "SQL JOINs → AQL graph traversals: each `JOIN` becomes a step in a "
-    "`FOR v, e, p IN OUTBOUND/INBOUND/ANY` traversal along the relevant "
-    "edge collection. Use the direction declared by the schema. For outer "
-    "joins, wrap the traversal in a `LET matches = (FOR ...)` and emit "
-    "with `LENGTH(matches) > 0 ? matches : [null]`-style fallbacks."
+    "SQL JOIN -> a nested `FOR` traversal, one `FOR` per hop, following the "
+    "schema's edge direction:\n"
+    "    FOR c IN Customer\n"
+    "      FOR o IN OUTBOUND c PLACED\n"
+    "        RETURN { ... }\n"
+    "For LEFT/OUTER joins, collect the optional side and keep the row when "
+    "it is empty:\n"
+    "    FOR c IN Customer\n"
+    "      LET orders = (FOR o IN OUTBOUND c PLACED RETURN o)\n"
+    "      FOR o IN (LENGTH(orders) > 0 ? orders : [null])\n"
+    "        RETURN { name: c.name, orderkey: o.orderkey }\n"
+    "(`o.orderkey` is null when the customer has no orders; reading a field "
+    "off the null placeholder is safe, but do NOT start a further traversal "
+    "FROM that null `o`.) Do NOT translate `JOIN ... ON` key equality into a "
+    "`FILTER` on foreign-key columns — the edge encodes the join and FK "
+    "columns are not stored on the documents."
 )
 
 _AGGREGATION_RULES = (
-    "Aggregations: `COLLECT ... WITH COUNT INTO counter` for plain counts; "
-    "`COLLECT key = expr WITH COUNT INTO n` for grouped counts; "
-    "`COLLECT key = expr AGGREGATE total = SUM(...), avg = AVERAGE(...) "
-    "INTO groups` for multi-aggregate grouping. AGGREGATE functions: "
-    "SUM, AVERAGE, MIN, MAX, LENGTH, COUNT_DISTINCT. To express SQL "
-    "`HAVING`, add a `FILTER` after the `COLLECT` clause."
+    "Aggregations come in two shapes.\n"
+    "1) Aggregate the related items OF EACH parent (the common case, e.g. "
+    "count/sum of orders per customer): use a correlated subquery, with a "
+    "`FILTER` for `HAVING`:\n"
+    "    FOR c IN Customer\n"
+    "      LET orders = (FOR o IN OUTBOUND c PLACED RETURN o)\n"
+    "      FILTER LENGTH(orders) > 1\n"
+    "      RETURN { custkey: c.custkey, order_count: LENGTH(orders), "
+    "total: SUM(orders[*].totalprice) }\n"
+    "   `LENGTH(xs)` is `COUNT(*)` over the related rows. When the subquery "
+    "returns whole documents (`RETURN o`), aggregate a field with "
+    "`SUM(xs[*].field)` / `AVERAGE(xs[*].field)` / `MIN(...)` / `MAX(...)`; "
+    "when it already projects the number (`RETURN o.totalprice`), use "
+    "`SUM(xs)`.\n"
+    "2) Global GROUP BY across a whole collection: use `COLLECT`, which "
+    "always needs a following `RETURN`:\n"
+    "   - grouped count: `FOR o IN Order COLLECT status = o.orderstatus "
+    "WITH COUNT INTO n RETURN { status, n }`\n"
+    "   - grouped sum/avg: `FOR o IN Order COLLECT status = o.orderstatus "
+    "AGGREGATE total = SUM(o.totalprice), avg = AVERAGE(o.totalprice) "
+    "RETURN { status, total, avg }`\n"
+    "   - plain total count: `FOR x IN Coll COLLECT WITH COUNT INTO n "
+    "RETURN n`\n"
+    "   AGGREGATE functions: SUM, AVERAGE, MIN, MAX, LENGTH, COUNT_UNIQUE. "
+    "For SQL `HAVING` on a grouped query, add a `FILTER` after the "
+    "`COLLECT`."
 )
 
 _ORDER_LIMIT_RULES = (
@@ -90,7 +220,7 @@ _ORDER_LIMIT_RULES = (
 )
 
 _CTE_RULES = (
-    "SQL CTEs (`WITH x AS (...)`) → AQL `LET x = (FOR ... RETURN ...)` "
+    "SQL CTEs (`WITH x AS (...)`) -> AQL `LET x = (FOR ... RETURN ...)` "
     "subquery assignments. Note: AQL's top-level `WITH` keyword declares "
     "collection bindings for transactions, NOT a CTE — use `LET` for the "
     "CTE pattern."
@@ -127,8 +257,9 @@ _SUBQUERY_RULES = (
 )
 
 _DISTINCT_RULES = (
-    "`SELECT DISTINCT` → `RETURN DISTINCT ...`. For `COUNT(DISTINCT x)`, "
-    "use `COUNT_DISTINCT(x)` inside `AGGREGATE`, or `LENGTH(UNIQUE(...))`."
+    "`SELECT DISTINCT` -> `RETURN DISTINCT ...`. For `COUNT(DISTINCT x)`, "
+    "use `COUNT_UNIQUE(x)` inside an `AGGREGATE` clause, or "
+    "`COUNT_DISTINCT(x)` / `LENGTH(UNIQUE(x))` as a plain expression."
 )
 
 _FEATURE_RULES: dict[SqlFeature, str] = {
@@ -148,30 +279,25 @@ _FEATURE_RULES: dict[SqlFeature, str] = {
 class AqlTarget:
     """AQL (ArangoDB) target language implementation.
 
-    The ``graph_name`` argument is the name of the *named graph* registered
-    in the target ArangoDB instance. It is woven into the system prompt so
-    the LLM produces correct ``GRAPH "<name>"`` clauses in traversals. When
-    ``graph_name`` is ``None`` (e.g. when running with ``--validation
-    syntax`` and no deployment is being targeted), the prompt falls back to
-    the wording "the configured named graph", and the LLM is expected to
-    leave a placeholder that the caller fills in later.
+    Implements :class:`rows2graph.targets.TargetLanguage` structurally —
+    there is no abstract base class to inherit from. The target is stateless:
+    AQL traversals use bare edge collections (the anonymous-graph form), so no
+    named-graph name needs to be threaded into the prompt.
     """
-
-    def __init__(self, graph_name: str | None = None) -> None:
-        self._graph_name = graph_name
 
     @property
     def name(self) -> str:
         return "aql"
 
     def system_prompt_section(self, features: frozenset[SqlFeature]) -> str:
-        if self._graph_name:
-            graph_hint = f'The named graph is "{self._graph_name}".'
-        else:
-            graph_hint = "Use the configured named graph for traversals."
-        base = _BASE_RULES_TEMPLATE.format(graph_hint=graph_hint)
+        """AQL-specific section appended to the system prompt.
 
-        chunks = [base, *(_FEATURE_RULES[feat] for feat in SqlFeature if feat in features)]
+        The base block is always emitted; the per-feature rule chunks are
+        appended in :class:`~rows2graph.sql_features.SqlFeature` declaration
+        order, giving a stable, readable layout across translations (the same
+        composition strategy as the Cypher and Gremlin targets).
+        """
+        chunks = [_BASE_RULES, *(_FEATURE_RULES[feat] for feat in SqlFeature if feat in features)]
         return "\n\n".join(chunks)
 
     def extract_query(self, llm_response: str) -> str:

@@ -85,7 +85,7 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 | `llm/anthropic.py`| Wrap `anthropic.Anthropic` and `anthropic.AsyncAnthropic` (direct API). | `AnthropicConfig`, `AnthropicLLMClient`, `AsyncAnthropicLLMClient` |
 | `targets/__init__.py` | Target-language Protocol + factory. | `TargetLanguage`, `make_target` |
 | `targets/cypher.py`   | Cypher prompt + extractor. | `CypherTarget` |
-| `targets/aql.py`      | AQL prompt + extractor. | `AqlTarget(graph_name)` |
+| `targets/aql.py`      | AQL prompt + extractor. | `AqlTarget` |
 | `validators/__init__.py` | Validator Protocols + discriminated-union config. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator` |
 | `validators/noop.py` | Pass-through (sync + async). | `NoopValidator`, `AsyncNoopValidator` |
 | `validators/cypher/syntax.py` | Regex-based Cypher validation (sync + async). | `CypherSyntaxValidator`, `AsyncCypherSyntaxValidator` |

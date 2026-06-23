@@ -45,19 +45,16 @@ class TargetLanguage(Protocol):
     def extract_query(self, llm_response: str) -> str: ...
 
 
-def make_target(name: str, *, graph_name: str | None = None) -> TargetLanguage:
+def make_target(name: str) -> TargetLanguage:
     """Construct a :class:`TargetLanguage` by short name.
 
     Args:
         name: ``"cypher"``, ``"aql"``, or ``"gremlin"``.
-        graph_name: Only used by AQL — the named graph in the target
-            ArangoDB instance, woven into the system prompt. Ignored for
-            Cypher and Gremlin.
     """
     if name == "cypher":
         return CypherTarget()
     if name == "aql":
-        return AqlTarget(graph_name=graph_name)
+        return AqlTarget()
     if name == "gremlin":
         return GremlinTarget()
     raise ValueError(f"Unknown target language: {name!r}. Supported: 'cypher', 'aql', 'gremlin'.")

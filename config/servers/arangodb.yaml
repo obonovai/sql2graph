@@ -7,14 +7,12 @@
 # Conventions enforced by the schema mapping:
 #   - Each node `label` in the mapping is the name of a vertex collection.
 #   - Each edge `type`  in the mapping is the name of an edge collection.
-#   - `graph_name` below names the registered named graph that ties them
-#     together; the demo CLI threads this name into the AQL system prompt
-#     (`FOR v IN ... GRAPH "<graph_name>" ...`) unless overridden by
-#     --aql-graph-name.
+# Generated AQL uses bare edge-collection traversals
+# (`FOR v IN OUTBOUND <doc> <EdgeCollection>`), so no named graph is
+# referenced and none needs to be configured here.
 
 type: "arangodb"
 url: "http://localhost:8529"
 username: "root"
 password: "${ARANGO_PASSWORD}"
 database: "ldbc"
-graph_name: "ldbc"

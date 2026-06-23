@@ -2,16 +2,14 @@
 
 Submits each candidate query to ``db.aql.validate(query)`` against a live
 ArangoDB instance. The endpoint parses the query without executing it,
-making the check safe for any statement and catching collection-name and
-graph-name hallucinations that the syntax validator cannot detect.
+making the check safe for any statement and catching syntax and
+collection-name hallucinations that the regex syntax validator cannot
+detect.
 
 The :class:`ArangoDBConfig` Pydantic model is colocated with the validator
-that consumes it. Note that ``graph_name`` here is the deployment-level
-identifier of the named graph in ArangoDB; the homonymous parameter on
-:class:`rows2graph.targets.aql.AqlTarget` is the *prompt-level* identifier
-referenced in generated traversals. The demo CLI is responsible for keeping
-the two consistent (typically by reading ``--aql-graph-name`` from the
-server config when ``--validation server``).
+that consumes it. The framework uses bare edge-collection traversals
+(``FOR v IN OUTBOUND <doc> <EdgeCollection>``), so no named graph is
+referenced and none needs to be configured here.
 """
 
 from __future__ import annotations
@@ -43,7 +41,6 @@ class ArangoDBConfig(BaseModel):
     username: str = "root"
     password: str
     database: str = "_system"
-    graph_name: str
 
 
 def _validate_aql_sync(db: object, query: str) -> list[str]:

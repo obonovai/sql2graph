@@ -224,10 +224,10 @@ def test_load_server_config_dispatches_to_neo4j(tmp_path: Path, monkeypatch: pyt
 def test_load_server_config_dispatches_to_arangodb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEST_PW", "open-sesame")
     p = tmp_path / "arangodb.yaml"
-    p.write_text('type: "arangodb"\npassword: "${TEST_PW}"\ngraph_name: "g1"\n')
+    p.write_text('type: "arangodb"\npassword: "${TEST_PW}"\n')
     config = load_server_config(p)
     assert isinstance(config, ArangoDBConfig)
-    assert config.graph_name == "g1"
+    assert config.password == "open-sesame"
 
 
 def test_load_server_config_dispatches_to_gremlin(tmp_path: Path) -> None:
@@ -266,29 +266,21 @@ def test_make_target_cypher() -> None:
     assert t.name == "cypher"
 
 
-def test_make_target_aql_carries_graph_name() -> None:
-    t = make_target("aql", graph_name="myGraph")
+def test_make_target_aql() -> None:
+    t = make_target("aql")
     assert isinstance(t, AqlTarget)
     assert t.name == "aql"
-    assert "myGraph" in t.system_prompt_section(frozenset())
-
-
-def test_make_target_aql_without_graph_name_falls_back() -> None:
-    t = make_target("aql")
-    assert "configured named graph" in t.system_prompt_section(frozenset())
+    section = t.system_prompt_section(frozenset())
+    # AQL uses bare edge-collection traversals plus an anti-pattern block,
+    # not the named-graph form.
+    assert "OUTBOUND" in section
+    assert "These are NOT valid AQL" in section
 
 
 def test_make_target_gremlin() -> None:
     t = make_target("gremlin")
     assert isinstance(t, GremlinTarget)
     assert t.name == "gremlin"
-
-
-def test_make_target_gremlin_ignores_graph_name() -> None:
-    # graph_name is only meaningful for AQL; Gremlin should accept the
-    # argument (uniform factory signature) but ignore it.
-    t = make_target("gremlin", graph_name="ignored")
-    assert isinstance(t, GremlinTarget)
 
 
 def test_make_target_rejects_unknown_name() -> None:
@@ -327,7 +319,7 @@ def test_make_validator_cypher_server_requires_neo4j_config() -> None:
 
 
 def test_make_validator_cypher_server_rejects_arangodb_config() -> None:
-    arango_config = ArangoDBConfig(password="p", graph_name="g")
+    arango_config = ArangoDBConfig(password="p")
     with pytest.raises(TypeError, match="Neo4jConfig"):
         make_validator("cypher", "server", server_config=arango_config)
 
@@ -382,7 +374,7 @@ def test_make_validator_aql_server_constructs_with_arangodb() -> None:
         v = make_validator(
             "aql",
             "server",
-            server_config=ArangoDBConfig(password="secret", graph_name="g"),
+            server_config=ArangoDBConfig(password="secret"),
         )
         from rows2graph.validators.aql.server import AqlServerValidator
 
@@ -646,16 +638,16 @@ def test_extract_cypher_fallback_returns_stripped() -> None:
 
 def test_extract_aql_from_fence() -> None:
     text = "```aql\nFOR p IN persons RETURN p\n```"
-    assert AqlTarget(graph_name="g").extract_query(text) == "FOR p IN persons RETURN p"
+    assert AqlTarget().extract_query(text) == "FOR p IN persons RETURN p"
 
 
 def test_extract_aql_from_keyword() -> None:
     text = "OK:\nFOR p IN persons FILTER p.age > 18 RETURN p"
-    assert AqlTarget(graph_name="g").extract_query(text) == "FOR p IN persons FILTER p.age > 18 RETURN p"
+    assert AqlTarget().extract_query(text) == "FOR p IN persons FILTER p.age > 18 RETURN p"
 
 
 def test_extract_aql_fallback_returns_stripped() -> None:
-    assert AqlTarget(graph_name="g").extract_query("  nothing here  ") == "nothing here"
+    assert AqlTarget().extract_query("  nothing here  ") == "nothing here"
 
 
 def test_extract_gremlin_from_gremlin_fence() -> None:
@@ -769,18 +761,16 @@ def test_build_system_prompt_cypher() -> None:
     assert "Person" in prompt  # schema is embedded
 
 
-def test_build_system_prompt_aql_includes_graph_name() -> None:
-    prompt = build_system_prompt(_schema(), AqlTarget(graph_name="mygraph"), frozenset())
+def test_build_system_prompt_aql_uses_edge_collection_form() -> None:
+    prompt = build_system_prompt(_schema(), AqlTarget(), frozenset())
     assert "aql" in prompt
     assert "FOR" in prompt
-    assert "mygraph" in prompt
     assert "FILTER" in prompt
-    assert "Person" in prompt
-
-
-def test_build_system_prompt_aql_without_graph_name_falls_back() -> None:
-    prompt = build_system_prompt(_schema(), AqlTarget(graph_name=None), frozenset())
-    assert "configured named graph" in prompt
+    assert "Person" in prompt  # schema is embedded
+    # AQL uses bare edge-collection traversals, and the prompt warns against
+    # the Cypher edge syntax small models tend to emit.
+    assert "OUTBOUND" in prompt
+    assert "These are NOT valid AQL" in prompt
 
 
 def test_build_system_prompt_gremlin() -> None:
@@ -1183,8 +1173,8 @@ def test_cypher_prompt_includes_window_chunk_when_detected() -> None:
 
 
 def test_aql_prompt_includes_collect_only_when_aggregation_detected() -> None:
-    with_agg = build_system_prompt(_schema(), AqlTarget(graph_name="g"), frozenset({SqlFeature.AGGREGATION}))
-    without_agg = build_system_prompt(_schema(), AqlTarget(graph_name="g"), frozenset())
+    with_agg = build_system_prompt(_schema(), AqlTarget(), frozenset({SqlFeature.AGGREGATION}))
+    without_agg = build_system_prompt(_schema(), AqlTarget(), frozenset())
     assert "COLLECT" in with_agg
     assert "COLLECT" not in without_agg
 

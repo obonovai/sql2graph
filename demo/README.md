@@ -67,7 +67,6 @@ LLM:
 
 Target language:
   --target {cypher,aql,gremlin}  Default: cypher
-  --aql-graph-name NAME   Named graph for AQL traversals; defaults to server config
 
 Validation:
   --validation {syntax,server,none}  Default: syntax

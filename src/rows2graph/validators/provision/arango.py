@@ -10,10 +10,6 @@ from rows2graph.validators.aql.server import ArangoDBConfig
 IMAGE = "arangodb:3.11"
 # Deterministic root password for the disposable container.
 _PASSWORD = "managedpassword"
-# ``ArangoDBConfig`` requires ``graph_name``, but the validator only calls
-# ``db.aql.validate`` — a static parse check that never dereferences the
-# graph — so a placeholder is sufficient for an empty managed database.
-_GRAPH_NAME = "managed"
 
 
 def start() -> tuple[Any, ArangoDBConfig]:
@@ -32,6 +28,5 @@ def start() -> tuple[Any, ArangoDBConfig]:
         username="root",
         password=_PASSWORD,
         database="_system",
-        graph_name=_GRAPH_NAME,
     )
     return container, config

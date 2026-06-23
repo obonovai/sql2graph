@@ -133,15 +133,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="cypher",
         help="Target graph query language (default: cypher).",
     )
-    target_group.add_argument(
-        "--aql-graph-name",
-        default=None,
-        help=(
-            "Named graph to reference in AQL traversals. Only meaningful "
-            "when --target=aql. If omitted with --validation=server, the "
-            "graph_name from the ArangoDB server config is used."
-        ),
-    )
 
     validation_group = parser.add_argument_group("Validation")
     validation_group.add_argument(
@@ -197,20 +188,6 @@ def _read_sql(sql_arg: str) -> str:
     if sql_arg == "-":
         return sys.stdin.read()
     return sql_arg
-
-
-def _resolve_aql_graph_name(
-    args: argparse.Namespace,
-    server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None,
-) -> str | None:
-    """Pick the AQL graph name from CLI flag, falling back to server config."""
-    if args.target != "aql":
-        return None
-    if args.aql_graph_name:
-        return str(args.aql_graph_name)
-    if isinstance(server_config, ArangoDBConfig):
-        return server_config.graph_name
-    return None
 
 
 def _resolve_validation_mode(args: argparse.Namespace) -> str:
@@ -301,7 +278,6 @@ def _print_settings(
     server_path: Path | None,
     server_config: Neo4jConfig | ArangoDBConfig | GremlinConfig | None,
     max_iterations: int,
-    aql_graph_name: str | None,
 ) -> None:
     """Top-of-output header: every parameter that shapes the translation."""
     table = Table.grid(padding=(0, 2))
@@ -326,8 +302,6 @@ def _print_settings(
             "Server:",
             f"[cyan]{server_config.type}[/cyan]  [dim]({server_path})[/dim]",
         )
-    if target == "aql" and aql_graph_name:
-        table.add_row("AQL graph:", aql_graph_name)
 
     console.print(
         Panel(
@@ -491,7 +465,6 @@ def main(argv: list[str] | None = None) -> int:
     model_config = _load_model_config_or_die(args)
     server_config = _load_server_config_or_die(args)
     validation_mode = _resolve_validation_mode(args)
-    aql_graph_name = _resolve_aql_graph_name(args, server_config)
 
     _print_settings(
         mapping_path=args.mapping,
@@ -503,12 +476,11 @@ def main(argv: list[str] | None = None) -> int:
         server_path=args.server,
         server_config=server_config,
         max_iterations=args.max_iterations,
-        aql_graph_name=aql_graph_name,
     )
     _print_input_sql(sql_query)
 
     llm = make_async_llm(model_config)
-    target = make_target(args.target, graph_name=aql_graph_name)
+    target = make_target(args.target)
     validator = make_async_validator(args.target, validation_mode, server_config=server_config)
     translator = AsyncSQLTranslator(
         schema_mapping=mapping,
