@@ -44,6 +44,14 @@ from rows2graph import (
 from rows2graph._env import interpolate_env
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
 from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
+from rows2graph.targets import aql as aql_target
+from rows2graph.targets import cypher as cypher_target
+from rows2graph.targets import gremlin as gremlin_target
+from rows2graph.targets._schema import EX_JOIN_FILTER_SQL, EX_POINT_LOOKUP_SQL
+
+# Target classes and modules for parametrized cross-target parity tests.
+_ALL_TARGET_CLASSES = [CypherTarget, AqlTarget, GremlinTarget]
+_ALL_TARGET_MODULES = [cypher_target, aql_target, gremlin_target]
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -1228,11 +1236,27 @@ def test_gremlin_prompt_includes_dedup_only_when_distinct_detected() -> None:
     assert ".dedup()" not in without_distinct
 
 
-def test_aql_and_gremlin_tolerate_temporal_feature() -> None:
-    # TEMPORAL is detected globally (and is in ALL_FEATURES, emitted on
-    # parse-failure) but only the Cypher target defines a chunk for it. AQL and
-    # Gremlin must skip it via the tolerant `.get()` lookup, not KeyError.
-    for target in (AqlTarget(), GremlinTarget()):
+def test_aql_prompt_includes_temporal_chunk_only_when_detected() -> None:
+    # Every target now defines a TEMPORAL chunk (no silent gaps). For AQL the
+    # chunk is gated on `DATE_TIMESTAMP`, a substring absent from the base block.
+    with_temporal = build_system_prompt(_schema(), AqlTarget(), frozenset({SqlFeature.TEMPORAL}))
+    without_temporal = build_system_prompt(_schema(), AqlTarget(), frozenset())
+    assert "DATE_TIMESTAMP" in with_temporal
+    assert "DATE_TIMESTAMP" not in without_temporal
+
+
+def test_gremlin_prompt_includes_temporal_chunk_only_when_detected() -> None:
+    # Gremlin's TEMPORAL chunk is gated on `epoch`, absent from the base block.
+    with_temporal = build_system_prompt(_schema(), GremlinTarget(), frozenset({SqlFeature.TEMPORAL}))
+    without_temporal = build_system_prompt(_schema(), GremlinTarget(), frozenset())
+    assert "epoch" in with_temporal
+    assert "epoch" not in without_temporal
+
+
+def test_all_targets_build_with_all_features() -> None:
+    # TEMPORAL is in ALL_FEATURES (emitted on parse-failure); every target must
+    # build the full rule set without raising now that coverage is total.
+    for target in (CypherTarget(), AqlTarget(), GremlinTarget()):
         prompt = build_system_prompt(_schema(), target, ALL_FEATURES)
         assert prompt  # built without raising
 
@@ -1270,6 +1294,72 @@ def test_translator_omits_unused_rules_from_system_message() -> None:
     assert system_msg["role"] == "system"
     assert "CONTAINS" in system_msg["content"]
     assert "window function" not in system_msg["content"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Cross-target rule-schema parity
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("target_mod", _ALL_TARGET_MODULES)
+def test_target_feature_rules_cover_every_sql_feature(target_mod: Any) -> None:
+    # The keystone parity guard: every target must define a rule chunk for every
+    # SqlFeature, so a half-landed feature (a chunk in one target but silently
+    # missing from another, as TEMPORAL once was) fails the suite instead of
+    # disappearing into a tolerant `.get()` lookup.
+    assert set(target_mod._FEATURE_RULES) == set(SqlFeature)
+
+
+@pytest.mark.parametrize("target_cls", _ALL_TARGET_CLASSES)
+def test_target_base_block_has_uniform_sections(target_cls: type) -> None:
+    # Every target's always-on base block renders the same five-section
+    # skeleton with the same headers, regardless of detected features.
+    base = build_system_prompt(_schema(), target_cls(), frozenset())
+    for header in ("Data model:", "Core syntax:", "These are NOT valid", "Examples:"):
+        assert header in base, f"{target_cls.__name__} base missing section {header!r}"
+
+
+@pytest.mark.parametrize("target_cls", _ALL_TARGET_CLASSES)
+def test_target_base_block_renders_shared_examples(target_cls: type) -> None:
+    # Every target shows its translation of the same shared SQL inputs, so the
+    # worked examples line up across languages.
+    base = build_system_prompt(_schema(), target_cls(), frozenset())
+    assert EX_POINT_LOOKUP_SQL in base
+    assert EX_JOIN_FILTER_SQL in base
+
+
+@pytest.mark.parametrize("target_cls", _ALL_TARGET_CLASSES)
+def test_order_limit_chunk_has_worked_example(target_cls: type) -> None:
+    # Every target's ORDER_LIMIT chunk carries a worked sort+limit example (parity);
+    # it is gated, so it appears only when ORDER_LIMIT is detected.
+    sql = "SELECT name FROM supplier ORDER BY acctbal DESC LIMIT 10"
+    with_ol = build_system_prompt(_schema(), target_cls(), frozenset({SqlFeature.ORDER_LIMIT}))
+    without_ol = build_system_prompt(_schema(), target_cls(), frozenset())
+    assert sql in with_ol
+    assert sql not in without_ol
+
+
+# ---------------------------------------------------------------------------
+# AQL clause-ordering and set-operation rules (regression: qwen3-coder failures)
+# ---------------------------------------------------------------------------
+
+
+def test_aql_base_teaches_sort_limit_before_return() -> None:
+    # The fatal AQL failure mode (aql-11/aql-12): SORT/LIMIT placed after RETURN.
+    # The always-on base block must teach that RETURN terminates the FOR block,
+    # with a BAD->GOOD anti-pattern showing the correct ordering.
+    base = build_system_prompt(_schema(), AqlTarget(), frozenset())
+    assert "must come BEFORE `RETURN`" in base
+    assert "SORT LENGTH(members) DESC LIMIT 10 RETURN" in base  # GOOD ordering shown
+
+
+def test_aql_union_rule_warns_function_not_infix() -> None:
+    # aql-13 wasted iterations writing `FOR...RETURN UNION_DISTINCT FOR...RETURN`
+    # (SQL-style infix). The UNION chunk must warn it is a function, not infix.
+    with_union = build_system_prompt(_schema(), AqlTarget(), frozenset({SqlFeature.UNION}))
+    without_union = build_system_prompt(_schema(), AqlTarget(), frozenset())
+    assert "NOT an infix" in with_union
+    assert "NOT an infix" not in without_union
 
 
 # ---------------------------------------------------------------------------

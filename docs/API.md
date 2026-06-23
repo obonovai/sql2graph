@@ -82,13 +82,16 @@ a live display.
 class TargetLanguage(Protocol):
     @property
     def name(self) -> str: ...
-    def system_prompt_section(self) -> str: ...
+    def system_prompt_section(self, features: frozenset[SqlFeature]) -> str: ...
     def extract_query(self, llm_response: str) -> str: ...
 
 def make_target(name: str) -> TargetLanguage
 ```
 
-`name` ∈ `{"cypher", "aql", "gremlin"}`.
+`name` ∈ `{"cypher", "aql", "gremlin"}`. `system_prompt_section` receives the
+`frozenset[SqlFeature]` detected in the SQL and returns the always-on base
+block plus the rule chunks gated on those features (see
+[Per-query prompt assembly](#) in `docs/ARCHITECTURE.md`).
 
 For the `"gremlin"` target the framework emits Gremlin-Groovy script form
 (e.g. `g.V().hasLabel('Person').valueMap()`) — portable across Apache

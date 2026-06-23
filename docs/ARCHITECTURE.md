@@ -353,31 +353,45 @@ The feature set flows through two layers:
 2. **Target-specific rule chunks.**
    `TargetLanguage.system_prompt_section` now takes the feature set as
    an argument. `CypherTarget`, `AqlTarget`, and `GremlinTarget` each
-   keep a private `_FEATURE_RULES: dict[SqlFeature, str]` mapping (see
-   `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) holding
-   the multi-line rule chunks per operation, and append only the chunks
-   for features present. A target may define a chunk for only *some*
-   features: `system_prompt_section` looks each one up with
-   `_FEATURE_RULES.get(...)` and silently skips a feature it has no chunk
-   for, so a target-specific concern lives in just the target that needs
-   it (e.g. `TEMPORAL` ships only in `CypherTarget` — AQL and Gremlin
-   compare ISO date strings directly and need no wrapping rule). The
-   always-on base block — a data-model + "NOT valid Cypher" anti-pattern
-   + worked-examples block for Cypher, the `FOR ... GRAPH` traversal idiom
-   for AQL, the `g.V()` / `.hasLabel(...)` / `.out(...)` traversal idiom
-   for Gremlin — is emitted unconditionally.
+   keep a private `_FEATURE_RULES: dict[SqlFeature, FeatureRule]` mapping
+   (see `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`)
+   holding the per-operation rule chunks, and append only the chunks for
+   features present, in `SqlFeature` declaration order. The mapping is
+   **total** over `SqlFeature` for every target — each language defines a
+   chunk for *every* feature, and a parametrized parity test
+   (`test_target_feature_rules_cover_every_sql_feature`) fails the suite
+   if any target drops one. This is deliberate: an earlier design let
+   `system_prompt_section` look features up with `_FEATURE_RULES.get(...)`
+   and *silently skip* a missing one, which made "deliberately not
+   applicable" and "accidentally forgotten" indistinguishable — `TEMPORAL`
+   shipped in `CypherTarget` alone for exactly that reason. Where a feature
+   is a near no-op in a language, the chunk says so explicitly rather than
+   being omitted (AQL/Gremlin `TEMPORAL` instruct the model to compare
+   ISO-8601 strings directly and *not* to emit Cypher's `date(...)` /
+   `datetime(...)` constructors).
+
+   The shape of a target's section is fixed by the dataclasses in
+   `targets/_schema.py`: a `BaseRules` always-on block with five named
+   sections (output mandate → `Data model:` → `Core syntax:` →
+   `These are NOT valid <lang>:` anti-patterns as `BAD -> GOOD` pairs →
+   `Examples:`) rendered uniformly for all three targets, plus the
+   `FeatureRule` chunks. The shared `compose_section` and `extract_query`
+   helpers there replace logic the three targets previously duplicated
+   verbatim. Worked examples render a shared set of SQL inputs
+   (`EX_POINT_LOOKUP_SQL`, `EX_JOIN_FILTER_SQL`) so the base blocks are
+   comparable across languages.
 
 ### Trade-off
 
 The mechanism requires the AST detectors and the per-target rule chunks
 to stay in sync. Adding a rule chunk without a matching detector means
-the chunk never fires; adding a detector without a chunk is harmless
-(the `.get()` lookup skips it). Whenever a new operation cluster is
-supported, the change is two mandatory touches — a `SqlFeature` enum
-member and a detector branch in `detect_features` — plus a rule chunk in
-each target that wants to say something about it. A chunk is no longer
-required in *every* target: a feature relevant to only one language (such
-as `TEMPORAL`) is registered in that target's `_FEATURE_RULES` alone.
+the chunk never fires. Supporting a new operation cluster is now a
+four-part change, all enforced by tests: a `SqlFeature` enum member, a
+detector branch in `detect_features`, and a `FeatureRule` chunk in
+**every** target's `_FEATURE_RULES` (the parity test rejects a partial
+roll-out). For a feature with no meaningful work in some language, the
+chunk states the no-op explicitly — coverage stays total, so a genuine
+"not applicable" reads differently from an accidental omission.
 
 ---
 

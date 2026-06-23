@@ -100,7 +100,7 @@ The system prompt is assembled *per query*, not once per translator. Before
 the first LLM call, `detect_features` (in `src/rows2graph/sql_features.py`)
 parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
 operation clusters present — `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
-`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`. Both the generic
+`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`. Both the generic
 rules block and the target-language section (see
 `src/rows2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
 chunks corresponding to features actually in the query, so the LLM is not
