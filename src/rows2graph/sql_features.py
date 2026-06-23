@@ -18,6 +18,7 @@ harmless.
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any
 
@@ -39,9 +40,20 @@ class SqlFeature(StrEnum):
     CASE = "case"
     SUBQUERY = "subquery"
     DISTINCT = "distinct"
+    TEMPORAL = "temporal"
 
 
 ALL_FEATURES: frozenset[SqlFeature] = frozenset(SqlFeature)
+
+# An ISO-8601-ish date or timestamp string literal: ``'YYYY-MM-DD'`` optionally
+# followed by a space- or ``T``-separated ``hh:mm`` / ``hh:mm:ss``. Matches the
+# date literals SQL queries compare against (e.g. ``shipdate >= '1995-03-01'``);
+# does NOT match identifiers, codes like ``'12-34-5678'``, or phone strings.
+_DATE_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$")
+
+# sqlglot ``DataType.Type`` members whose name contains DATE or TIME — every
+# temporal cast target (DATE, TIMESTAMP, DATETIME, TIME, TIMESTAMPTZ, …).
+_TEMPORAL_CAST_TYPES = frozenset(t for t in exp.DataType.Type if "DATE" in t.name or "TIME" in t.name)
 
 
 def detect_features(sql_query: str, *, dialect: str | None = None) -> frozenset[SqlFeature]:
@@ -84,6 +96,8 @@ def detect_features(sql_query: str, *, dialect: str | None = None) -> frozenset[
         found.add(SqlFeature.SUBQUERY)
     if _any(tree, exp.Distinct):
         found.add(SqlFeature.DISTINCT)
+    if _has_temporal(tree):
+        found.add(SqlFeature.TEMPORAL)
 
     return frozenset(found)
 
@@ -97,3 +111,30 @@ def _any(tree: Any, node_type: type[Any]) -> bool:
     block legitimate calls.
     """
     return next(iter(tree.find_all(node_type)), None) is not None
+
+
+def _has_temporal(tree: Any) -> bool:
+    """Return ``True`` if the query compares against a date/timestamp value.
+
+    Three signals, any of which is sufficient:
+      * a string literal shaped like an ISO date/timestamp
+        (``'1995-03-01'``, ``'2010-06-01T12:30:00'``);
+      * an explicit cast to a temporal type (``CAST(x AS DATE)``,
+        ``DATE '2020-01-01'``, which sqlglot parses as a cast to DATE);
+      * a ``CURRENT_DATE`` / ``CURRENT_TIMESTAMP`` builtin.
+
+    Integer/identifier comparisons (``suppkey = 1337``) and ordinary string
+    equality (``name = 'Supplier#000000666'``) produce none of these, so the
+    detector stays quiet on plain selects.
+    """
+    if any(lit.is_string and _DATE_LITERAL_RE.match(lit.this) for lit in tree.find_all(exp.Literal)):
+        return True
+    if any(
+        isinstance(cast.to, exp.DataType) and cast.to.this in _TEMPORAL_CAST_TYPES for cast in tree.find_all(exp.Cast)
+    ):
+        return True
+    if next(iter(tree.find_all(exp.CurrentDate)), None) is not None:
+        return True
+    if next(iter(tree.find_all(exp.CurrentTimestamp)), None) is not None:
+        return True
+    return False

@@ -248,7 +248,10 @@ class GremlinTarget:
         (e.g. LIKE then JOIN then AGGREGATION) appear in the same sequence
         across translations.
         """
-        chunks = [_BASE_RULES, *(_FEATURE_RULES[feat] for feat in SqlFeature if feat in features)]
+        chunks = [
+            _BASE_RULES,
+            *(chunk for feat in SqlFeature if feat in features and (chunk := _FEATURE_RULES.get(feat)) is not None),
+        ]
         return "\n\n".join(chunks)
 
     def extract_query(self, llm_response: str) -> str:

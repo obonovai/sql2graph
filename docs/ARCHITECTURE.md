@@ -318,7 +318,7 @@ the corresponding rule chunks.
 
 `detect_features` (in `src/rows2graph/sql_features.py`) calls
 `sqlglot.parse_one`, walks the resulting AST with `find_all`, and returns
-a `frozenset[SqlFeature]` naming the clusters present. The enum has ten
+a `frozenset[SqlFeature]` naming the clusters present. The enum has eleven
 members:
 
 | `SqlFeature` | sqlglot nodes that light it up |
@@ -333,6 +333,7 @@ members:
 | `CASE` | `exp.Case` |
 | `SUBQUERY` | `exp.Subquery`, `exp.Exists` (CTEs are excluded — they get their own bucket) |
 | `DISTINCT` | `exp.Distinct` |
+| `TEMPORAL` | an ISO-shaped date/timestamp `exp.Literal`, `exp.Cast` to a DATE/TIMESTAMP type, or `exp.CurrentDate`/`exp.CurrentTimestamp` (see `_has_temporal`) |
 
 On any `sqlglot.errors.ParseError` the function returns `ALL_FEATURES`,
 which restores the pre-refactor "ship every rule" behaviour. That
@@ -355,19 +356,28 @@ The feature set flows through two layers:
    keep a private `_FEATURE_RULES: dict[SqlFeature, str]` mapping (see
    `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) holding
    the multi-line rule chunks per operation, and append only the chunks
-   for features present. The always-on base block (`MATCH`/`CREATE`/
-   keyword list for Cypher, the `FOR ... GRAPH` traversal idiom for AQL,
-   the `g.V()` / `.hasLabel(...)` / `.out(...)` traversal idiom for
-   Gremlin) is emitted unconditionally.
+   for features present. A target may define a chunk for only *some*
+   features: `system_prompt_section` looks each one up with
+   `_FEATURE_RULES.get(...)` and silently skips a feature it has no chunk
+   for, so a target-specific concern lives in just the target that needs
+   it (e.g. `TEMPORAL` ships only in `CypherTarget` — AQL and Gremlin
+   compare ISO date strings directly and need no wrapping rule). The
+   always-on base block — a data-model + "NOT valid Cypher" anti-pattern
+   + worked-examples block for Cypher, the `FOR ... GRAPH` traversal idiom
+   for AQL, the `g.V()` / `.hasLabel(...)` / `.out(...)` traversal idiom
+   for Gremlin — is emitted unconditionally.
 
 ### Trade-off
 
 The mechanism requires the AST detectors and the per-target rule chunks
 to stay in sync. Adding a rule chunk without a matching detector means
-the chunk never fires; adding a detector without a chunk is harmless but
-pointless. Whenever a new operation cluster is supported, the change is
-three-touch: a `SqlFeature` enum member, a detector branch in
-`detect_features`, and one entry in each target's `_FEATURE_RULES` dict.
+the chunk never fires; adding a detector without a chunk is harmless
+(the `.get()` lookup skips it). Whenever a new operation cluster is
+supported, the change is two mandatory touches — a `SqlFeature` enum
+member and a detector branch in `detect_features` — plus a rule chunk in
+each target that wants to say something about it. A chunk is no longer
+required in *every* target: a feature relevant to only one language (such
+as `TEMPORAL`) is registered in that target's `_FEATURE_RULES` alone.
 
 ---
 

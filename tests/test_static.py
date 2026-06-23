@@ -1144,6 +1144,23 @@ def test_detect_features_distinct() -> None:
     assert SqlFeature.DISTINCT in detect_features("SELECT DISTINCT a FROM t")
 
 
+def test_detect_features_temporal_date_literal() -> None:
+    # A comparison against an ISO date/timestamp string literal must light up
+    # TEMPORAL so the date()/datetime() wrapping rule ships.
+    assert SqlFeature.TEMPORAL in detect_features("SELECT a FROM lineitem WHERE shipdate >= '1995-03-01'")
+    assert SqlFeature.TEMPORAL in detect_features(
+        "SELECT a FROM post WHERE creation_date >= '2010-06-01' AND creation_date < '2010-07-01'"
+    )
+
+
+def test_detect_features_temporal_not_fired_on_non_date() -> None:
+    # An integer key, ordinary string equality, and a plain numeric predicate
+    # must NOT light up TEMPORAL — the detector keys on date-shaped literals.
+    assert SqlFeature.TEMPORAL not in detect_features("SELECT a FROM supplier WHERE suppkey = 1337")
+    assert SqlFeature.TEMPORAL not in detect_features("SELECT a FROM supplier WHERE name = 'Supplier#000000666'")
+    assert SqlFeature.TEMPORAL not in detect_features("SELECT a, b FROM t WHERE x = 1")
+
+
 def test_detect_features_parse_failure_returns_all() -> None:
     # Garbage SQL must yield the full feature set so no rule chunk is
     # silently stripped from the prompt.
@@ -1172,6 +1189,24 @@ def test_cypher_prompt_includes_window_chunk_when_detected() -> None:
     assert "window function" in prompt.lower()
 
 
+def test_cypher_prompt_includes_temporal_chunk_only_when_detected() -> None:
+    with_temporal = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.TEMPORAL}))
+    without_temporal = build_system_prompt(_schema(), CypherTarget(), frozenset())
+    # `datetime(` is unique to the temporal chunk and absent from the base block.
+    assert "datetime(" in with_temporal
+    assert "datetime(" not in without_temporal
+
+
+def test_cypher_base_rules_carry_anti_pattern_block() -> None:
+    # The always-on base block must now mirror AQL/Gremlin: a concrete data
+    # model plus an explicit "NOT valid Cypher" anti-pattern list and an
+    # output-format mandate — present even with no features detected.
+    prompt = build_system_prompt(_schema(), CypherTarget(), frozenset())
+    assert "NOT valid Cypher" in prompt
+    assert "Output ONLY the query" in prompt
+    assert "MATCH" in prompt
+
+
 def test_aql_prompt_includes_collect_only_when_aggregation_detected() -> None:
     with_agg = build_system_prompt(_schema(), AqlTarget(), frozenset({SqlFeature.AGGREGATION}))
     without_agg = build_system_prompt(_schema(), AqlTarget(), frozenset())
@@ -1191,6 +1226,15 @@ def test_gremlin_prompt_includes_dedup_only_when_distinct_detected() -> None:
     without_distinct = build_system_prompt(_schema(), GremlinTarget(), frozenset())
     assert ".dedup()" in with_distinct
     assert ".dedup()" not in without_distinct
+
+
+def test_aql_and_gremlin_tolerate_temporal_feature() -> None:
+    # TEMPORAL is detected globally (and is in ALL_FEATURES, emitted on
+    # parse-failure) but only the Cypher target defines a chunk for it. AQL and
+    # Gremlin must skip it via the tolerant `.get()` lookup, not KeyError.
+    for target in (AqlTarget(), GremlinTarget()):
+        prompt = build_system_prompt(_schema(), target, ALL_FEATURES)
+        assert prompt  # built without raising
 
 
 def test_generic_join_rule_is_feature_gated() -> None:
