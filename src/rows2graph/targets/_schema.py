@@ -43,6 +43,17 @@ EX_JOIN_FILTER_SQL = (
 )
 EX_GROUPED_COUNT_SQL = "SELECT brand, COUNT(*) AS c FROM part GROUP BY brand"
 
+# Match a fenced code block with ANY (or no) info-string after the opening
+# ```. The info-string is whatever follows the ``` up to the newline — `aql`,
+# `arangodb`, `cypher`, `sql`, or empty — so a model that mislabels the fence
+# (e.g. ```arangodb for AQL) still has its body extracted cleanly instead of
+# leaking the closing ``` into the query. The first group is the fence body.
+FENCE_RE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+
+# A closing fence left dangling at the END of a keyword-sliced query — stripped
+# on the fallback paths so a stray ``` never reaches the validator.
+_TRAILING_FENCE_RE = re.compile(r"\n?[ \t]*```[ \t]*$")
+
 
 @dataclass(frozen=True)
 class Example:
@@ -149,20 +160,23 @@ def compose_section(
     return "\n\n".join(chunks)
 
 
-def extract_query(fence_re: re.Pattern[str], start_re: re.Pattern[str], llm_response: str) -> str:
+def extract_query(start_re: re.Pattern[str], llm_response: str) -> str:
     """Pull a query out of (possibly noisy) LLM output.
 
-    Resolution order, shared by every target: (1) any fenced code block;
-    (2) the first line that starts with a target entry keyword; (3) the whole
-    response, stripped. The per-target ``fence_re`` / ``start_re`` carry the
-    language-specific keyword sets.
+    Resolution order, shared by every target: (1) any fenced code block
+    (:data:`FENCE_RE` accepts any info-string, so a mislabeled fence such as
+    ```` ```arangodb ```` is still parsed); (2) the first line that starts with a
+    target entry keyword (the per-target ``start_re``); (3) the whole response,
+    stripped. On the two fallback paths a dangling closing ```` ``` ```` is
+    removed, so a fence the model opened but mistagged never leaks its delimiter
+    into the query.
     """
-    match = fence_re.search(llm_response)
+    match = FENCE_RE.search(llm_response)
     if match:
         return match.group(1).strip()
 
     match = start_re.search(llm_response)
     if match:
-        return llm_response[match.start() :].strip()
+        return _TRAILING_FENCE_RE.sub("", llm_response[match.start() :]).strip()
 
-    return llm_response.strip()
+    return _TRAILING_FENCE_RE.sub("", llm_response).strip()

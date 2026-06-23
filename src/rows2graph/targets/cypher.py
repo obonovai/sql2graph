@@ -31,13 +31,6 @@ from rows2graph.targets._schema import (
     extract_query,
 )
 
-# Match a fenced code block tagged ``cypher`` (case-insensitive) or untagged.
-# The first captured group is the body of the fence.
-_FENCE_RE = re.compile(
-    r"```(?:cypher|CYPHER)?\s*\n(.*?)```",
-    re.DOTALL,
-)
-
 # Match the first Cypher-starting keyword at the start of any line. Used as a
 # fallback when the model does not wrap its response in a code fence.
 _START_RE = re.compile(
@@ -328,4 +321,4 @@ class CypherTarget:
         Resolution order: (1) any fenced code block; (2) the first line that
         starts with a Cypher keyword; (3) the whole response, stripped.
         """
-        return extract_query(_FENCE_RE, _START_RE, llm_response)
+        return extract_query(_START_RE, llm_response)

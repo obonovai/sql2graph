@@ -39,12 +39,6 @@ from rows2graph.targets._schema import (
     extract_query,
 )
 
-# Match a fenced code block tagged ``aql`` (case-insensitive) or untagged.
-_FENCE_RE = re.compile(
-    r"```(?:aql|AQL)?\s*\n(.*?)```",
-    re.DOTALL,
-)
-
 # Match the first AQL top-level keyword at the start of any line.
 _START_RE = re.compile(
     r"^(FOR|LET|INSERT|UPDATE|REPLACE|REMOVE|UPSERT|WITH|RETURN)\b",
@@ -377,4 +371,4 @@ class AqlTarget:
         Resolution order: (1) any fenced code block; (2) the first line that
         starts with an AQL keyword; (3) the whole response, stripped.
         """
-        return extract_query(_FENCE_RE, _START_RE, llm_response)
+        return extract_query(_START_RE, llm_response)

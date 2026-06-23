@@ -685,6 +685,35 @@ def test_extract_gremlin_fallback_returns_stripped() -> None:
     assert GremlinTarget().extract_query("  not a query  ") == "not a query"
 
 
+def test_extract_aql_from_mislabeled_arangodb_fence() -> None:
+    # Regression: the model fences AQL as ```arangodb (not ```aql). The body
+    # must still be extracted cleanly, without the closing ``` leaking in.
+    text = "```arangodb\nFOR f IN Forum\n  RETURN f\n```"
+    result = AqlTarget().extract_query(text)
+    assert result == "FOR f IN Forum\n  RETURN f"
+    assert "```" not in result
+
+
+@pytest.mark.parametrize("target_cls", _ALL_TARGET_CLASSES)
+@pytest.mark.parametrize("tag", ["sql", "text", "json"])
+def test_extract_handles_arbitrary_fence_tag(target_cls: type, tag: str) -> None:
+    # Any info-string after ``` is treated as a fence for every target, so a
+    # mislabeled fence never falls through and leaks its closing delimiter.
+    text = f"```{tag}\nQUERY BODY HERE\n```"
+    result = target_cls().extract_query(text)
+    assert result == "QUERY BODY HERE"
+    assert "```" not in result
+
+
+def test_extract_strips_trailing_fence_on_keyword_fallback() -> None:
+    # No opening fence, but a stray closing ``` trails the keyword query (the
+    # shape that previously reached the validator). It must be stripped.
+    text = "FOR p IN persons RETURN p\n```"
+    result = AqlTarget().extract_query(text)
+    assert result == "FOR p IN persons RETURN p"
+    assert "```" not in result
+
+
 # ---------------------------------------------------------------------------
 # Syntax validators
 # ---------------------------------------------------------------------------

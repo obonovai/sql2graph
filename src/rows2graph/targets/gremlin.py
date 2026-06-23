@@ -40,13 +40,6 @@ from rows2graph.targets._schema import (
     extract_query,
 )
 
-# Match a fenced code block tagged ``gremlin`` or ``groovy`` (case-insensitive)
-# or untagged. The first captured group is the body of the fence.
-_FENCE_RE = re.compile(
-    r"```(?:gremlin|groovy|GREMLIN|GROOVY)?\s*\n(.*?)```",
-    re.DOTALL,
-)
-
 # Match the first Gremlin-starting token at the start of any line. ``g.V``,
 # ``g.E``, ``g.addV``, ``g.addE``, ``g.with`` cover all legal entry points
 # against a TraversalSource; ``__.`` covers anonymous traversals that a
@@ -341,4 +334,4 @@ class GremlinTarget:
         ``g.addV``, ``g.addE``, ``g.with``, ``__.``); (3) the whole
         response, stripped.
         """
-        return extract_query(_FENCE_RE, _START_RE, llm_response)
+        return extract_query(_START_RE, llm_response)
