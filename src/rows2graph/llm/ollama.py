@@ -68,7 +68,30 @@ class OllamaConfig(BaseModel):
     host: str = _DEFAULT_HOST
     temperature: float = 0.1
     num_ctx: int = 4096
+    # Optional anti-repetition knob. Left unset by default so the framework passes
+    # only what the YAML opts into and Ollama's own default governs the rest;
+    # ``repeat_penalty`` > 1.0 counters the degenerate-repetition failure mode the
+    # fix loop can hit.
+    repeat_penalty: float | None = None
     max_retries: int = Field(default=3, ge=0)
+
+
+def _base_options(config: OllamaConfig) -> dict[str, Any]:
+    """Assemble the Ollama ``options`` dict, omitting unset optional knobs."""
+    options: dict[str, Any] = {
+        "temperature": config.temperature,
+        "num_ctx": config.num_ctx,
+    }
+    if config.repeat_penalty is not None:
+        options["repeat_penalty"] = config.repeat_penalty
+    return options
+
+
+def _options_for_call(base: dict[str, Any], temperature: float | None) -> dict[str, Any]:
+    """Per-call options: the base dict, with ``temperature`` overridden if given."""
+    if temperature is None:
+        return base
+    return {**base, "temperature": temperature}
 
 
 class OllamaLLMClient:
@@ -88,19 +111,17 @@ class OllamaLLMClient:
         self._client = Client(host=config.host)
         self._model = config.model
         self._max_retries = config.max_retries
-        self._options: dict[str, Any] = {
-            "temperature": config.temperature,
-            "num_ctx": config.num_ctx,
-        }
+        self._options = _base_options(config)
 
-    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
+    def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply:
+        options = _options_for_call(self._options, temperature)
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             try:
                 response = self._client.chat(
                     model=self._model,
                     messages=messages,
-                    options=self._options,
+                    options=options,
                 )
                 return ChatReply(text=response.message.content or "", usage=_ollama_usage(response))
             except ResponseError as exc:
@@ -149,17 +170,16 @@ class AsyncOllamaLLMClient:
         self._client = AsyncClient(host=config.host)
         self._model = config.model
         self._max_retries = config.max_retries
-        self._options: dict[str, Any] = {
-            "temperature": config.temperature,
-            "num_ctx": config.num_ctx,
-        }
+        self._options = _base_options(config)
 
     async def chat(
         self,
         messages: list[dict[str, Any]],
         *,
         stream_to: Callable[[str], None] | None = None,
+        temperature: float | None = None,
     ) -> ChatReply:
+        options = _options_for_call(self._options, temperature)
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             # Stream only on the first attempt. On retries, fall back to
@@ -172,7 +192,7 @@ class AsyncOllamaLLMClient:
                     response = await self._client.chat(
                         model=self._model,
                         messages=messages,
-                        options=self._options,
+                        options=options,
                     )
                     return ChatReply(text=response.message.content or "", usage=_ollama_usage(response))
 
@@ -183,7 +203,7 @@ class AsyncOllamaLLMClient:
                 stream_iter = await self._client.chat(
                     model=self._model,
                     messages=messages,
-                    options=self._options,
+                    options=options,
                     stream=True,
                 )
                 assert stream_to is not None  # narrows the type for mypy

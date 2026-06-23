@@ -44,6 +44,18 @@ class TargetLanguage(Protocol):
 
     def extract_query(self, llm_response: str) -> str: ...
 
+    def repair_hint(self, errors: list[str]) -> str | None:
+        """Targeted fix guidance for a class of validator errors, or ``None``.
+
+        The translator passes the latest validation errors here when building a
+        fix prompt. A non-``None`` result *replaces* the generic "fix only the
+        reported errors, don't restructure" instruction — use it for errors
+        whose only valid fix *is* a restructure (e.g. a clause placed after a
+        terminal ``RETURN``), which the validator's terse message actively
+        misdirects the model away from. Return ``None`` to keep the default.
+        """
+        ...
+
 
 def make_target(name: str) -> TargetLanguage:
     """Construct a :class:`TargetLanguage` by short name.

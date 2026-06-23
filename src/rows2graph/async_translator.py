@@ -28,12 +28,20 @@ from rows2graph.events import (
     FixGeneratedEvent,
     GeneratedEvent,
     MaxIterationsReachedEvent,
+    StalledEvent,
     TranslationEvent,
     ValidatedEvent,
 )
 from rows2graph.llm import AsyncLLMClient, StreamCallback
 from rows2graph.mapping import SchemaMapping
-from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
+from rows2graph.prompts import (
+    build_escalation_prompt,
+    build_fix_prompt,
+    build_generate_prompt,
+    build_system_prompt,
+    error_signature,
+    normalize_query,
+)
 from rows2graph.sql_features import detect_features
 from rows2graph.state import TranslationResult, TranslationState
 from rows2graph.targets import TargetLanguage
@@ -59,12 +67,17 @@ class AsyncSQLTranslator:
         target: TargetLanguage,
         validator: AsyncQueryValidator,
         max_iterations: int = 3,
+        escalation_temperature: float = 0.6,
+        fix_temperature: float | None = None,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
+        # See SQLTranslator.__init__ — same stall-escalation knobs, async sibling.
+        self._fix_temperature = fix_temperature
+        self._escalation_temperature = escalation_temperature
         # See SQLTranslator.last_messages — same contract, async sibling.
         self.last_messages: list[dict[str, str]] = []
 
@@ -145,6 +158,11 @@ class AsyncSQLTranslator:
         logger.info("Initial query generated:\n%s", state.generated_query)
         _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
+        # See SQLTranslator.translate — same stall-detection/escalation logic.
+        previous_signature: frozenset[str] | None = None
+        previous_norm_query: str | None = None
+        escalated = False
+
         while state.validation_iteration < self._max_iterations:
             state.validation_iteration += 1
             errors = await self._validator.validate(state.generated_query or "")
@@ -197,17 +215,70 @@ class AsyncSQLTranslator:
                 )
                 break
 
-            fix_msg = build_fix_prompt(
-                sql_query=sql_query,
-                generated_query=state.generated_query or "",
-                errors=errors,
+            signature = error_signature(errors)
+            norm_query = normalize_query(state.generated_query or "")
+            no_progress = previous_signature is not None and (
+                signature == previous_signature or norm_query == previous_norm_query
             )
-            state.messages.append(_msg("user", fix_msg))
-            _emit_conversation(on_conversation, state.messages)
+            previous_signature = signature
+            previous_norm_query = norm_query
 
-            reply = await self._llm.chat(
-                state.messages, stream_to=_stream_with_conversation(state, on_conversation, stream_to)
-            )
+            if no_progress and escalated:
+                state.final_status = "stalled"
+                logger.warning(
+                    "Translation stalled (no progress after escalation) on iteration %d: %s",
+                    state.validation_iteration,
+                    errors,
+                )
+                break
+
+            repair_hint = self._target.repair_hint(errors)
+
+            if no_progress:
+                escalated = True
+                logger.info(
+                    "No progress on iteration %d — escalating with a fresh context",
+                    state.validation_iteration,
+                )
+                _emit(
+                    on_event,
+                    StalledEvent(
+                        iteration=state.validation_iteration,
+                        query=state.generated_query or "",
+                        errors=list(errors),
+                    ),
+                )
+                escalation_msg = build_escalation_prompt(
+                    sql_query=sql_query,
+                    generated_query=state.generated_query or "",
+                    errors=errors,
+                    repair_hint=repair_hint,
+                )
+                state.messages.append(_msg("user", escalation_msg))
+                _emit_conversation(on_conversation, state.messages)
+                # Re-ask from a CLEAN context (system turn + this one) so the
+                # repetition-poisoned history doesn't pin the model to its
+                # previous answer; the record still keeps the turn.
+                reply = await self._llm.chat(
+                    [state.messages[0], _msg("user", escalation_msg)],
+                    stream_to=_stream_with_conversation(state, on_conversation, stream_to),
+                    temperature=self._escalation_temperature,
+                )
+            else:
+                fix_msg = build_fix_prompt(
+                    sql_query=sql_query,
+                    generated_query=state.generated_query or "",
+                    errors=errors,
+                    repair_hint=repair_hint,
+                )
+                state.messages.append(_msg("user", fix_msg))
+                _emit_conversation(on_conversation, state.messages)
+                reply = await self._llm.chat(
+                    state.messages,
+                    stream_to=_stream_with_conversation(state, on_conversation, stream_to),
+                    temperature=self._fix_temperature,
+                )
+
             state.token_usage = state.token_usage + reply.usage
             raw_content = reply.text
             state.messages.append(_msg("assistant", raw_content))

@@ -35,12 +35,20 @@ from rows2graph.events import (
     FixGeneratedEvent,
     GeneratedEvent,
     MaxIterationsReachedEvent,
+    StalledEvent,
     TranslationEvent,
     ValidatedEvent,
 )
 from rows2graph.llm import LLMClient
 from rows2graph.mapping import SchemaMapping
-from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
+from rows2graph.prompts import (
+    build_escalation_prompt,
+    build_fix_prompt,
+    build_generate_prompt,
+    build_system_prompt,
+    error_signature,
+    normalize_query,
+)
 from rows2graph.sql_features import detect_features
 from rows2graph.state import TranslationResult, TranslationState
 from rows2graph.targets import TargetLanguage
@@ -65,12 +73,20 @@ class SQLTranslator:
         target: TargetLanguage,
         validator: QueryValidator,
         max_iterations: int = 3,
+        escalation_temperature: float = 0.6,
+        fix_temperature: float | None = None,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
+        # Sampling temperature for ordinary fix turns (``None`` = backend
+        # default) and for the one-shot stall-breaking escalation retry. The
+        # escalation runs hotter on purpose: a near-greedy retry over a history
+        # full of the same rejected query just reproduces it.
+        self._fix_temperature = fix_temperature
+        self._escalation_temperature = escalation_temperature
         # Full system↔LLM conversation from the most recent translate() call
         # (system + user/assistant turns), overwritten each call. Exposed for
         # callers that want to display the exchange; TranslationResult itself
@@ -143,6 +159,15 @@ class SQLTranslator:
         logger.info("Initial query generated:\n%s", state.generated_query)
         _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
+        # Stall tracking: a fix that reproduces the prior candidate, or draws
+        # the *same* validator error twice running, means the loop is stuck. On
+        # the first stall we escalate once (fresh context + higher temperature);
+        # a second stall aborts early with status "stalled" rather than burning
+        # the remaining iterations on byte-identical output.
+        previous_signature: frozenset[str] | None = None
+        previous_norm_query: str | None = None
+        escalated = False
+
         while state.validation_iteration < self._max_iterations:
             state.validation_iteration += 1
             errors = self._validator.validate(state.generated_query or "")
@@ -195,14 +220,64 @@ class SQLTranslator:
                 )
                 break
 
-            fix_msg = build_fix_prompt(
-                sql_query=sql_query,
-                generated_query=state.generated_query or "",
-                errors=errors,
+            signature = error_signature(errors)
+            norm_query = normalize_query(state.generated_query or "")
+            no_progress = previous_signature is not None and (
+                signature == previous_signature or norm_query == previous_norm_query
             )
-            state.messages.append(_msg("user", fix_msg))
+            previous_signature = signature
+            previous_norm_query = norm_query
 
-            reply = self._llm.chat(state.messages)
+            if no_progress and escalated:
+                state.final_status = "stalled"
+                logger.warning(
+                    "Translation stalled (no progress after escalation) on iteration %d: %s",
+                    state.validation_iteration,
+                    errors,
+                )
+                break
+
+            repair_hint = self._target.repair_hint(errors)
+
+            if no_progress:
+                escalated = True
+                logger.info(
+                    "No progress on iteration %d — escalating with a fresh context",
+                    state.validation_iteration,
+                )
+                _emit(
+                    on_event,
+                    StalledEvent(
+                        iteration=state.validation_iteration,
+                        query=state.generated_query or "",
+                        errors=list(errors),
+                    ),
+                )
+                escalation_msg = build_escalation_prompt(
+                    sql_query=sql_query,
+                    generated_query=state.generated_query or "",
+                    errors=errors,
+                    repair_hint=repair_hint,
+                )
+                state.messages.append(_msg("user", escalation_msg))
+                # Re-ask from a CLEAN context (system turn + this one). The
+                # accumulated history is several copies of the rejected query
+                # and its error — exactly what pins a low-temperature model to
+                # reproducing it. The full record still keeps the turn.
+                reply = self._llm.chat(
+                    [state.messages[0], _msg("user", escalation_msg)],
+                    temperature=self._escalation_temperature,
+                )
+            else:
+                fix_msg = build_fix_prompt(
+                    sql_query=sql_query,
+                    generated_query=state.generated_query or "",
+                    errors=errors,
+                    repair_hint=repair_hint,
+                )
+                state.messages.append(_msg("user", fix_msg))
+                reply = self._llm.chat(state.messages, temperature=self._fix_temperature)
+
             state.token_usage = state.token_usage + reply.usage
             raw_content = reply.text
             state.messages.append(_msg("assistant", raw_content))

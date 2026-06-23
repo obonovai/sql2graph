@@ -52,9 +52,13 @@ class LLMClient(Protocol):
     a :class:`~rows2graph.llm.usage.ChatReply`) and :meth:`close` (releasing
     whatever connection-pool resources the backend may hold). Anything else is
     implementation-private.
+
+    ``temperature`` optionally overrides the backend's configured sampling
+    temperature for a single call. The loop uses it to raise entropy on a
+    stall-breaking escalation retry; when ``None`` the backend default applies.
     """
 
-    def chat(self, messages: list[dict[str, Any]]) -> ChatReply: ...
+    def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply: ...
 
     def close(self) -> None: ...
 
@@ -86,6 +90,7 @@ class AsyncLLMClient(Protocol):
         messages: list[dict[str, Any]],
         *,
         stream_to: StreamCallback | None = None,
+        temperature: float | None = None,
     ) -> ChatReply: ...
 
     async def close(self) -> None: ...

@@ -335,3 +335,11 @@ class GremlinTarget:
         response, stripped.
         """
         return extract_query(_START_RE, llm_response)
+
+    def repair_hint(self, errors: list[str]) -> str | None:  # noqa: ARG002
+        """No Gremlin-specific repair overrides yet — keep the default fix flow.
+
+        Gremlin is a single method-chain, so the AQL clause-ordering trap does
+        not arise; the generic fix instruction is appropriate.
+        """
+        return None

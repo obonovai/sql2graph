@@ -43,7 +43,14 @@ from rows2graph import (
 )
 from rows2graph._env import interpolate_env
 from rows2graph.llm.usage import ChatReply, TokenUsage
-from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
+from rows2graph.prompts import (
+    build_escalation_prompt,
+    build_fix_prompt,
+    build_generate_prompt,
+    build_system_prompt,
+    error_signature,
+    normalize_query,
+)
 from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
 from rows2graph.targets import aql as aql_target
 from rows2graph.targets import cypher as cypher_target
@@ -865,6 +872,67 @@ def test_build_fix_prompt_includes_errors() -> None:
     assert "Unbalanced parentheses" in prompt
 
 
+def test_build_fix_prompt_default_keeps_do_not_restructure() -> None:
+    prompt = build_fix_prompt(sql_query="SELECT 1", generated_query="MATCH (n", errors=["e"])
+    assert "Do not change the query structure unnecessarily." in prompt
+
+
+def test_build_fix_prompt_repair_hint_replaces_default() -> None:
+    prompt = build_fix_prompt(
+        sql_query="SELECT 1",
+        generated_query="MATCH (n",
+        errors=["e"],
+        repair_hint="MOVE THE RETURN LAST.",
+    )
+    assert "MOVE THE RETURN LAST." in prompt
+    # The hint *replaces* the default "don't restructure" instruction.
+    assert "Do not change the query structure unnecessarily." not in prompt
+
+
+def test_build_escalation_prompt_names_the_repetition_and_hint() -> None:
+    prompt = build_escalation_prompt(
+        sql_query="SELECT 1",
+        generated_query="FOR f IN Forum RETURN f SORT f.x",
+        errors=["unexpected SORT declaration"],
+        repair_hint="MOVE THE RETURN LAST.",
+    )
+    assert "DIFFERENT" in prompt  # tells the model not to repeat itself
+    assert "FOR f IN Forum RETURN f SORT f.x" in prompt
+    assert "MOVE THE RETURN LAST." in prompt
+
+
+def test_aql_repair_hint_fires_on_clause_ordering_error() -> None:
+    errors = [
+        "[HTTP 400][ERR 1501] syntax error, unexpected SORT declaration, "
+        "expecting end of query string near 'SORT LENGTH(members) DESC' at position 4:1",
+    ]
+    hint = AqlTarget().repair_hint(errors)
+    assert hint is not None
+    assert "RETURN" in hint and "before" in hint.lower()
+
+
+def test_aql_repair_hint_none_for_unrelated_error() -> None:
+    assert AqlTarget().repair_hint(["Unbalanced parentheses"]) is None
+
+
+def test_cypher_and_gremlin_repair_hint_always_none() -> None:
+    err = ["unexpected SORT declaration, expecting end of query string"]
+    assert CypherTarget().repair_hint(err) is None
+    assert GremlinTarget().repair_hint(err) is None
+
+
+def test_error_signature_is_position_independent() -> None:
+    a = ["[ERR 1501] syntax error, unexpected SORT declaration near 'x' at position 4:3"]
+    b = ["[ERR 1501] syntax error, unexpected SORT declaration near 'y' at position 4:1"]
+    # Same ArangoDB error code + shape, different position/near-text → same signature.
+    assert error_signature(a) == error_signature(b)
+    assert error_signature(a) != error_signature(["[ERR 1577] something else"])
+
+
+def test_normalize_query_collapses_whitespace() -> None:
+    assert normalize_query("FOR f\n  RETURN f") == normalize_query("FOR f RETURN f")
+
+
 # ---------------------------------------------------------------------------
 # SQLTranslator end-to-end with fake LLM
 # ---------------------------------------------------------------------------
@@ -876,10 +944,12 @@ class _FakeLLM:
     def __init__(self, responses: list[str]) -> None:
         self._responses = list(responses)
         self.calls: list[list[dict[str, Any]]] = []
+        self.temperatures: list[float | None] = []
         self.closed = False
 
-    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
+    def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply:
         self.calls.append(list(messages))
+        self.temperatures.append(temperature)
         # Fixed per-call usage (15 total tokens) lets loop tests assert accumulation.
         return ChatReply(text=self._responses.pop(0), usage=TokenUsage(input_tokens=10, output_tokens=5))
 
@@ -958,6 +1028,58 @@ def test_translator_hits_max_iterations() -> None:
     assert result.status == "max_iterations_reached"
     assert result.iterations_used == 3
     assert result.generated_query == "MATCH (p:Person)"
+
+
+def test_translator_escalates_on_stall_then_recovers() -> None:
+    """A repeated (stalled) candidate triggers one fresh-context, hot retry that recovers."""
+    from rows2graph import StalledEvent, TranslationEvent
+
+    # gen=bad, fix=identical bad (→ stall), escalation=good.
+    fake = _FakeLLM(["MATCH (p:Person)", "MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+        max_iterations=5,
+    ) as translator:
+        result = translator.translate("SELECT * FROM persons", on_event=events.append)
+
+    assert result.status == "success"
+    assert result.generated_query == "MATCH (p:Person) RETURN p"
+    # Exactly one escalation was signalled.
+    assert sum(isinstance(e, StalledEvent) for e in events) == 1
+    # Three LLM calls: generate, normal fix, escalation.
+    assert len(fake.calls) == 3
+    # The escalation ran hotter than the (default) generate/fix calls...
+    assert fake.temperatures == [None, None, 0.6]
+    # ...and on a CLEAN context: system turn + the single escalation user turn.
+    assert len(fake.calls[2]) == 2
+    assert fake.calls[2][0]["role"] == "system"
+
+
+def test_translator_aborts_early_when_stalled_instead_of_burning_iterations() -> None:
+    """When even the escalation makes no progress, abort as 'stalled' — not 10 identical tries."""
+    from rows2graph import StalledEvent, TranslationEvent
+
+    fake = _FakeLLM(["MATCH (p:Person)"] * 4)  # always invalid; one response left unused
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+        max_iterations=10,
+    ) as translator:
+        result = translator.translate("SELECT * FROM persons", on_event=events.append)
+
+    assert result.status == "stalled"
+    assert result.validation_passed is False
+    # generate + normal fix + escalation = 3 calls, then it gives up (not 10).
+    assert result.iterations_used == 3
+    assert len(fake.calls) == 3
+    assert sum(isinstance(e, StalledEvent) for e in events) == 1
 
 
 def test_translator_context_manager_closes_components() -> None:
@@ -1424,6 +1546,7 @@ class _FakeAsyncLLM:
     def __init__(self, responses: list[str]) -> None:
         self._responses = list(responses)
         self.calls: list[list[dict[str, Any]]] = []
+        self.temperatures: list[float | None] = []
         self.stream_calls: int = 0
         self.closed = False
 
@@ -1432,8 +1555,10 @@ class _FakeAsyncLLM:
         messages: list[dict[str, Any]],
         *,
         stream_to: Any = None,
+        temperature: float | None = None,
     ) -> ChatReply:
         self.calls.append(list(messages))
+        self.temperatures.append(temperature)
         response = self._responses.pop(0)
         if stream_to is not None:
             self.stream_calls += 1
@@ -1515,6 +1640,31 @@ def test_async_translator_hits_max_iterations() -> None:
     assert result.validation_passed is False
     assert result.status == "max_iterations_reached"
     assert result.iterations_used == 3
+
+
+def test_async_translator_escalates_and_aborts_when_stalled() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> tuple[TranslationResult, _FakeAsyncLLM]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person)"] * 4)  # always invalid
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+            max_iterations=10,
+        ) as translator:
+            return await translator.translate("SELECT * FROM persons"), fake
+
+    result, fake = asyncio.run(run())
+    assert result.status == "stalled"
+    assert result.iterations_used == 3
+    assert len(fake.calls) == 3
+    # The escalation call (3rd) ran at the hot escalation temperature.
+    assert fake.temperatures == [None, None, 0.6]
 
 
 def test_async_translator_emits_same_event_sequence_as_sync() -> None:

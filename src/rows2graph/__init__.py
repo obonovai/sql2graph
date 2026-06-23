@@ -46,6 +46,7 @@ from rows2graph.events import (
     FixGeneratedEvent,
     GeneratedEvent,
     MaxIterationsReachedEvent,
+    StalledEvent,
     TranslationEvent,
     ValidatedEvent,
 )
@@ -142,6 +143,7 @@ __all__ = [
     "SQLTranslator",
     "SchemaMapping",
     "ServerConfig",
+    "StalledEvent",
     "StreamCallback",
     "TargetLanguage",
     "TranslationEvent",

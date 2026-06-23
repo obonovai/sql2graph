@@ -83,6 +83,24 @@ class FixGeneratedEvent:
 
 
 @dataclass(frozen=True)
+class StalledEvent:
+    """The loop detected no progress and is escalating with a fresh-context retry.
+
+    Emitted at most once per translation, the moment the fix loop notices that a
+    candidate repeated its predecessor or drew the *same* validator error twice
+    running. The next LLM call discards the accumulated (poisoned) history and
+    re-asks from a clean context at a higher temperature; ``query`` and
+    ``errors`` are the stuck candidate and the error that triggered escalation.
+    If that escalated attempt still makes no progress the translation ends with
+    ``status='stalled'``.
+    """
+
+    iteration: int
+    query: str
+    errors: list[str]
+
+
+@dataclass(frozen=True)
 class MaxIterationsReachedEvent:
     """The loop terminated at iteration N without passing validation.
 
@@ -106,7 +124,9 @@ class CompletedEvent:
     result: TranslationResult
 
 
-TranslationEvent = GeneratedEvent | ValidatedEvent | FixGeneratedEvent | MaxIterationsReachedEvent | CompletedEvent
+TranslationEvent = (
+    GeneratedEvent | ValidatedEvent | FixGeneratedEvent | StalledEvent | MaxIterationsReachedEvent | CompletedEvent
+)
 """Discriminated union of every event the translator emits."""
 
 
@@ -131,6 +151,7 @@ __all__ = [
     "FixGeneratedEvent",
     "GeneratedEvent",
     "MaxIterationsReachedEvent",
+    "StalledEvent",
     "TranslationEvent",
     "ValidatedEvent",
 ]

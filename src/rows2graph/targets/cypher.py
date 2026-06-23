@@ -322,3 +322,11 @@ class CypherTarget:
         starts with a Cypher keyword; (3) the whole response, stripped.
         """
         return extract_query(_START_RE, llm_response)
+
+    def repair_hint(self, errors: list[str]) -> str | None:  # noqa: ARG002
+        """No Cypher-specific repair overrides yet — keep the default fix flow.
+
+        Cypher's `ORDER BY`/`LIMIT` follow `RETURN` (as in SQL), so the AQL
+        clause-ordering trap does not arise here.
+        """
+        return None

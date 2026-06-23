@@ -86,8 +86,21 @@ The codebase is structured as a *framework + reference demo*:
 state, same iteration semantics — with `await` at the LLM and validator
 call sites. Both translators accept an optional `on_event` callback that
 fires at every milestone (`GeneratedEvent`, `ValidatedEvent`,
-`FixGeneratedEvent`, `MaxIterationsReachedEvent`, `CompletedEvent`); the
-async path also accepts `stream_to` for token-by-token output.
+`FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`,
+`CompletedEvent`); the async path also accepts `stream_to` for
+token-by-token output.
+
+When a fix iteration makes no progress — the model repeats its previous
+candidate, or the validator returns the same error signature twice running —
+the loop escalates once: it re-asks from a *fresh* context (system prompt +
+a single corrective turn, discarding the repetition-poisoned history) at a
+higher `escalation_temperature`, and the target language can inject a
+clause-specific `repair_hint` that overrides the default "don't restructure"
+advice (AQL uses this for the `RETURN`-must-be-last ordering trap). If the
+escalation still stalls, the translation ends early with
+`status="stalled"` rather than burning the remaining iterations. This is
+what stops small local models (notably `qwen3-coder`) from looping on
+identical invalid output.
 
 See `docs/ARCHITECTURE.md` for the deeper technical reference, including a
 discussion of why the loop is implemented as plain Python rather than a

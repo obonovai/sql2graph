@@ -22,6 +22,8 @@ property the feedback loop relies on for iterative refinement.
 
 from __future__ import annotations
 
+import re
+
 from rows2graph.mapping import SchemaMapping
 from rows2graph.sql_features import SqlFeature
 from rows2graph.targets import TargetLanguage
@@ -130,15 +132,30 @@ def build_fix_prompt(
     sql_query: str,
     generated_query: str,
     errors: list[str],
+    *,
+    repair_hint: str | None = None,
 ) -> str:
     """Build the user-turn appended after a failed validation.
 
     Includes the original SQL, the failing generated query, and a bulleted
-    list of validator errors. The instruction "Fix ONLY the reported errors"
-    is intentional: without it, low-temperature models tend to restructure
-    the entire query on each retry, undoing partial progress.
+    list of validator errors.
+
+    The default closing instruction ("Fix ONLY the reported errors. Do not
+    change the query structure unnecessarily.") is intentional: without it,
+    low-temperature models tend to restructure the entire query on each retry,
+    undoing partial progress. But for some errors that advice is actively
+    wrong — a clause-*ordering* error can only be fixed by a restructure. When
+    the target supplies a ``repair_hint`` for the given errors (see
+    :meth:`rows2graph.targets.TargetLanguage.repair_hint`), it *replaces* the
+    default line, licensing the restructure the validator's terse message
+    discourages.
     """
     errors_text = "\n".join(f"- {e}" for e in errors)
+    guidance = (
+        repair_hint
+        if repair_hint is not None
+        else "Fix ONLY the reported errors. Do not change the query structure unnecessarily."
+    )
     return f"""The following query was generated from a SQL query but failed validation.
 
 Original SQL:
@@ -150,5 +167,74 @@ Generated query:
 Validation errors:
 {errors_text}
 
-Fix ONLY the reported errors. Do not change the query structure unnecessarily.
+{guidance}
 Your response MUST contain ONLY valid query code."""
+
+
+def build_escalation_prompt(
+    sql_query: str,
+    generated_query: str,
+    errors: list[str],
+    *,
+    repair_hint: str | None = None,
+) -> str:
+    """Build the user-turn for a *stall-breaking escalation* retry.
+
+    The loop sends this on a deliberately **fresh** context (system prompt +
+    this turn only), discarding the accumulated fix history. That history is
+    what poisons a stalled retry: it contains several copies of the same
+    rejected query and the same error, and at low temperature the model simply
+    reproduces them. Restating the problem self-containedly — plus an explicit
+    "your previous attempts were identical and rejected; produce something
+    DIFFERENT" — combined with a higher sampling temperature at the call site,
+    is what breaks the repetition fixed point.
+    """
+    errors_text = "\n".join(f"- {e}" for e in errors)
+    hint = f"\n\n{repair_hint}" if repair_hint else ""
+    return f"""Your previous attempts to translate this SQL kept producing the SAME query and \
+were REJECTED with the SAME error. Do NOT repeat that query — it is wrong. Rethink the \
+approach and produce a DIFFERENT, restructured query.
+
+Original SQL:
+{sql_query}
+
+Rejected query (do not repeat it):
+{generated_query}
+
+Validation errors:
+{errors_text}{hint}
+
+Output ONLY the corrected query — no prose, no explanation."""
+
+
+def normalize_query(query: str) -> str:
+    """Collapse whitespace so trivial re-indentation doesn't read as a change.
+
+    Used by the loop's stall detector: a model that merely re-indents its
+    previous (still-broken) answer has made no real progress.
+    """
+    return re.sub(r"\s+", " ", query.strip())
+
+
+def error_signature(errors: list[str]) -> frozenset[str]:
+    """Reduce a validator error list to a position-independent signature.
+
+    Two validations "say the same thing" when this signature is equal, even if
+    the byte text differs in volatile details. For database validators that
+    emit an ``[ERR ####]`` code (e.g. ArangoDB) the codes alone are the
+    signature; otherwise each message is normalized by stripping quoted
+    near-text and digits (line/column positions) and lowercasing. This lets the
+    loop notice "same error two iterations running" — the hallmark of a stall —
+    without being fooled by a position that shifts from ``4:3`` to ``4:1``.
+    """
+    sig: set[str] = set()
+    for err in errors:
+        codes = re.findall(r"ERR\s*\d+", err, re.IGNORECASE)
+        if codes:
+            sig.update(c.upper().replace(" ", "") for c in codes)
+            continue
+        norm = re.sub(r"'[^']*'", "", err)  # drop quoted "near '...'" snippets
+        norm = re.sub(r"\d+", "", norm)  # drop line/column numbers
+        norm = re.sub(r"\s+", " ", norm).strip().lower()
+        sig.add(norm)
+    return frozenset(sig)

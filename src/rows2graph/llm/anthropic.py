@@ -90,12 +90,12 @@ class AnthropicLLMClient:
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens
 
-    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
+    def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply:
         kwargs = _build_anthropic_kwargs(
             messages,
             model=self._model,
             max_tokens=self._max_tokens,
-            temperature=self._temperature,
+            temperature=self._temperature if temperature is None else temperature,
         )
         response = self._client.messages.create(**kwargs)
         usage = _anthropic_usage(response, self._model)
@@ -205,12 +205,13 @@ class AsyncAnthropicLLMClient:
         messages: list[dict[str, Any]],
         *,
         stream_to: Callable[[str], None] | None = None,
+        temperature: float | None = None,
     ) -> ChatReply:
         kwargs = _build_anthropic_kwargs(
             messages,
             model=self._model,
             max_tokens=self._max_tokens,
-            temperature=self._temperature,
+            temperature=self._temperature if temperature is None else temperature,
         )
 
         if stream_to is None:

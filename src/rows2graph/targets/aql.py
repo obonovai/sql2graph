@@ -45,6 +45,29 @@ _START_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+# A clause-ordering error: ArangoDB rejects a SORT/LIMIT/FILTER/COLLECT/LET that
+# follows the block-terminating RETURN. The parser blames the trailing clause
+# ("unexpected SORT declaration") or reports it expected the query to end — both
+# misdirect the model toward the named clause when the real fix is to move
+# RETURN last. Either signal (the "unexpected <clause>" phrasing or the
+# "expecting end of query string" tail) identifies the class.
+_ORDERING_ERROR_RE = re.compile(
+    r"unexpected\s+(SORT|LIMIT|FILTER|COLLECT|LET)\b|expecting end of query string",
+    re.IGNORECASE,
+)
+
+# Targeted corrective injected into the fix prompt for the ordering class. It
+# explicitly licenses the restructure the default fix instruction forbids.
+_ORDERING_REPAIR_HINT = (
+    "This is a clause-ORDERING error, not a problem with the clause the parser "
+    "names. In AQL, `RETURN` ENDS the `FOR` block, so any `SORT`, `LIMIT`, "
+    "`FILTER`, or `COLLECT` placed AFTER a `RETURN` is illegal. You MUST "
+    "restructure the query (this overrides the usual advice to preserve the "
+    "structure): move every `SORT`/`LIMIT`/`FILTER`/`COLLECT` to BEFORE the "
+    "single trailing `RETURN`, and emit exactly ONE `RETURN` as the very last "
+    "clause. Canonical order: `FOR ... FILTER ... SORT ... LIMIT ... RETURN ...`."
+)
+
 # Always emitted. Covers the AQL data model, the single traversal form this
 # project uses (bare edge collections, no GRAPH), an explicit anti-pattern
 # block that names the exact mistakes small models make, and worked SQL->AQL
@@ -372,3 +395,16 @@ class AqlTarget:
         starts with an AQL keyword; (3) the whole response, stripped.
         """
         return extract_query(_START_RE, llm_response)
+
+    def repair_hint(self, errors: list[str]) -> str | None:
+        """Return the clause-ordering corrective when the errors warrant it.
+
+        This is the single most common AQL failure for SQL-trained models: they
+        map SQL's trailing `ORDER BY`/`LIMIT` to a trailing `SORT`/`LIMIT`,
+        which AQL forbids after the terminal `RETURN`. The validator's message
+        names the trailing clause, so a literal "fix only that" retry never
+        moves the `RETURN`. See :data:`_ORDERING_REPAIR_HINT`.
+        """
+        if any(_ORDERING_ERROR_RE.search(err) for err in errors):
+            return _ORDERING_REPAIR_HINT
+        return None

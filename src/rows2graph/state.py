@@ -64,12 +64,17 @@ class TranslationResult(BaseModel):
     only the fields that callers need to consume the outcome — the chat
     history and iteration counter are deliberately omitted.
 
-    The ``status`` field takes one of three values:
+    The ``status`` field takes one of four values:
 
     * ``"success"`` — validator returned no errors on some iteration.
     * ``"max_iterations_reached"`` — the loop hit
       ``max_validation_iterations`` without producing a valid query;
       ``generated_query`` still holds the last attempt.
+    * ``"stalled"`` — the loop detected it was making no progress (the model
+      repeated a candidate / drew the same error twice), escalated once with a
+      fresh-context, higher-temperature retry, and still could not advance, so
+      it aborted early rather than burning the remaining iterations.
+      ``generated_query`` holds the last attempt.
     * ``"pending"`` — sentinel for an unfinished translation; should not
       appear in returned results.
     """

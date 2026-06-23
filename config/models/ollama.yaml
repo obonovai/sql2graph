@@ -12,6 +12,11 @@ model: "qwen3-coder:30b"
 host: "http://localhost:11434"
 temperature: 0.1
 # num_ctx is the model's working-context window in tokens. The framework
-# sends the full chat history (system + every prior turn) on each call,
-# so raise this for large schemas or many fix iterations.
-num_ctx: 8192
+# sends the full chat history (system + every prior turn) on each call, so
+# raise this for large schemas or many fix iterations. The LDBC system prompt
+# alone is ~4-5k tokens; at 8192 a multi-iteration loop can approach the window
+# and Ollama context-shifts the schema/rules out. 16384 keeps them resident.
+num_ctx: 16384
+# Optional anti-repetition knob: >1.0 penalises reproducing recent tokens,
+# nudging the model off a degenerate repeat loop on fix iterations.
+repeat_penalty: 1.1
