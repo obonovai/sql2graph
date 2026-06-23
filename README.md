@@ -115,7 +115,13 @@ translation read the schema + rules from Anthropic's prompt cache instead
 of re-billing them as input tokens. See `src/rows2graph/llm/anthropic.py`
 — the `Anthropic call:` log line reports `cache_read` and `cache_write`
 counts alongside the regular input/output totals so cache hit rate is
-observable per call.
+observable per call. Those per-call counts are also accumulated across the
+generate–validate–fix loop and returned on `TranslationResult.token_usage`
+(a `TokenUsage` with `input_tokens`, `output_tokens`, Anthropic-only
+`cache_read_tokens` / `cache_creation_tokens`, and a computed `total_tokens`),
+so callers can report exactly how many tokens each translation cost. Ollama
+populates `input_tokens` / `output_tokens` from `prompt_eval_count` /
+`eval_count`; its cache fields stay 0.
 
 ## Install
 
@@ -202,6 +208,7 @@ with SQLTranslator(mapping, llm, target, validator) as translator:
         print(result.generated_query)
     else:
         print(f"Failed after {result.iterations_used} iterations: {result.validation_errors}")
+    print(f"Consumed {result.token_usage.total_tokens} tokens")
 ```
 
 ### Async variant
@@ -235,7 +242,7 @@ async def main() -> None:
             on_event=on_event,
             stream_to=lambda chunk: print(chunk, end="", flush=True),
         )
-    print(f"\n→ {result.status} in {result.duration_seconds:.2f}s")
+    print(f"\n→ {result.status} in {result.duration_seconds:.2f}s, {result.token_usage.total_tokens} tokens")
 
 
 asyncio.run(main())

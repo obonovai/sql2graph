@@ -384,7 +384,7 @@ def _print_generated(query: str | None, target_language: str) -> None:
 
 
 def _print_result(result: TranslationResult) -> None:
-    """Bottom-of-output panel: status, iterations, validation, duration."""
+    """Bottom-of-output panel: status, iterations, validation, duration, tokens."""
     if result.validation_passed:
         status_cell = "[bold green]✓ success[/bold green]"
         border = "green"
@@ -402,6 +402,12 @@ def _print_result(result: TranslationResult) -> None:
         "[green]yes[/green]" if result.validation_passed else "[red]no[/red]",
     )
     table.add_row("Duration:", f"{result.duration_seconds:.2f}s")
+    usage = result.token_usage
+    total_input = usage.input_tokens + usage.cache_read_tokens + usage.cache_creation_tokens
+    table.add_row(
+        "Tokens:",
+        f"{usage.total_tokens:,}  [dim](in {total_input:,} / out {usage.output_tokens:,})[/dim]",
+    )
     if result.validation_errors:
         bullets = "\n".join(f"• {e}" for e in result.validation_errors)
         table.add_row("Errors:", f"[red]{bullets}[/red]")

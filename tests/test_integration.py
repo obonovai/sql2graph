@@ -163,7 +163,7 @@ def test_real_anthropic_logs_token_usage(
     anthropic_config: AnthropicConfig,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The Anthropic chat helper must log non-zero input/output token counts."""
+    """The Anthropic chat helper must log AND return non-zero token counts."""
     client = AnthropicLLMClient(anthropic_config)
     with caplog.at_level(logging.INFO, logger="rows2graph.llm.anthropic"):
         reply = client.chat(
@@ -172,13 +172,16 @@ def test_real_anthropic_logs_token_usage(
                 {"role": "user", "content": "ready?"},
             ]
         )
-    assert reply  # non-empty
+    assert reply.text  # non-empty response text
+    # Usage is now returned on the ChatReply, not just logged. Counts are
+    # model-dependent, so we only assert they're present and non-zero.
+    assert reply.usage.input_tokens > 0
+    assert reply.usage.output_tokens > 0
+    assert reply.usage.total_tokens >= reply.usage.input_tokens + reply.usage.output_tokens
     usage_lines = [r for r in caplog.records if "Anthropic call:" in r.getMessage()]
     assert usage_lines, "expected at least one 'Anthropic call:' usage log line"
     msg = usage_lines[-1].getMessage()
     assert "input=" in msg and "output=" in msg
-    # We don't pin specific token counts (model-dependent) — just that the
-    # numbers are present and non-zero.
     assert "input=0" not in msg
     assert "output=0" not in msg
 

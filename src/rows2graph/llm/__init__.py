@@ -41,17 +41,20 @@ from pydantic import Field, TypeAdapter
 from rows2graph._env import interpolate_env
 from rows2graph.llm.anthropic import AnthropicConfig, AnthropicLLMClient, AsyncAnthropicLLMClient
 from rows2graph.llm.ollama import AsyncOllamaLLMClient, OllamaConfig, OllamaLLMClient
+from rows2graph.llm.usage import ChatReply, TokenUsage
 
 
 class LLMClient(Protocol):
     """Structural type for any LLM backend the translator can use.
 
     The translator only invokes :meth:`chat` (returning the assistant turn's
-    text) and :meth:`close` (releasing whatever connection-pool resources
-    the backend may hold). Anything else is implementation-private.
+    text and the :class:`~rows2graph.llm.usage.TokenUsage` it cost, bundled in
+    a :class:`~rows2graph.llm.usage.ChatReply`) and :meth:`close` (releasing
+    whatever connection-pool resources the backend may hold). Anything else is
+    implementation-private.
     """
 
-    def chat(self, messages: list[dict[str, Any]]) -> str: ...
+    def chat(self, messages: list[dict[str, Any]]) -> ChatReply: ...
 
     def close(self) -> None: ...
 
@@ -73,9 +76,9 @@ class AsyncLLMClient(Protocol):
     The optional ``stream_to`` callback opts into token-by-token streaming:
     when set, the implementation invokes ``stream_to(delta)`` for each
     text chunk as it arrives, and still returns the fully assembled text
-    once the response completes. When unset, the call is non-streaming
-    (single round-trip), which is the default for callers that don't need
-    a live display.
+    (and its :class:`~rows2graph.llm.usage.TokenUsage`) once the response
+    completes. When unset, the call is non-streaming (single round-trip),
+    which is the default for callers that don't need a live display.
     """
 
     async def chat(
@@ -83,7 +86,7 @@ class AsyncLLMClient(Protocol):
         messages: list[dict[str, Any]],
         *,
         stream_to: StreamCallback | None = None,
-    ) -> str: ...
+    ) -> ChatReply: ...
 
     async def close(self) -> None: ...
 
@@ -139,11 +142,13 @@ __all__ = [
     "AsyncAnthropicLLMClient",
     "AsyncLLMClient",
     "AsyncOllamaLLMClient",
+    "ChatReply",
     "LLMClient",
     "ModelConfig",
     "OllamaConfig",
     "OllamaLLMClient",
     "StreamCallback",
+    "TokenUsage",
     "load_model_config",
     "make_async_llm",
     "make_llm",

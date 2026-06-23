@@ -134,7 +134,9 @@ class SQLTranslator:
         user_msg = build_generate_prompt(sql_query)
         state.messages.append(_msg("user", user_msg))
 
-        raw_content = self._llm.chat(state.messages)
+        reply = self._llm.chat(state.messages)
+        state.token_usage = state.token_usage + reply.usage
+        raw_content = reply.text
         state.messages.append(_msg("assistant", raw_content))
         state.generated_query = self._target.extract_query(raw_content)
 
@@ -200,7 +202,9 @@ class SQLTranslator:
             )
             state.messages.append(_msg("user", fix_msg))
 
-            raw_content = self._llm.chat(state.messages)
+            reply = self._llm.chat(state.messages)
+            state.token_usage = state.token_usage + reply.usage
+            raw_content = reply.text
             state.messages.append(_msg("assistant", raw_content))
             state.generated_query = self._target.extract_query(raw_content)
 
@@ -226,6 +230,7 @@ class SQLTranslator:
             iterations_used=state.iterations_used,
             status=state.final_status,
             duration_seconds=state.duration_seconds,
+            token_usage=state.token_usage,
         )
         _emit(on_event, CompletedEvent(result=result))
         return result

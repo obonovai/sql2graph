@@ -133,9 +133,11 @@ class AsyncSQLTranslator:
         state.messages.append(_msg("user", user_msg))
         _emit_conversation(on_conversation, state.messages)
 
-        raw_content = await self._llm.chat(
+        reply = await self._llm.chat(
             state.messages, stream_to=_stream_with_conversation(state, on_conversation, stream_to)
         )
+        state.token_usage = state.token_usage + reply.usage
+        raw_content = reply.text
         state.messages.append(_msg("assistant", raw_content))
         _emit_conversation(on_conversation, state.messages)
         state.generated_query = self._target.extract_query(raw_content)
@@ -203,9 +205,11 @@ class AsyncSQLTranslator:
             state.messages.append(_msg("user", fix_msg))
             _emit_conversation(on_conversation, state.messages)
 
-            raw_content = await self._llm.chat(
+            reply = await self._llm.chat(
                 state.messages, stream_to=_stream_with_conversation(state, on_conversation, stream_to)
             )
+            state.token_usage = state.token_usage + reply.usage
+            raw_content = reply.text
             state.messages.append(_msg("assistant", raw_content))
             _emit_conversation(on_conversation, state.messages)
             state.generated_query = self._target.extract_query(raw_content)
@@ -232,6 +236,7 @@ class AsyncSQLTranslator:
             iterations_used=state.iterations_used,
             status=state.final_status,
             duration_seconds=state.duration_seconds,
+            token_usage=state.token_usage,
         )
         _emit(on_event, CompletedEvent(result=result))
         return result

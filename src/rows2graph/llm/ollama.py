@@ -23,11 +23,28 @@ from typing import Any, Literal
 from ollama import AsyncClient, Client, RequestError, ResponseError
 from pydantic import BaseModel, ConfigDict, Field
 
+from rows2graph.llm.usage import ChatReply, TokenUsage
+
 logger = logging.getLogger(__name__)
 
 # Default Ollama HTTP endpoint (matches the upstream client default; the
 # framework restates it so error messages reference our default, not Ollama's).
 _DEFAULT_HOST = "http://localhost:11434"
+
+
+def _ollama_usage(response: Any) -> TokenUsage:
+    """Extract token usage from an Ollama chat response.
+
+    Ollama reports ``prompt_eval_count`` (prompt tokens) and ``eval_count``
+    (generated tokens). On a streamed response only the final ``done`` chunk
+    carries them, so absent values fall back to 0 (a ``None`` response — an
+    empty stream — yields a zeroed :class:`TokenUsage`). Ollama has no prompt
+    cache, so the cache fields stay 0.
+    """
+    return TokenUsage(
+        input_tokens=getattr(response, "prompt_eval_count", 0) or 0,
+        output_tokens=getattr(response, "eval_count", 0) or 0,
+    )
 
 
 class OllamaConfig(BaseModel):
@@ -76,7 +93,7 @@ class OllamaLLMClient:
             "num_ctx": config.num_ctx,
         }
 
-    def chat(self, messages: list[dict[str, Any]]) -> str:
+    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             try:
@@ -85,7 +102,7 @@ class OllamaLLMClient:
                     messages=messages,
                     options=self._options,
                 )
-                return response.message.content or ""
+                return ChatReply(text=response.message.content or "", usage=_ollama_usage(response))
             except ResponseError as exc:
                 # Don't retry 4xx — they indicate a malformed request that
                 # another attempt won't fix (unknown model, bad params, ...).
@@ -142,7 +159,7 @@ class AsyncOllamaLLMClient:
         messages: list[dict[str, Any]],
         *,
         stream_to: Callable[[str], None] | None = None,
-    ) -> str:
+    ) -> ChatReply:
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             # Stream only on the first attempt. On retries, fall back to
@@ -157,10 +174,12 @@ class AsyncOllamaLLMClient:
                         messages=messages,
                         options=self._options,
                     )
-                    return response.message.content or ""
+                    return ChatReply(text=response.message.content or "", usage=_ollama_usage(response))
 
-                # Streaming path.
+                # Streaming path. The token counts live on the final ``done``
+                # chunk, so keep the last one seen and read usage off it.
                 text_buf: list[str] = []
+                last_chunk: Any = None
                 stream_iter = await self._client.chat(
                     model=self._model,
                     messages=messages,
@@ -169,11 +188,12 @@ class AsyncOllamaLLMClient:
                 )
                 assert stream_to is not None  # narrows the type for mypy
                 async for chunk in stream_iter:
+                    last_chunk = chunk
                     delta = chunk.message.content or ""
                     if delta:
                         text_buf.append(delta)
                         stream_to(delta)
-                return "".join(text_buf)
+                return ChatReply(text="".join(text_buf), usage=_ollama_usage(last_chunk))
             except ResponseError as exc:
                 if exc.status_code < 500:
                     raise

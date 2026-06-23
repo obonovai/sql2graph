@@ -25,6 +25,8 @@ from typing import Any, Literal
 from anthropic import Anthropic, AsyncAnthropic
 from pydantic import BaseModel, ConfigDict, Field
 
+from rows2graph.llm.usage import ChatReply, TokenUsage
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,7 +90,7 @@ class AnthropicLLMClient:
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens
 
-    def chat(self, messages: list[dict[str, Any]]) -> str:
+    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
         kwargs = _build_anthropic_kwargs(
             messages,
             model=self._model,
@@ -96,8 +98,8 @@ class AnthropicLLMClient:
             temperature=self._temperature,
         )
         response = self._client.messages.create(**kwargs)
-        _log_anthropic_usage(response, self._model)
-        return _extract_anthropic_text(response)
+        usage = _anthropic_usage(response, self._model)
+        return ChatReply(text=_extract_anthropic_text(response), usage=usage)
 
     def close(self) -> None:
         """No-op: ``Anthropic`` manages its own HTTP session lifecycle."""
@@ -144,17 +146,31 @@ def _build_anthropic_kwargs(
     return kwargs
 
 
-def _log_anthropic_usage(response: Any, model: str) -> None:
-    """Shared usage-logging helper for sync and async clients."""
-    if response.usage is not None:
-        logger.info(
-            "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-            getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-            getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
-            model,
-        )
+def _anthropic_usage(response: Any, model: str) -> TokenUsage:
+    """Extract token usage from an Anthropic response, logging it in passing.
+
+    Shared by the sync and async clients. Returns a zeroed :class:`TokenUsage`
+    when the response carries no usage block. ``input_tokens`` is the *uncached*
+    prompt portion; the API reports cache reads/writes separately, which map
+    onto the ``cache_read_tokens`` / ``cache_creation_tokens`` fields.
+    """
+    if response.usage is None:
+        return TokenUsage()
+    usage = TokenUsage(
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+        cache_read_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+        cache_creation_tokens=getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+    )
+    logger.info(
+        "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cache_read_tokens,
+        usage.cache_creation_tokens,
+        model,
+    )
+    return usage
 
 
 def _extract_anthropic_text(response: Any) -> str:
@@ -189,7 +205,7 @@ class AsyncAnthropicLLMClient:
         messages: list[dict[str, Any]],
         *,
         stream_to: Callable[[str], None] | None = None,
-    ) -> str:
+    ) -> ChatReply:
         kwargs = _build_anthropic_kwargs(
             messages,
             model=self._model,
@@ -199,8 +215,8 @@ class AsyncAnthropicLLMClient:
 
         if stream_to is None:
             response = await self._client.messages.create(**kwargs)
-            _log_anthropic_usage(response, self._model)
-            return _extract_anthropic_text(response)
+            usage = _anthropic_usage(response, self._model)
+            return ChatReply(text=_extract_anthropic_text(response), usage=usage)
 
         # Streaming path: yields text deltas via ``stream_to`` while still
         # assembling the full text for the return value. ``get_final_message``
@@ -211,8 +227,8 @@ class AsyncAnthropicLLMClient:
                 text_buf.append(delta)
                 stream_to(delta)
             final = await stream.get_final_message()
-        _log_anthropic_usage(final, self._model)
-        return "".join(text_buf)
+        usage = _anthropic_usage(final, self._model)
+        return ChatReply(text="".join(text_buf), usage=usage)
 
     async def close(self) -> None:
         """Release the underlying httpx connection pool."""

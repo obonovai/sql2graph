@@ -31,6 +31,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from rows2graph.llm.usage import TokenUsage
+
 
 class TranslationState(BaseModel):
     """Internal state accumulated by the generate–validate–fix loop.
@@ -52,6 +54,7 @@ class TranslationState(BaseModel):
     iterations_used: int = 0
     final_status: str = "pending"
     duration_seconds: float = 0.0
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
 
 class TranslationResult(BaseModel):
@@ -79,3 +82,4 @@ class TranslationResult(BaseModel):
     iterations_used: int
     status: str
     duration_seconds: float = 0.0
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)

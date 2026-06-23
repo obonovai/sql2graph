@@ -42,6 +42,7 @@ from rows2graph import (
     make_validator,
 )
 from rows2graph._env import interpolate_env
+from rows2graph.llm.usage import ChatReply, TokenUsage
 from rows2graph.prompts import build_fix_prompt, build_generate_prompt, build_system_prompt
 from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
 from rows2graph.targets import aql as aql_target
@@ -482,13 +483,18 @@ def test_ollama_chat_retries_on_request_error_then_succeeds() -> None:
     ):
         mock_response = MagicMock()
         mock_response.message.content = "ok"
+        mock_response.prompt_eval_count = 7
+        mock_response.eval_count = 3
         mock_client_cls.return_value.chat.side_effect = [
             RequestError("connection refused"),
             RequestError("connection refused"),
             mock_response,
         ]
         client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
-        assert client.chat([{"role": "user", "content": "hi"}]) == "ok"
+        reply = client.chat([{"role": "user", "content": "hi"}])
+        assert reply.text == "ok"
+        assert reply.usage.input_tokens == 7
+        assert reply.usage.output_tokens == 3
         assert mock_client_cls.return_value.chat.call_count == 3
         # First failure → sleep 1s; second failure → sleep 2s.
         assert [call.args[0] for call in mock_sleep.call_args_list] == [1.0, 2.0]
@@ -505,12 +511,14 @@ def test_ollama_chat_retries_on_5xx_response_error() -> None:
     ):
         mock_response = MagicMock()
         mock_response.message.content = "ok"
+        mock_response.prompt_eval_count = 7
+        mock_response.eval_count = 3
         mock_client_cls.return_value.chat.side_effect = [
             ResponseError("server overloaded", 503),
             mock_response,
         ]
         client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
-        assert client.chat([{"role": "user", "content": "hi"}]) == "ok"
+        assert client.chat([{"role": "user", "content": "hi"}]).text == "ok"
         assert mock_client_cls.return_value.chat.call_count == 2
 
 
@@ -841,9 +849,10 @@ class _FakeLLM:
         self.calls: list[list[dict[str, Any]]] = []
         self.closed = False
 
-    def chat(self, messages: list[dict[str, Any]]) -> str:
+    def chat(self, messages: list[dict[str, Any]]) -> ChatReply:
         self.calls.append(list(messages))
-        return self._responses.pop(0)
+        # Fixed per-call usage (15 total tokens) lets loop tests assert accumulation.
+        return ChatReply(text=self._responses.pop(0), usage=TokenUsage(input_tokens=10, output_tokens=5))
 
     def close(self) -> None:
         self.closed = True
@@ -867,6 +876,10 @@ def test_translator_returns_result_on_first_try_success() -> None:
     assert result.generated_query == "MATCH (p:Person) RETURN p"
     assert len(fake.calls) == 1
     assert fake.closed is True
+    # One LLM call → one TokenUsage (10 in + 5 out).
+    assert result.token_usage.total_tokens == 15
+    assert result.token_usage.input_tokens == 10
+    assert result.token_usage.output_tokens == 5
 
 
 def test_translator_runs_fix_loop_on_validation_failure() -> None:
@@ -892,6 +905,10 @@ def test_translator_runs_fix_loop_on_validation_failure() -> None:
     assert result.validation_passed is True
     assert result.iterations_used == 2
     assert len(fake.calls) == 2
+    # Usage accumulates across both LLM calls: 2 × (10 in + 5 out).
+    assert result.token_usage.total_tokens == 30
+    assert result.token_usage.input_tokens == 20
+    assert result.token_usage.output_tokens == 10
 
 
 def test_translator_hits_max_iterations() -> None:
@@ -1386,14 +1403,15 @@ class _FakeAsyncLLM:
         messages: list[dict[str, Any]],
         *,
         stream_to: Any = None,
-    ) -> str:
+    ) -> ChatReply:
         self.calls.append(list(messages))
         response = self._responses.pop(0)
         if stream_to is not None:
             self.stream_calls += 1
             for char in response:
                 stream_to(char)
-        return response
+        # Fixed per-call usage (15 total tokens) lets loop tests assert accumulation.
+        return ChatReply(text=response, usage=TokenUsage(input_tokens=10, output_tokens=5))
 
     async def close(self) -> None:
         self.closed = True
@@ -1443,6 +1461,8 @@ def test_async_translator_runs_fix_loop_on_validation_failure() -> None:
     result = asyncio.run(run())
     assert result.validation_passed is True
     assert result.iterations_used == 2
+    # Usage accumulates across both async LLM calls: 2 × (10 in + 5 out).
+    assert result.token_usage.total_tokens == 30
 
 
 def test_async_translator_hits_max_iterations() -> None:
