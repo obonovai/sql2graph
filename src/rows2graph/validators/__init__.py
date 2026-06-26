@@ -88,6 +88,27 @@ class AsyncQueryValidator(Protocol):
     async def close(self) -> None: ...
 
 
+# User-facing validation modes (``managed`` is derived, not chosen directly — see
+# ``resolve_validation_mode``). The canonical set, so callers/CLIs/web UIs don't
+# each hardcode their own copy.
+VALID_VALIDATION_MODES: tuple[str, ...] = ("none", "syntax", "server")
+
+# Which server-config / database type each target language validates against.
+TARGET_SERVER_TYPE: dict[str, str] = {"cypher": "neo4j", "aql": "arangodb", "gremlin": "gremlin"}
+
+
+def resolve_validation_mode(mode: str, *, server_config: object | None) -> str:
+    """Resolve the *effective* validation mode.
+
+    ``"server"`` with no ``server_config`` means *managed*: the library provisions
+    a throwaway database itself. Every other case passes ``mode`` through unchanged.
+    Centralised here so the CLI and the web backend share one rule.
+    """
+    if mode == "server" and server_config is None:
+        return "managed"
+    return mode
+
+
 ServerConfig = Annotated[Neo4jConfig | ArangoDBConfig | GremlinConfig, Field(discriminator="type")]
 """Tagged union over every supported server-validator config."""
 
@@ -246,7 +267,10 @@ __all__ = [
     "NoopValidator",
     "QueryValidator",
     "ServerConfig",
+    "TARGET_SERVER_TYPE",
+    "VALID_VALIDATION_MODES",
     "load_server_config",
     "make_async_validator",
     "make_validator",
+    "resolve_validation_mode",
 ]

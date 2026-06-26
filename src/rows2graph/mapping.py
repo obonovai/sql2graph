@@ -141,5 +141,16 @@ class SchemaMapping(_StrictModel):
         location.
         """
         with open(path) as f:
-            data = yaml.safe_load(f)
+            return cls.from_yaml_string(f.read())
+
+    @classmethod
+    def from_yaml_string(cls, text: str) -> Self:
+        """Load a schema mapping from a YAML string (e.g. a textarea or HTTP body).
+
+        Same parse-and-validate path as :meth:`from_yaml`, but from an in-memory
+        string rather than a file: ``yaml.safe_load`` then Pydantic validation, so
+        malformed YAML raises ``yaml.YAMLError`` and a structurally invalid mapping
+        raises ``pydantic.ValidationError``.
+        """
+        data = yaml.safe_load(text)
         return cls.model_validate(data)

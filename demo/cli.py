@@ -77,6 +77,7 @@ from rows2graph import (
     make_async_llm,
     make_async_validator,
     make_target,
+    resolve_validation_mode,
 )
 
 # Two consoles: pretty output (stdout) and logs/errors (stderr). Splitting
@@ -188,18 +189,6 @@ def _read_sql(sql_arg: str) -> str:
     if sql_arg == "-":
         return sys.stdin.read()
     return sql_arg
-
-
-def _resolve_validation_mode(args: argparse.Namespace) -> str:
-    """Map CLI flags to an effective validation mode.
-
-    ``--validation server`` with no ``--server`` means *managed*: the library
-    provisions a throwaway database. With ``--server PATH`` it stays plain
-    ``server`` (bring-your-own).
-    """
-    if args.validation == "server" and args.server is None:
-        return "managed"
-    return str(args.validation)
 
 
 def _load_server_config_or_die(
@@ -470,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
     mapping = SchemaMapping.from_yaml(args.mapping)
     model_config = _load_model_config_or_die(args)
     server_config = _load_server_config_or_die(args)
-    validation_mode = _resolve_validation_mode(args)
+    validation_mode = resolve_validation_mode(args.validation, server_config=server_config)
 
     _print_settings(
         mapping_path=args.mapping,

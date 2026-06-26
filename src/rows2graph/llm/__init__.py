@@ -43,6 +43,9 @@ from rows2graph.llm.anthropic import AnthropicConfig, AnthropicLLMClient, AsyncA
 from rows2graph.llm.ollama import AsyncOllamaLLMClient, OllamaConfig, OllamaLLMClient
 from rows2graph.llm.usage import ChatReply, TokenUsage
 
+# Canonical set of LLM provider short names, so callers don't each hardcode it.
+VALID_PROVIDERS: tuple[str, ...] = ("ollama", "anthropic")
+
 
 class LLMClient(Protocol):
     """Structural type for any LLM backend the translator can use.
@@ -142,6 +145,7 @@ def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient:
 
 
 __all__ = [
+    "VALID_PROVIDERS",
     "AnthropicConfig",
     "AnthropicLLMClient",
     "AsyncAnthropicLLMClient",

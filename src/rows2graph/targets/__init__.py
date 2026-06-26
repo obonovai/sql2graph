@@ -33,6 +33,9 @@ from rows2graph.targets.aql import AqlTarget
 from rows2graph.targets.cypher import CypherTarget
 from rows2graph.targets.gremlin import GremlinTarget
 
+# Canonical set of target language short names, so callers don't each hardcode it.
+VALID_TARGETS: tuple[str, ...] = ("cypher", "aql", "gremlin")
+
 
 class TargetLanguage(Protocol):
     """Structural type for any target graph query language."""
@@ -69,7 +72,7 @@ def make_target(name: str) -> TargetLanguage:
         return AqlTarget()
     if name == "gremlin":
         return GremlinTarget()
-    raise ValueError(f"Unknown target language: {name!r}. Supported: 'cypher', 'aql', 'gremlin'.")
+    raise ValueError(f"Unknown target language: {name!r}. Supported: {', '.join(VALID_TARGETS)}.")
 
 
-__all__ = ["AqlTarget", "CypherTarget", "GremlinTarget", "TargetLanguage", "make_target"]
+__all__ = ["VALID_TARGETS", "AqlTarget", "CypherTarget", "GremlinTarget", "TargetLanguage", "make_target"]
