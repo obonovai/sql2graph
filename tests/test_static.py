@@ -43,6 +43,7 @@ from rows2graph import (
 )
 from rows2graph._env import interpolate_env
 from rows2graph.llm.usage import ChatReply, TokenUsage
+from rows2graph.preflight import PreflightAction, find_unmapped_columns, find_unmapped_tables
 from rows2graph.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
@@ -51,7 +52,7 @@ from rows2graph.prompts import (
     error_signature,
     normalize_query,
 )
-from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
+from rows2graph.sql_features import ALL_FEATURES, SqlFeature, analyze_sql, detect_features
 from rows2graph.targets import aql as aql_target
 from rows2graph.targets import cypher as cypher_target
 from rows2graph.targets import gremlin as gremlin_target
@@ -1344,6 +1345,344 @@ def test_detect_features_parse_failure_returns_all() -> None:
 
 
 # ---------------------------------------------------------------------------
+# analyze_sql: features + source tables + parse status (rows2graph.sql_features)
+# ---------------------------------------------------------------------------
+
+
+def test_analyze_sql_reports_features_tables_and_parse_ok() -> None:
+    a = analyze_sql("SELECT * FROM orders o JOIN customer c ON o.custkey = c.custkey")
+    assert a.parse_ok is True
+    assert a.source_tables == frozenset({"orders", "customer"})
+    assert SqlFeature.JOIN in a.features
+
+
+def test_analyze_sql_parse_failure_keeps_all_features_and_flags_parse() -> None:
+    # The load-bearing fallback: an unparseable query still ships every rule
+    # (so the prompt isn't silently trimmed) but parse_ok records the failure
+    # and the table set is empty (so any coverage check is a no-op).
+    a = analyze_sql("SELECT ;;; FROM")
+    assert a.parse_ok is False
+    assert a.features == ALL_FEATURES
+    assert a.source_tables == frozenset()
+
+
+def test_analyze_sql_excludes_cte_and_derived_table_names() -> None:
+    # A CTE name and a derived-table alias look like tables to a naive
+    # find_all(exp.Table); the scope-based extractor must report only the real
+    # underlying tables.
+    cte = analyze_sql("WITH recent AS (SELECT * FROM orders) SELECT * FROM recent r JOIN customer c ON r.x = c.x")
+    assert cte.source_tables == frozenset({"orders", "customer"})
+    derived = analyze_sql("SELECT * FROM (SELECT * FROM orders) sub JOIN customer c ON 1 = 1")
+    assert derived.source_tables == frozenset({"orders", "customer"})
+
+
+def test_analyze_sql_strips_schema_qualifier_and_preserves_casing() -> None:
+    a = analyze_sql('SELECT * FROM public.Orders, "Customer"')
+    # Schema qualifier dropped (bare name); original casing preserved so an
+    # error message echoes what the user wrote.
+    assert a.source_tables == frozenset({"Orders", "Customer"})
+
+
+def test_analyze_sql_no_tables_for_tableless_and_dml() -> None:
+    assert analyze_sql("SELECT 1").source_tables == frozenset()
+    # DML/DDL enumerate no SELECT-scope sources, so coverage never fires on them.
+    assert analyze_sql("INSERT INTO persons (id) VALUES (1)").source_tables == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Schema-mapping coverage (SchemaMapping.source_tables / find_unmapped_tables)
+# ---------------------------------------------------------------------------
+
+
+def test_schema_mapping_source_tables_unions_nodes_and_edges() -> None:
+    # _schema() maps persons + forums (nodes) and knows (edge source table).
+    assert _schema().source_tables() == {"persons", "forums", "knows"}
+
+
+def test_find_unmapped_tables_is_case_insensitive_and_sorted() -> None:
+    mapping = _schema()
+    # "persons" is covered (case-insensitively); "orders" and "Lineitem" are not.
+    unmapped = find_unmapped_tables(frozenset({"PERSONS", "orders", "Lineitem"}), mapping)
+    assert unmapped == ["Lineitem", "orders"]  # sorted, original casing kept
+
+
+def test_find_unmapped_tables_empty_when_all_covered() -> None:
+    assert find_unmapped_tables(frozenset({"persons", "knows"}), _schema()) == []
+
+
+# ---------------------------------------------------------------------------
+# Translator input pre-flight (parse-failure warn / unmapped-tables reject)
+# ---------------------------------------------------------------------------
+
+
+def test_translator_rejects_unmapped_tables_without_calling_llm() -> None:
+    from rows2graph import CompletedEvent, TranslationEvent, UnmappedTablesEvent
+
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])  # must never be consumed
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        result = translator.translate("SELECT * FROM nonexistent_table", on_event=events.append)
+
+    assert result.status == "unmapped_tables"
+    assert result.validation_passed is False
+    assert result.unmapped_tables == ["nonexistent_table"]
+    assert result.generated_query is None
+    assert result.iterations_used == 0
+    assert result.token_usage.total_tokens == 0
+    assert len(fake.calls) == 0  # the LLM was skipped entirely
+    # Exactly the rejection event then the always-last CompletedEvent.
+    assert [type(e).__name__ for e in events] == ["UnmappedTablesEvent", "CompletedEvent"]
+    assert isinstance(events[0], UnmappedTablesEvent)
+    assert isinstance(events[-1], CompletedEvent)
+
+
+def test_translator_warns_on_parse_failure_but_still_translates() -> None:
+    from rows2graph import GeneratedEvent, ParseFailedEvent, TranslationEvent
+
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        result = translator.translate("SELECT ;;; FROM", on_event=events.append)
+
+    # Warn, don't block: the LLM still ran and produced a result.
+    assert result.status == "success"
+    assert len(fake.calls) == 1
+    assert result.validation_errors == []  # warn must not pollute validation errors
+    parse_events = [e for e in events if isinstance(e, ParseFailedEvent)]
+    assert len(parse_events) == 1
+    # The warning precedes the initial generation event.
+    assert events.index(parse_events[0]) < next(i for i, e in enumerate(events) if isinstance(e, GeneratedEvent))
+
+
+def test_translator_no_preflight_events_for_mapped_query() -> None:
+    from rows2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
+
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        translator.translate("SELECT * FROM persons", on_event=events.append)
+
+    assert not any(isinstance(e, (ParseFailedEvent, UnmappedTablesEvent)) for e in events)
+
+
+def test_translator_does_not_flag_cte_name_as_unmapped() -> None:
+    # A CTE alias must not be mistaken for an unmapped table — the underlying
+    # 'persons' is mapped, so this translates normally.
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        result = translator.translate("WITH recent AS (SELECT * FROM persons) SELECT * FROM recent")
+
+    assert result.status == "success"
+    assert result.unmapped_tables == []
+
+
+def test_translator_ignore_action_keeps_legacy_behavior() -> None:
+    # With both actions IGNORE, an unmapped table is translated as before
+    # (the LLM is called, no preflight events, no rejection).
+    from rows2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
+
+    fake = _FakeLLM(["MATCH (x) RETURN x"])
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+        parse_error_action=PreflightAction.IGNORE,
+        unmapped_tables_action=PreflightAction.IGNORE,
+    ) as translator:
+        result = translator.translate("SELECT * FROM nonexistent_table", on_event=events.append)
+
+    assert result.status == "success"
+    assert len(fake.calls) == 1
+    assert not any(isinstance(e, (ParseFailedEvent, UnmappedTablesEvent)) for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Column-reference extraction (analyze_sql.column_refs)
+# ---------------------------------------------------------------------------
+
+_GAP_SQL = (
+    "SELECT f.id, f.title, COUNT(fhm.person_id) AS member_count "
+    "FROM forum f LEFT JOIN forum_has_member fhm ON fhm.forum_id = f.id "
+    "GROUP BY f.id, f.title ORDER BY member_count DESC"
+)
+
+
+def test_analyze_sql_extracts_qualified_column_refs() -> None:
+    # Qualified columns resolve to their real table; the SELECT alias
+    # (member_count) must NOT appear as a column.
+    assert analyze_sql(_GAP_SQL).column_refs == frozenset(
+        {("forum", "id"), ("forum", "title"), ("forum_has_member", "forum_id"), ("forum_has_member", "person_id")}
+    )
+
+
+def test_analyze_sql_attributes_single_table_unqualified_columns() -> None:
+    # In a single-table leaf scope, bare columns attribute to the sole table.
+    assert analyze_sql("SELECT id, title FROM forum").column_refs == frozenset({("forum", "id"), ("forum", "title")})
+
+
+def test_analyze_sql_does_not_leak_subquery_columns() -> None:
+    # The leaf-scope gate: the outer scope has a child subquery, so its
+    # unqualified columns are NOT attributed — `person_id` must bind to `knows`
+    # (its own leaf), never to `persons`.
+    refs = analyze_sql("SELECT p.full_name FROM persons p WHERE p.id IN (SELECT person_id FROM knows)").column_refs
+    assert ("persons", "person_id") not in refs
+    assert ("knows", "person_id") in refs
+    assert ("persons", "full_name") in refs
+
+
+def test_analyze_sql_no_column_refs_for_star_cte_alias_and_dml() -> None:
+    assert analyze_sql("SELECT * FROM persons").column_refs == frozenset()
+    assert analyze_sql("SELECT 1").column_refs == frozenset()
+    assert analyze_sql("INSERT INTO persons (id) VALUES (1)").column_refs == frozenset()
+    # A CTE alias is not a real table, so a column off it is excluded.
+    assert analyze_sql("WITH r AS (SELECT * FROM forum) SELECT r.id FROM r").column_refs == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Column coverage (find_unmapped_columns)
+# ---------------------------------------------------------------------------
+
+
+def _forum_no_title() -> SchemaMapping:
+    return SchemaMapping(
+        nodes=[NodeMapping(label="Forum", source_table="forum", primary_key="id", properties={"id": "id"})],
+        edges=[],
+    )
+
+
+def test_find_unmapped_columns_flags_missing_property() -> None:
+    mapping = _forum_no_title()
+    assert find_unmapped_columns(frozenset({("forum", "title")}), mapping) == ["forum.title"]
+    assert find_unmapped_columns(frozenset({("forum", "id")}), mapping) == []
+
+
+def test_find_unmapped_columns_skips_pure_junction_tables() -> None:
+    # `knows` in _schema() is only an edge source (never a node), so its columns
+    # are not checkable — a junction FK must never be flagged.
+    assert find_unmapped_columns(frozenset({("knows", "forum_id"), ("knows", "anything")}), _schema()) == []
+
+
+def test_find_unmapped_columns_absorbs_join_keys_of_node_plus_edge_table() -> None:
+    # A table that is BOTH a node source and an edge source: the edge's FK/PK
+    # join columns are absorbed as covered, so they aren't false-flagged.
+    mapping = SchemaMapping(
+        nodes=[NodeMapping(label="Forum", source_table="forum", primary_key="id", properties={"id": "id"})],
+        edges=[
+            EdgeMapping(
+                type="OWNS",
+                source_node="Forum",
+                target_node="Forum",
+                source_table="forum",
+                source_foreign_key="owner_id",
+                target_primary_key="id",
+            )
+        ],
+    )
+    assert find_unmapped_columns(frozenset({("forum", "owner_id"), ("forum", "id")}), mapping) == []
+    assert find_unmapped_columns(frozenset({("forum", "title")}), mapping) == ["forum.title"]
+
+
+def test_find_unmapped_columns_is_case_insensitive_and_sorted() -> None:
+    # Covered comparison casefolds both sides; output keeps SQL casing, sorted.
+    assert find_unmapped_columns(frozenset({("PERSONS", "Full_Name")}), _schema()) == []
+    assert find_unmapped_columns(frozenset({("forums", "z_missing"), ("forums", "a_missing")}), _schema()) == [
+        "forums.a_missing",
+        "forums.z_missing",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Translator unmapped-column pre-flight (warn default / reject opt-in)
+# ---------------------------------------------------------------------------
+
+
+def test_translator_warns_on_unmapped_column_but_translates() -> None:
+    from rows2graph import GeneratedEvent, TranslationEvent, UnmappedColumnsEvent
+
+    fake = _FakeLLM(["MATCH (f:Forum) RETURN f"])
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        result = translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
+
+    assert result.status == "success"
+    assert len(fake.calls) == 1  # warn does not block the LLM
+    assert result.validation_errors == []  # must not pollute validation errors
+    assert result.unmapped_columns == ["forums.bogus"]  # self-describing result
+    parse = [e for e in events if isinstance(e, UnmappedColumnsEvent)]
+    assert len(parse) == 1
+    assert parse[0].columns == ["forums.bogus"]
+    # The warning precedes the initial generation event.
+    assert events.index(parse[0]) < next(i for i, e in enumerate(events) if isinstance(e, GeneratedEvent))
+
+
+def test_translator_rejects_unmapped_column_when_configured() -> None:
+    from rows2graph import CompletedEvent, TranslationEvent
+
+    fake = _FakeLLM(["MATCH (f:Forum) RETURN f"])  # must never be consumed
+    events: list[TranslationEvent] = []
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+        unmapped_columns_action=PreflightAction.REJECT,
+    ) as translator:
+        result = translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
+
+    assert result.status == "unmapped_columns"
+    assert result.unmapped_columns == ["forums.bogus"]
+    assert result.generated_query is None
+    assert result.token_usage.total_tokens == 0
+    assert len(fake.calls) == 0
+    assert [type(e).__name__ for e in events] == ["UnmappedColumnsEvent", "CompletedEvent"]
+    assert isinstance(events[-1], CompletedEvent)
+
+
+def test_translator_no_column_signal_for_mapped_or_star_queries() -> None:
+    from rows2graph import TranslationEvent, UnmappedColumnsEvent
+
+    for sql in ("SELECT * FROM persons", "SELECT full_name FROM persons WHERE id = 1"):
+        fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+        events: list[TranslationEvent] = []
+        with SQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=CypherSyntaxValidator(),
+        ) as translator:
+            result = translator.translate(sql, on_event=events.append)
+        assert not any(isinstance(e, UnmappedColumnsEvent) for e in events), sql
+        assert result.unmapped_columns == [], sql
+
+
+# ---------------------------------------------------------------------------
 # Feature-gated prompt assembly
 # ---------------------------------------------------------------------------
 
@@ -1617,6 +1956,75 @@ def test_async_translator_runs_fix_loop_on_validation_failure() -> None:
     assert result.iterations_used == 2
     # Usage accumulates across both async LLM calls: 2 × (10 in + 5 out).
     assert result.token_usage.total_tokens == 30
+
+
+def test_async_translator_rejects_unmapped_tables_without_calling_llm() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator, CompletedEvent, TranslationEvent
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def run() -> tuple[TranslationResult, _FakeAsyncLLM, list[TranslationEvent]]:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])  # must never be consumed
+        events: list[TranslationEvent] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+        ) as translator:
+            result = await translator.translate("SELECT * FROM nonexistent_table", on_event=events.append)
+        return result, fake, events
+
+    result, fake, events = asyncio.run(run())
+    assert result.status == "unmapped_tables"
+    assert result.unmapped_tables == ["nonexistent_table"]
+    assert result.generated_query is None
+    assert result.token_usage.total_tokens == 0
+    assert len(fake.calls) == 0
+    assert [type(e).__name__ for e in events] == ["UnmappedTablesEvent", "CompletedEvent"]
+    assert isinstance(events[-1], CompletedEvent)
+
+
+def test_async_translator_unmapped_column_warn_and_reject() -> None:
+    import asyncio
+
+    from rows2graph import AsyncSQLTranslator, TranslationEvent, UnmappedColumnsEvent
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    async def warn() -> tuple[TranslationResult, _FakeAsyncLLM, list[TranslationEvent]]:
+        fake = _FakeAsyncLLM(["MATCH (f:Forum) RETURN f"])
+        events: list[TranslationEvent] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(), llm=fake, target=CypherTarget(), validator=AsyncCypherSyntaxValidator()
+        ) as translator:
+            result = await translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
+        return result, fake, events
+
+    async def reject() -> tuple[TranslationResult, _FakeAsyncLLM, list[TranslationEvent]]:
+        fake = _FakeAsyncLLM(["MATCH (f:Forum) RETURN f"])
+        events: list[TranslationEvent] = []
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+            unmapped_columns_action=PreflightAction.REJECT,
+        ) as translator:
+            result = await translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
+        return result, fake, events
+
+    wr, wfake, wevents = asyncio.run(warn())
+    assert wr.status == "success"
+    assert len(wfake.calls) == 1
+    assert wr.unmapped_columns == ["forums.bogus"]
+    assert any(isinstance(e, UnmappedColumnsEvent) for e in wevents)
+
+    rr, rfake, revents = asyncio.run(reject())
+    assert rr.status == "unmapped_columns"
+    assert rr.unmapped_columns == ["forums.bogus"]
+    assert len(rfake.calls) == 0
+    assert [type(e).__name__ for e in revents] == ["UnmappedColumnsEvent", "CompletedEvent"]
 
 
 def test_async_translator_hits_max_iterations() -> None:

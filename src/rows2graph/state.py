@@ -64,7 +64,7 @@ class TranslationResult(BaseModel):
     only the fields that callers need to consume the outcome — the chat
     history and iteration counter are deliberately omitted.
 
-    The ``status`` field takes one of four values:
+    The ``status`` field takes one of these values:
 
     * ``"success"`` — validator returned no errors on some iteration.
     * ``"max_iterations_reached"`` — the loop hit
@@ -75,6 +75,20 @@ class TranslationResult(BaseModel):
       fresh-context, higher-temperature retry, and still could not advance, so
       it aborted early rather than burning the remaining iterations.
       ``generated_query`` holds the last attempt.
+    * ``"unmapped_tables"`` — a pre-flight check found the SQL reads tables
+      absent from the schema mapping, so translation was rejected before any
+      LLM call (the default ``unmapped_tables_action``). ``unmapped_tables``
+      lists the offending tables; ``generated_query`` is ``None`` and
+      ``token_usage`` is zero.
+    * ``"unmapped_columns"`` — a pre-flight check found the SQL uses columns of
+      mapped tables that the mapping does not define, and the translator was
+      configured with ``unmapped_columns_action="reject"`` (not the default,
+      which only warns). ``unmapped_columns`` lists the offending
+      ``"table.column"`` refs; the LLM was skipped.
+    * ``"parse_error"`` — a pre-flight check found the SQL was unparseable and
+      the translator was configured with ``parse_error_action="reject"`` (not
+      the default, which only warns). The LLM was skipped; ``generated_query``
+      is ``None``.
     * ``"pending"`` — sentinel for an unfinished translation; should not
       appear in returned results.
     """
@@ -86,5 +100,7 @@ class TranslationResult(BaseModel):
     validation_errors: list[str]
     iterations_used: int
     status: str
+    unmapped_tables: list[str] = Field(default_factory=list)
+    unmapped_columns: list[str] = Field(default_factory=list)
     duration_seconds: float = 0.0
     token_usage: TokenUsage = Field(default_factory=TokenUsage)

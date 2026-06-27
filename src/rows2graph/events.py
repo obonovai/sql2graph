@@ -41,6 +41,51 @@ from rows2graph.state import TranslationResult
 
 
 @dataclass(frozen=True)
+class ParseFailedEvent:
+    """The input SQL could not be parsed by sqlglot.
+
+    Emitted at most once, before :class:`GeneratedEvent`, when the translator's
+    ``parse_error_action`` surfaces a parse failure. Under the default
+    ``"warn"`` action the translation still proceeds (the LLM is given a chance
+    on the unparseable text); under ``"reject"`` this is followed directly by
+    :class:`CompletedEvent` with ``status='parse_error'`` and no LLM call.
+    ``message`` is a human-readable explanation.
+    """
+
+    message: str
+
+
+@dataclass(frozen=True)
+class UnmappedTablesEvent:
+    """The input SQL reads tables absent from the schema mapping.
+
+    Emitted at most once, before :class:`CompletedEvent`, when the translator's
+    ``unmapped_tables_action`` fires. ``tables`` lists the offending source
+    tables (as written in the SQL). Under the default ``"reject"`` action the
+    LLM is skipped and the following :class:`CompletedEvent` carries
+    ``status='unmapped_tables'``; under ``"warn"`` the translation proceeds.
+    """
+
+    tables: list[str]
+    message: str
+
+
+@dataclass(frozen=True)
+class UnmappedColumnsEvent:
+    """The input SQL uses columns of mapped tables that the mapping omits.
+
+    Emitted at most once, before :class:`CompletedEvent`, when the translator's
+    ``unmapped_columns_action`` fires. ``columns`` lists the offending
+    ``"table.column"`` references. Under the default ``"warn"`` action the
+    translation still proceeds; under ``"reject"`` the LLM is skipped and the
+    following :class:`CompletedEvent` carries ``status='unmapped_columns'``.
+    """
+
+    columns: list[str]
+    message: str
+
+
+@dataclass(frozen=True)
 class GeneratedEvent:
     """Initial query was generated. ``iteration`` is always 1.
 
@@ -125,7 +170,15 @@ class CompletedEvent:
 
 
 TranslationEvent = (
-    GeneratedEvent | ValidatedEvent | FixGeneratedEvent | StalledEvent | MaxIterationsReachedEvent | CompletedEvent
+    ParseFailedEvent
+    | UnmappedTablesEvent
+    | UnmappedColumnsEvent
+    | GeneratedEvent
+    | ValidatedEvent
+    | FixGeneratedEvent
+    | StalledEvent
+    | MaxIterationsReachedEvent
+    | CompletedEvent
 )
 """Discriminated union of every event the translator emits."""
 
@@ -151,7 +204,10 @@ __all__ = [
     "FixGeneratedEvent",
     "GeneratedEvent",
     "MaxIterationsReachedEvent",
+    "ParseFailedEvent",
     "StalledEvent",
     "TranslationEvent",
+    "UnmappedColumnsEvent",
+    "UnmappedTablesEvent",
     "ValidatedEvent",
 ]

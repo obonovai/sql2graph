@@ -34,6 +34,11 @@ from rows2graph.events import (
 )
 from rows2graph.llm import AsyncLLMClient, StreamCallback
 from rows2graph.mapping import SchemaMapping
+from rows2graph.preflight import (
+    PreflightAction,
+    build_rejected_result,
+    evaluate_preflight,
+)
 from rows2graph.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
@@ -42,7 +47,7 @@ from rows2graph.prompts import (
     error_signature,
     normalize_query,
 )
-from rows2graph.sql_features import detect_features
+from rows2graph.sql_features import analyze_sql
 from rows2graph.state import TranslationResult, TranslationState
 from rows2graph.targets import TargetLanguage
 from rows2graph.validators import AsyncQueryValidator
@@ -69,6 +74,9 @@ class AsyncSQLTranslator:
         max_iterations: int = 3,
         escalation_temperature: float = 0.6,
         fix_temperature: float | None = None,
+        parse_error_action: PreflightAction = PreflightAction.WARN,
+        unmapped_tables_action: PreflightAction = PreflightAction.REJECT,
+        unmapped_columns_action: PreflightAction = PreflightAction.WARN,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
@@ -78,6 +86,10 @@ class AsyncSQLTranslator:
         # See SQLTranslator.__init__ — same stall-escalation knobs, async sibling.
         self._fix_temperature = fix_temperature
         self._escalation_temperature = escalation_temperature
+        # See SQLTranslator.__init__ — same input-side pre-flight policy.
+        self._parse_error_action = parse_error_action
+        self._unmapped_tables_action = unmapped_tables_action
+        self._unmapped_columns_action = unmapped_columns_action
         # See SQLTranslator.last_messages — same contract, async sibling.
         self.last_messages: list[dict[str, str]] = []
 
@@ -123,6 +135,27 @@ class AsyncSQLTranslator:
         if target_name not in ("cypher", "aql", "gremlin"):
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
 
+        # Pre-flight: parse the SQL once and decide whether to warn or reject
+        # before any expensive work — see SQLTranslator.translate. A reject runs
+        # before warmup so it never boots a managed database for a query we will
+        # not translate.
+        analysis = analyze_sql(sql_query)
+        outcome = evaluate_preflight(
+            analysis,
+            self._schema_mapping,
+            self._parse_error_action,
+            self._unmapped_tables_action,
+            self._unmapped_columns_action,
+        )
+        if outcome is not None:
+            _emit(on_event, outcome.event)
+            if outcome.is_reject:
+                logger.info("Pre-flight rejected translation: %s", outcome.message)
+                self.last_messages = []
+                result = build_rejected_result(sql_query, target_name, outcome)
+                _emit(on_event, CompletedEvent(result=result))
+                return result
+
         # Provision the validator (e.g. boot a managed throwaway database) before
         # the timer starts, so duration_seconds measures only the LLM + validation
         # loop rather than one-off database setup.
@@ -136,7 +169,7 @@ class AsyncSQLTranslator:
             target_language=target_name,  # type: ignore[arg-type]
         )
 
-        features = detect_features(sql_query)
+        features = analysis.features
         logger.info("Detected SQL features: %s", sorted(f.value for f in features))
         system_prompt = build_system_prompt(self._schema_mapping, self._target, features)
         state.messages.append(_msg("system", system_prompt))
@@ -306,6 +339,10 @@ class AsyncSQLTranslator:
             validation_errors=state.validation_errors,
             iterations_used=state.iterations_used,
             status=state.final_status,
+            # A surviving ``outcome`` here is a WARN (a reject returned earlier),
+            # so the result stays self-describing about what the pre-flight flagged.
+            unmapped_tables=list(outcome.tables) if outcome is not None else [],
+            unmapped_columns=list(outcome.columns) if outcome is not None else [],
             duration_seconds=state.duration_seconds,
             token_usage=state.token_usage,
         )

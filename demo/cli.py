@@ -397,6 +397,8 @@ def _print_result(result: TranslationResult) -> None:
         "Tokens:",
         f"{usage.total_tokens:,}  [dim](in {total_input:,} / out {usage.output_tokens:,})[/dim]",
     )
+    if result.unmapped_tables:
+        table.add_row("Unmapped:", f"[red]{', '.join(result.unmapped_tables)}[/red]")
     if result.validation_errors:
         bullets = "\n".join(f"• {e}" for e in result.validation_errors)
         table.add_row("Errors:", f"[red]{bullets}[/red]")

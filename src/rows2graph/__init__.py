@@ -46,8 +46,11 @@ from rows2graph.events import (
     FixGeneratedEvent,
     GeneratedEvent,
     MaxIterationsReachedEvent,
+    ParseFailedEvent,
     StalledEvent,
     TranslationEvent,
+    UnmappedColumnsEvent,
+    UnmappedTablesEvent,
     ValidatedEvent,
 )
 from rows2graph.llm import (
@@ -67,6 +70,8 @@ from rows2graph.llm import (
     make_llm,
 )
 from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
+from rows2graph.preflight import PreflightAction
+from rows2graph.sql_features import SqlAnalysis, analyze_sql
 from rows2graph.state import TranslationResult
 from rows2graph.targets import (
     VALID_TARGETS,
@@ -154,16 +159,22 @@ __all__ = [
     "NoopValidator",
     "OllamaConfig",
     "OllamaLLMClient",
+    "ParseFailedEvent",
+    "PreflightAction",
     "QueryValidator",
     "SQLTranslator",
     "SchemaMapping",
     "ServerConfig",
+    "SqlAnalysis",
     "StalledEvent",
     "StreamCallback",
     "TargetLanguage",
     "TranslationEvent",
     "TranslationResult",
+    "UnmappedColumnsEvent",
+    "UnmappedTablesEvent",
     "ValidatedEvent",
+    "analyze_sql",
     "load_model_config",
     "load_server_config",
     "make_async_llm",

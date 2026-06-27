@@ -120,6 +120,15 @@ class SchemaMapping(_StrictModel):
     nodes: list[NodeMapping]
     edges: list[EdgeMapping]
 
+    def source_tables(self) -> set[str]:
+        """Every relational table this mapping covers (node + edge sources).
+
+        Returned with each table's casing exactly as written in the mapping.
+        Coverage comparisons against a SQL query are case-insensitive and live
+        in :func:`rows2graph.preflight.find_unmapped_tables`, not here.
+        """
+        return {n.source_table for n in self.nodes} | {e.source_table for e in self.edges}
+
     @model_validator(mode="after")
     def validate_edge_references(self) -> Self:
         """Reject edges whose ``source_node``/``target_node`` is undeclared."""
