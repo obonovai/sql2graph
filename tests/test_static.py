@@ -1618,7 +1618,7 @@ def test_find_unmapped_columns_is_case_insensitive_and_sorted() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_translator_warns_on_unmapped_column_but_translates() -> None:
+def test_translator_warns_on_unmapped_column_when_configured_to_warn() -> None:
     from rows2graph import GeneratedEvent, TranslationEvent, UnmappedColumnsEvent
 
     fake = _FakeLLM(["MATCH (f:Forum) RETURN f"])
@@ -1628,6 +1628,7 @@ def test_translator_warns_on_unmapped_column_but_translates() -> None:
         llm=fake,
         target=CypherTarget(),
         validator=CypherSyntaxValidator(),
+        unmapped_columns_action=PreflightAction.WARN,  # opt out of the reject default
     ) as translator:
         result = translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
 
@@ -1642,7 +1643,7 @@ def test_translator_warns_on_unmapped_column_but_translates() -> None:
     assert events.index(parse[0]) < next(i for i, e in enumerate(events) if isinstance(e, GeneratedEvent))
 
 
-def test_translator_rejects_unmapped_column_when_configured() -> None:
+def test_translator_rejects_unmapped_column_by_default() -> None:
     from rows2graph import CompletedEvent, TranslationEvent
 
     fake = _FakeLLM(["MATCH (f:Forum) RETURN f"])  # must never be consumed
@@ -1652,7 +1653,6 @@ def test_translator_rejects_unmapped_column_when_configured() -> None:
         llm=fake,
         target=CypherTarget(),
         validator=CypherSyntaxValidator(),
-        unmapped_columns_action=PreflightAction.REJECT,
     ) as translator:
         result = translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
 
@@ -1996,20 +1996,21 @@ def test_async_translator_unmapped_column_warn_and_reject() -> None:
         fake = _FakeAsyncLLM(["MATCH (f:Forum) RETURN f"])
         events: list[TranslationEvent] = []
         async with AsyncSQLTranslator(
-            schema_mapping=_schema(), llm=fake, target=CypherTarget(), validator=AsyncCypherSyntaxValidator()
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+            unmapped_columns_action=PreflightAction.WARN,  # opt out of the reject default
         ) as translator:
             result = await translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
         return result, fake, events
 
     async def reject() -> tuple[TranslationResult, _FakeAsyncLLM, list[TranslationEvent]]:
+        # No explicit action — reject is the default.
         fake = _FakeAsyncLLM(["MATCH (f:Forum) RETURN f"])
         events: list[TranslationEvent] = []
         async with AsyncSQLTranslator(
-            schema_mapping=_schema(),
-            llm=fake,
-            target=CypherTarget(),
-            validator=AsyncCypherSyntaxValidator(),
-            unmapped_columns_action=PreflightAction.REJECT,
+            schema_mapping=_schema(), llm=fake, target=CypherTarget(), validator=AsyncCypherSyntaxValidator()
         ) as translator:
             result = await translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
         return result, fake, events

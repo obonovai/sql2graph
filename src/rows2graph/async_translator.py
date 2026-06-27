@@ -76,7 +76,7 @@ class AsyncSQLTranslator:
         fix_temperature: float | None = None,
         parse_error_action: PreflightAction = PreflightAction.WARN,
         unmapped_tables_action: PreflightAction = PreflightAction.REJECT,
-        unmapped_columns_action: PreflightAction = PreflightAction.WARN,
+        unmapped_columns_action: PreflightAction = PreflightAction.REJECT,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm

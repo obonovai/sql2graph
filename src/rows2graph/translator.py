@@ -82,7 +82,7 @@ class SQLTranslator:
         fix_temperature: float | None = None,
         parse_error_action: PreflightAction = PreflightAction.WARN,
         unmapped_tables_action: PreflightAction = PreflightAction.REJECT,
-        unmapped_columns_action: PreflightAction = PreflightAction.WARN,
+        unmapped_columns_action: PreflightAction = PreflightAction.REJECT,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
@@ -91,11 +91,12 @@ class SQLTranslator:
         self._max_iterations = max_iterations
         # Input-side pre-flight policy (see rows2graph.preflight). Defaults match
         # the product decision: warn-and-translate on an unparseable query (a
-        # weak signal — sqlglot can false-fail on valid exotic SQL), reject on a
-        # query that reads tables absent from the mapping (a strong signal — the
-        # LLM has nothing to map them to), and warn on a query that uses a column
-        # of a mapped table the mapping doesn't expose (a softer, recoverable
-        # signal — the table maps, so the model can often still translate).
+        # weak signal — sqlglot can false-fail on valid exotic SQL), and reject on
+        # a query that reads tables — or names columns of a mapped table — absent
+        # from the mapping. A column explicitly referenced but unmapped can't be
+        # translated faithfully (the model has no property to map it to), so the
+        # call would be wasted; the column check is conservative (only confidently
+        # attributed columns of node tables), keeping false positives rare.
         self._parse_error_action = parse_error_action
         self._unmapped_tables_action = unmapped_tables_action
         self._unmapped_columns_action = unmapped_columns_action

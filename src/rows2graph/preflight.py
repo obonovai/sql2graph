@@ -13,10 +13,11 @@ cannot translate well:
   the LLM has nothing to translate those tables *to*, so the default action is
   to *reject* and skip the (wasted) LLM call.
 * **Unmapped columns** — the SQL uses a column of a *mapped* table that the
-  mapping doesn't expose as a property/key. A softer signal (the table maps, so
-  the LLM can often still produce a useful query by dropping/approximating the
-  column), and column attribution has more residual false-positive surface, so
-  the default action is to *warn*.
+  mapping doesn't expose as a property/key. The default action is to *reject*:
+  a column explicitly named but absent from the mapping has no graph property to
+  map to, so the translation can't be faithful (the LLM would hallucinate or
+  drop the field). The check is conservative — it only flags columns confidently
+  attributed to a node source-table — so genuine false positives are rare.
 
 This module owns the *policy* (what each :class:`PreflightAction` does) and the
 single home for table/column-name normalization (:func:`find_unmapped_tables`,

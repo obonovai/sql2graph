@@ -76,9 +76,9 @@ class UnmappedColumnsEvent:
 
     Emitted at most once, before :class:`CompletedEvent`, when the translator's
     ``unmapped_columns_action`` fires. ``columns`` lists the offending
-    ``"table.column"`` references. Under the default ``"warn"`` action the
-    translation still proceeds; under ``"reject"`` the LLM is skipped and the
-    following :class:`CompletedEvent` carries ``status='unmapped_columns'``.
+    ``"table.column"`` references. Under the default ``"reject"`` action the LLM
+    is skipped and the following :class:`CompletedEvent` carries
+    ``status='unmapped_columns'``; under ``"warn"`` the translation proceeds.
     """
 
     columns: list[str]

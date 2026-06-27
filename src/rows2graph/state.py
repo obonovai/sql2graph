@@ -81,10 +81,11 @@ class TranslationResult(BaseModel):
       lists the offending tables; ``generated_query`` is ``None`` and
       ``token_usage`` is zero.
     * ``"unmapped_columns"`` — a pre-flight check found the SQL uses columns of
-      mapped tables that the mapping does not define, and the translator was
-      configured with ``unmapped_columns_action="reject"`` (not the default,
-      which only warns). ``unmapped_columns`` lists the offending
-      ``"table.column"`` refs; the LLM was skipped.
+      mapped tables that the mapping does not define, so translation was rejected
+      before any LLM call (the default ``unmapped_columns_action``).
+      ``unmapped_columns`` lists the offending ``"table.column"`` refs;
+      ``generated_query`` is ``None`` and ``token_usage`` is zero. Pass
+      ``"warn"`` or ``"ignore"`` to translate anyway.
     * ``"parse_error"`` — a pre-flight check found the SQL was unparseable and
       the translator was configured with ``parse_error_action="reject"`` (not
       the default, which only warns). The LLM was skipped; ``generated_query``
