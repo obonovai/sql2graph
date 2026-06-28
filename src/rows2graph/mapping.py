@@ -29,10 +29,10 @@ architectural commitment of this refactor.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -45,6 +45,14 @@ class _StrictModel(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+
+# Required mapping identifiers (labels, table/column names, property names) must
+# be non-empty. Without this, Pydantic accepts "" and "   " as valid ``str``: an
+# empty ``primary_key`` or ``label`` would load fine yet silently break the
+# system prompt and the column-coverage pre-flight. ``strip_whitespace`` also
+# trims accidental surrounding spaces from names.
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class NodeMapping(_StrictModel):
@@ -64,10 +72,10 @@ class NodeMapping(_StrictModel):
             ``source_table``. Used by the LLM to reason about joins.
     """
 
-    label: str
-    source_table: str
-    properties: dict[str, str]
-    primary_key: str
+    label: NonBlankStr
+    source_table: NonBlankStr
+    properties: dict[NonBlankStr, NonBlankStr]
+    primary_key: NonBlankStr
 
 
 class EdgeMapping(_StrictModel):
@@ -94,13 +102,13 @@ class EdgeMapping(_StrictModel):
         properties: Optional edge properties, same format as node properties.
     """
 
-    type: str
-    source_node: str
-    target_node: str
-    source_table: str
-    source_foreign_key: str
-    target_primary_key: str
-    properties: dict[str, str] = Field(default_factory=dict)
+    type: NonBlankStr
+    source_node: NonBlankStr
+    target_node: NonBlankStr
+    source_table: NonBlankStr
+    source_foreign_key: NonBlankStr
+    target_primary_key: NonBlankStr
+    properties: dict[NonBlankStr, NonBlankStr] = Field(default_factory=dict)
 
 
 class SchemaMapping(_StrictModel):
@@ -129,15 +137,77 @@ class SchemaMapping(_StrictModel):
         """
         return {n.source_table for n in self.nodes} | {e.source_table for e in self.edges}
 
+    def node_labels(self) -> set[str]:
+        """The set of declared graph node labels."""
+        return {n.label for n in self.nodes}
+
+    def edge_types(self) -> set[str]:
+        """The set of declared graph relationship types."""
+        return {e.type for e in self.edges}
+
+    def properties_for_label(self, label: str) -> set[str]:
+        """Graph property names declared for ``label`` (empty if the label is unknown)."""
+        return {prop for n in self.nodes if n.label == label for prop in n.properties}
+
+    def properties_for_edge(self, edge_type: str) -> set[str]:
+        """Graph property names declared for ``edge_type`` (empty if it is unknown)."""
+        return {prop for e in self.edges if e.type == edge_type for prop in e.properties}
+
+    @model_validator(mode="after")
+    def _reject_duplicate_node_labels(self) -> Self:
+        """Reject two nodes sharing a ``label``: the label would be ambiguous.
+
+        The set built in :meth:`validate_edge_references` silently de-duplicates,
+        so without this a duplicate label loads fine and the LLM sees two
+        conflicting definitions for the same node.
+        """
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for node in self.nodes:
+            if node.label in seen and node.label not in duplicates:
+                duplicates.append(node.label)
+            seen.add(node.label)
+        if duplicates:
+            raise ValueError(f"Duplicate node label(s): {', '.join(sorted(duplicates))}")
+        return self
+
     @model_validator(mode="after")
     def validate_edge_references(self) -> Self:
         """Reject edges whose ``source_node``/``target_node`` is undeclared."""
-        node_labels = {n.label for n in self.nodes}
+        labels = self.node_labels()
         for edge in self.edges:
-            if edge.source_node not in node_labels:
+            if edge.source_node not in labels:
                 raise ValueError(f"Edge '{edge.type}' references undefined source_node '{edge.source_node}'")
-            if edge.target_node not in node_labels:
+            if edge.target_node not in labels:
                 raise ValueError(f"Edge '{edge.type}' references undefined target_node '{edge.target_node}'")
+        return self
+
+    @model_validator(mode="after")
+    def _reject_duplicate_edges(self) -> Self:
+        """Reject fully-identical edges (a copy-paste slip).
+
+        Two edges that share ``type``/``source_node``/``target_node`` but differ
+        in ``source_table`` (or the keys/properties) are allowed: that is a
+        legitimate multi-junction pattern (e.g. Person-LIKES-Post alongside
+        Person-LIKES-Comment).
+        """
+        seen: set[tuple[str, str, str, str, str, str, tuple[tuple[str, str], ...]]] = set()
+        for edge in self.edges:
+            key = (
+                edge.type,
+                edge.source_node,
+                edge.target_node,
+                edge.source_table,
+                edge.source_foreign_key,
+                edge.target_primary_key,
+                tuple(sorted(edge.properties.items())),
+            )
+            if key in seen:
+                raise ValueError(
+                    f"Duplicate edge: [:{edge.type}] {edge.source_node}->{edge.target_node} "
+                    f"from table '{edge.source_table}'"
+                )
+            seen.add(key)
         return self
 
     @classmethod
