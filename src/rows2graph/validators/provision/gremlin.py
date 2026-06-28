@@ -8,7 +8,7 @@ from rows2graph.validators.gremlin.server import GremlinConfig
 
 # Gremlin Server image. The minor version MUST track the installed
 # gremlinpython minor (3.8.x) so client and server agree on the
-# serialization protocol — a mismatch fails at submit time.
+# serialization protocol; a mismatch fails at submit time.
 IMAGE = "tinkerpop/gremlin-server:3.8.1"
 _PORT = 8182
 # The base Gremlin Server image logs this line once the websocket channel

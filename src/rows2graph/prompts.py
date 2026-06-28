@@ -1,4 +1,4 @@
-"""Prompt assembly for the generate–validate–fix loop.
+"""Prompt assembly for the generate-validate-fix loop.
 
 Three distinct prompts shape every translation:
 
@@ -8,14 +8,14 @@ Three distinct prompts shape every translation:
    rules, and constrains output format ("only valid query code, no markdown,
    no commentary").
 2. **Generate prompt** (:func:`build_generate_prompt`): the user-turn that
-   initiates a translation. Deliberately short — the schema and rules already
+   initiates a translation. Deliberately short: the schema and rules already
    live in the system prompt.
 3. **Fix prompt** (:func:`build_fix_prompt`): user-turn appended on each
    validate-fail iteration. Includes the failing query and the validator's
    error list; instructs the model to fix *only* those errors.
 
-Keeping the three prompts as separate function calls — each producing a plain
-``str`` — lets the loop accumulate them as chat messages without any framework
+Keeping the three prompts as separate function calls (each producing a plain
+``str``) lets the loop accumulate them as chat messages without any framework
 machinery. The LLM sees the entire history on each call, which is the
 property the feedback loop relies on for iterative refinement.
 """
@@ -43,8 +43,8 @@ def format_schema_context(schema: SchemaMapping) -> str:
     """Render a schema mapping as a human-readable Markdown-ish block.
 
     The LLM consumes this block directly inside the system prompt. The format
-    is deliberately verbose — explicit node labels, primary keys, property
-    mappings, and edge directions — so the LLM can refer back to it without
+    is deliberately verbose (explicit node labels, primary keys, property
+    mappings, and edge directions) so the LLM can refer back to it without
     having to reconstruct the graph topology from terse identifiers.
     """
     lines: list[str] = []
@@ -144,7 +144,7 @@ def build_fix_prompt(
     change the query structure unnecessarily.") is intentional: without it,
     low-temperature models tend to restructure the entire query on each retry,
     undoing partial progress. But for some errors that advice is actively
-    wrong — a clause-*ordering* error can only be fixed by a restructure. When
+    wrong: a clause-*ordering* error can only be fixed by a restructure. When
     the target supplies a ``repair_hint`` for the given errors (see
     :meth:`rows2graph.targets.TargetLanguage.repair_hint`), it *replaces* the
     default line, licensing the restructure the validator's terse message
@@ -184,15 +184,15 @@ def build_escalation_prompt(
     this turn only), discarding the accumulated fix history. That history is
     what poisons a stalled retry: it contains several copies of the same
     rejected query and the same error, and at low temperature the model simply
-    reproduces them. Restating the problem self-containedly — plus an explicit
+    reproduces them. Restating the problem self-containedly (plus an explicit
     "your previous attempts were identical and rejected; produce something
-    DIFFERENT" — combined with a higher sampling temperature at the call site,
+    DIFFERENT") combined with a higher sampling temperature at the call site,
     is what breaks the repetition fixed point.
     """
     errors_text = "\n".join(f"- {e}" for e in errors)
     hint = f"\n\n{repair_hint}" if repair_hint else ""
     return f"""Your previous attempts to translate this SQL kept producing the SAME query and \
-were REJECTED with the SAME error. Do NOT repeat that query — it is wrong. Rethink the \
+were REJECTED with the SAME error. Do NOT repeat that query. It is wrong. Rethink the \
 approach and produce a DIFFERENT, restructured query.
 
 Original SQL:
@@ -204,7 +204,7 @@ Rejected query (do not repeat it):
 Validation errors:
 {errors_text}{hint}
 
-Output ONLY the corrected query — no prose, no explanation."""
+Output ONLY the corrected query: no prose, no explanation."""
 
 
 def normalize_query(query: str) -> str:
@@ -224,7 +224,7 @@ def error_signature(errors: list[str]) -> frozenset[str]:
     emit an ``[ERR ####]`` code (e.g. ArangoDB) the codes alone are the
     signature; otherwise each message is normalized by stripping quoted
     near-text and digits (line/column positions) and lowercasing. This lets the
-    loop notice "same error two iterations running" — the hallmark of a stall —
+    loop notice "same error two iterations running" (the hallmark of a stall)
     without being fooled by a position that shifts from ``4:3`` to ``4:1``.
     """
     sig: set[str] = set()

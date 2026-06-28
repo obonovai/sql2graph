@@ -1,4 +1,4 @@
-# ArangoDB server connection — used only when running the demo with
+# ArangoDB server connection, used only when running the demo with
 # --validation server --target aql.
 #
 # The framework validates each candidate AQL query via

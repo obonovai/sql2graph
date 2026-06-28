@@ -6,7 +6,7 @@ a (possibly noisy) LLM response. The extractor accepts code-fenced
 (```` ```gremlin ... ``` ```` or ```` ```groovy ... ``` ````) and
 keyword-led (``g.V()...``) responses, in that order of preference.
 
-Gremlin is a *traversal* language rather than a *declarative* language —
+Gremlin is a *traversal* language rather than a *declarative* language:
 queries are method chains rooted at a ``TraversalSource`` (conventionally
 ``g``). The framework targets the Gremlin-Groovy script form because that
 is what the Gremlin Server REPL and the Python driver's
@@ -52,19 +52,19 @@ _START_RE = re.compile(
 
 # Always emitted. Covers the Gremlin data model, core read/projection/traversal
 # syntax, an explicit "these are NOT valid Gremlin" anti-pattern block, and
-# worked SQL->Gremlin examples — the same five-section structure every target's
+# worked SQL->Gremlin examples, the same five-section structure every target's
 # base block uses. NOTE: the substrings "TextP.containing", ".dedup()",
 # "Walk the path ONCE", and "epoch" are deliberately kept OUT of this always-on
-# block — they gate the LIKE, DISTINCT, JOIN, and TEMPORAL feature chunks, and
+# block. They gate the LIKE, DISTINCT, JOIN, and TEMPORAL feature chunks, and
 # leaking them here would defeat the focused-prompt tests.
 _BASE_RULES = BaseRules(
     language="Gremlin",
     output_mandate=(
         "Generate ONE valid Gremlin-Groovy traversal against the TraversalSource "
         "`g`. The whole SQL statement becomes a SINGLE traversal chain that "
-        "returns rows — never emit multiple `g.…` statements and never write one "
+        "returns rows; never emit multiple `g.…` statements and never write one "
         "statement per selected column. Output EXACTLY ONE traversal and NOTHING "
-        "else — no prose or explanation, no alternative versions, no `// or` "
+        "else: no prose or explanation, no alternative versions, no `// or` "
         "comments, and no text before or after the traversal. If more than one "
         "encoding works, choose the single best one and emit only that."
     ),
@@ -72,12 +72,12 @@ _BASE_RULES = BaseRules(
         "- Each NODE label is a vertex (e.g. `Customer`, `Order`). Read it with `g.V().hasLabel('Customer')`.",
         "- Each EDGE type is a DIRECTED relationship. Traverse it with "
         "`.out('PLACED')` in the schema's direction, or `.in('PLACED')` against it.",
-        "- A junction / link table is an EDGE, not a vertex — realize it as a "
+        "- A junction / link table is an EDGE, not a vertex; realize it as a "
         "traversal step (`.out('SUPPLIES')`), do not look for a vertex with its name.",
         "- Use the graph PROPERTY names from the schema (e.g. `firstName`), NOT the "
         "original SQL column names (e.g. `first_name`).",
         "- Foreign-key columns are NOT stored as properties. A join on a FK is the "
-        "edge itself — never `.has(...)` on a `*key`/`*_id` column.",
+        "edge itself; never `.has(...)` on a `*key`/`*_id` column.",
     ],
     core_syntax=[
         "- Read vertices with `g.V()`, edges with `g.E()`; writes use `g.addV('Label')` / `g.addE('TYPE')`.",
@@ -106,12 +106,12 @@ _BASE_RULES = BaseRules(
     anti_patterns=[
         AntiPattern(
             bad="`.property('x')`, `.propertyMap().get('x')`, `.valueMap().get('x')`, or "
-            "`.get('x')` to READ a value — `.property(...)` WRITES a property and "
+            "`.get('x')` to READ a value: `.property(...)` WRITES a property and "
             "`.get(...)` is not a step",
             good="read with `.values('x')` / `.valueMap('x')` / `.project(...).by(...)`",
         ),
         AntiPattern(
-            bad="`.with('name', expr)` to name an output column — `.with(...)` only configures step options",
+            bad="`.with('name', expr)` to name an output column: `.with(...)` only configures step options",
             good="use `.project(...).by(...)`",
         ),
         AntiPattern(
@@ -157,15 +157,15 @@ _JOIN_RULES = FeatureRule(
         "SQL JOINs → traversal steps: realise each `JOIN` as `.out('TYPE')` / "
         "`.in('TYPE')` / `.both('TYPE')` along the schema-declared edge label and "
         "direction. Use `.optional(__.out('TYPE'))` for outer joins "
-        "(LEFT/RIGHT/FULL) — the traversal is skipped instead of dropping the row "
+        "(LEFT/RIGHT/FULL): the traversal is skipped instead of dropping the row "
         "when no edge matches. Do NOT translate JOIN ON predicates into `.has(...)` "
-        "calls on foreign-key columns — the schema's edge label already encodes the "
+        "calls on foreign-key columns: the schema's edge label already encodes the "
         "join.\n"
         "When the SELECT returns columns from several joined tables, label each "
         "node as you traverse with `.as('t')`, then read them together at the end: "
         "`.select('t1', 't2').by('propA').by('propB')` (or "
         "`.project('a', 'b').by(__.select('t1').values('propA'))...`). Walk the "
-        "path ONCE — do not restart from `g.V()` for each column."
+        "path ONCE: do not restart from `g.V()` for each column."
     )
 )
 
@@ -174,8 +174,8 @@ _AGGREGATION_RULES = FeatureRule(
         "SQL aggregations → Gremlin reducers: use `.count()`, `.sum()`, "
         "`.mean()`, `.min()`, `.max()`, `.fold()` for collect-style "
         "aggregation. For grouped aggregates, use `.group().by(<key>)."
-        "by(<reducer>)` — e.g. `.group().by('label').by(__.count())`. "
-        "Gremlin has no `GROUP BY` clause — grouping is expressed by the "
+        "by(<reducer>)`, e.g. `.group().by('label').by(__.count())`. "
+        "Gremlin has no `GROUP BY` clause; grouping is expressed by the "
         "first `by(...)` of `.group()`. To express SQL `HAVING`, attach a "
         "`.unfold().filter { ... }` after the `.group()`, or use "
         "`.where(__.values(<key>).is(P.gt(threshold)))` patterns."
@@ -191,7 +191,7 @@ _ORDER_LIMIT_RULES = FeatureRule(
     body=(
         "Sorting and paging: use `.order().by('col', asc)` or `.order()."
         "by('col', desc)` (import `org.apache.tinkerpop.gremlin.process."
-        "traversal.Order` is implicit in the server REPL — just write "
+        "traversal.Order` is implicit in the server REPL; just write "
         "`asc`/`desc`). Paging: `.limit(n)` for a row cap; `.range(start, "
         "end)` for OFFSET+LIMIT (`start` is zero-based and exclusive of "
         "`end`). The typical order of steps is `.order().by(...).range(...)"
@@ -210,7 +210,7 @@ _CTE_RULES = FeatureRule(
         "results with `.as('x')` and re-select them downstream with "
         "`.select('x')`. Anonymous sub-traversals use `__.X` (e.g. "
         "`.where(__.out('KNOWS').has('city', 'Paris'))`). Gremlin has no "
-        "named CTE block — inline the correlated logic, or factor it into "
+        "named CTE block; inline the correlated logic, or factor it into "
         "a named traversal step and reuse with `.select`."
     )
 )
@@ -230,8 +230,8 @@ _WINDOW_RULES = FeatureRule(
     body=(
         "SQL window functions (`OVER (PARTITION BY ... ORDER BY ...)`) "
         "have no direct Gremlin equivalent. Emulate by grouping into "
-        "ordered folds — e.g. `.group().by(<partition>).by(__.order()."
-        "by(<sort>).fold())` — then `.unfold()` the grouped lists. For "
+        "ordered folds, e.g. `.group().by(<partition>).by(__.order()."
+        "by(<sort>).fold())`, then `.unfold()` the grouped lists. For "
         "row-number / rank, use the `.sack()` step seeded to 0 and "
         "incremented per traverser, or process the folded list with a "
         "Groovy closure `.map { ... }` when running against Gremlin "
@@ -277,12 +277,12 @@ _TEMPORAL_RULES = FeatureRule(
         "SQL date/timestamp literals → Gremlin: TinkerPop has no date "
         "constructor (the Cypher `date(...)` / `datetime(...)` are not Gremlin). "
         "Compare against the value AS STORED on the property:\n"
-        "- ISO-8601 string properties: compare with the string bound directly — "
+        "- ISO-8601 string properties: compare with the string bound directly, "
         "`.has('shipdate', P.gte('1995-03-01')).has('shipdate', "
         "P.lt('1995-04-01'))`. Zero-padded `YYYY-MM-DD` strings order lexically, "
         "so a range works.\n"
         "- epoch-millis (Long) properties: convert the SQL literal to "
-        "milliseconds since the Unix epoch and compare numerically — "
+        "milliseconds since the Unix epoch and compare numerically, "
         "`.has('createdAt', P.gte(801964800000))`.\n"
         "Pick the form that matches the property's type in the schema; never "
         "compare an ISO string against an epoch-millis property or vice versa."
@@ -309,7 +309,7 @@ class GremlinTarget:
 
     Implements :class:`rows2graph.targets.TargetLanguage` structurally.
     The same instance is used regardless of the concrete backend
-    (TinkerGraph, JanusGraph, Neptune, Cosmos DB) — Gremlin-Groovy
+    (TinkerGraph, JanusGraph, Neptune, Cosmos DB). Gremlin-Groovy
     scripts written against `g` are portable across them.
     """
 
@@ -337,7 +337,7 @@ class GremlinTarget:
         return extract_query(_START_RE, llm_response)
 
     def repair_hint(self, errors: list[str]) -> str | None:  # noqa: ARG002
-        """No Gremlin-specific repair overrides yet — keep the default fix flow.
+        """No Gremlin-specific repair overrides yet; keep the default fix flow.
 
         Gremlin is a single method-chain, so the AQL clause-ordering trap does
         not arise; the generic fix instruction is appropriate.

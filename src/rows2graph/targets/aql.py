@@ -7,7 +7,7 @@ response.
 The framework adopts the convention that vertex-collection names equal node
 labels and edge-collection names equal edge types from the user's schema
 mapping. Crucially, this target uses the **edge-collection (anonymous)**
-traversal form — ``FOR v IN OUTBOUND <startDoc> <EdgeCollection>`` — and
+traversal form (``FOR v IN OUTBOUND <startDoc> <EdgeCollection>``) and
 never the named-graph form. Edge collections always exist physically, so a
 traversal needs no registered named graph, and dropping ``GRAPH "<name>"``
 removes the failure modes small models fall into: combining ``GRAPH`` with a
@@ -47,7 +47,7 @@ _START_RE = re.compile(
 
 # A clause-ordering error: ArangoDB rejects a SORT/LIMIT/FILTER/COLLECT/LET that
 # follows the block-terminating RETURN. The parser blames the trailing clause
-# ("unexpected SORT declaration") or reports it expected the query to end — both
+# ("unexpected SORT declaration") or reports it expected the query to end. Both
 # misdirect the model toward the named clause when the real fix is to move
 # RETURN last. Either signal (the "unexpected <clause>" phrasing or the
 # "expecting end of query string" tail) identifies the class.
@@ -73,14 +73,14 @@ _ORDERING_REPAIR_HINT = (
 # block that names the exact mistakes small models make, and worked SQL->AQL
 # examples against the schema. The example queries were verified against the
 # documented ArangoDB AQL grammar. NOTE: "COLLECT" and "DATE_TIMESTAMP" are
-# deliberately kept OUT of this always-on block — they gate the AGGREGATION and
+# deliberately kept OUT of this always-on block. They gate the AGGREGATION and
 # TEMPORAL feature chunks, and leaking them here would defeat the focused-prompt
 # tests.
 _BASE_RULES = BaseRules(
     language="AQL",
     output_mandate=(
         "Generate ONE valid AQL (ArangoDB Query Language) query for the schema "
-        "above. Output ONLY the query — no prose, no explanation, no markdown "
+        "above. Output ONLY the query, no prose, no explanation, no markdown "
         "fences, no alternative versions, and nothing before or after the query."
     ),
     data_model=[
@@ -89,7 +89,7 @@ _BASE_RULES = BaseRules(
         "- Each EDGE type is an edge collection (e.g. `PLACED`, `CONTAINS`). "
         "Edges connect documents; they are not fields on a document.",
         "- The schema above prints each edge as `[:PLACED]` for readability. "
-        "That `[: ]` is Cypher notation, NOT AQL — in a query you write the edge "
+        "That `[: ]` is Cypher notation, NOT AQL. In a query you write the edge "
         "collection name BARE (`PLACED`), never `[:PLACED]`.",
     ],
     core_syntax=[
@@ -101,9 +101,9 @@ _BASE_RULES = BaseRules(
         '`"Customer/123"`. It is NEVER a collection name and NEVER a quoted '
         "collection name.\n"
         "  * `EdgeCollection` is written bare: no brackets, no colons, no "
-        'quotes — `PLACED`, never `[:PLACED]` and never `"PLACED"`.\n'
+        'quotes; `PLACED`, never `[:PLACED]` and never `"PLACED"`.\n'
         "  * This project does NOT use named graphs: never emit the `GRAPH` "
-        "keyword. A traversal ends at the edge collection — nothing (no "
+        "keyword. A traversal ends at the edge collection. Nothing (no "
         "`GRAPH`, no quoted string) may follow it except `FILTER`, a nested "
         "`FOR`, or `RETURN`.",
         "- Follow the edge DIRECTION from the schema: for `[:PLACED] from "
@@ -114,14 +114,14 @@ _BASE_RULES = BaseRules(
         "`FOR p, e IN OUTBOUND s SUPPLIES RETURN { part: p.name, cost: e.supplycost }`.",
         "- Express a chain of SQL JOINs as NESTED `FOR` loops, one per edge hop "
         "(see the examples). Do NOT build nested `FILTER x IN (FOR ...)` "
-        "comparisons on key columns — the edge already encodes the join, and "
+        "comparisons on key columns. The edge already encodes the join, and "
         "foreign-key columns are not stored on the documents.",
         "- Use `FILTER` (never `WHERE`). Sort with `SORT expr ASC|DESC`. Page "
         "with `LIMIT n` or `LIMIT offset, n` (offset first, unlike SQL `OFFSET`).",
         "- `RETURN` produces output. To return several columns, RETURN an "
         "object: `RETURN { alias: expr, ... }`. A SQL alias (`col AS name`) "
         "becomes the object key.",
-        "- `RETURN` is the LAST clause of a `FOR` block — it ends the block, so "
+        "- `RETURN` is the LAST clause of a `FOR` block: it ends the block, so "
         "`SORT` and `LIMIT` must come BEFORE `RETURN`, never after (the reverse "
         "of SQL/Cypher). Canonical order: `FOR ... FILTER ... SORT ... LIMIT ... "
         "RETURN ...`.",
@@ -135,18 +135,18 @@ _BASE_RULES = BaseRules(
     ],
     anti_patterns=[
         AntiPattern(
-            bad="`[:PLACED]` or `-[:REL]->` — Cypher edge syntax (AQL has no `[:`)",
+            bad="`[:PLACED]` or `-[:REL]->`: Cypher edge syntax (AQL has no `[:`)",
             good="name the edge collection bare after the start vertex",
             bad_example='FOR v, e, p IN OUTBOUND[:LOCATED_IN]("Nation") GRAPH "named_graph"',
             good_example="FOR s IN Supplier FOR n IN OUTBOUND s LOCATED_IN RETURN { supplier: s.name, nation: n.name }",
         ),
         AntiPattern(
-            bad='`OUTBOUND "Customer"` or `OUTBOUND("Customer")` — a collection name '
+            bad='`OUTBOUND "Customer"` or `OUTBOUND("Customer")`: a collection name '
             "(or a function call) as the start vertex",
             good='start from a document variable bound by an enclosing `FOR`, or a document id string `"Customer/123"`',
         ),
         AntiPattern(
-            bad='`OUTBOUND c PLACED GRAPH "..."` — an edge collection AND `GRAPH` together '
+            bad='`OUTBOUND c PLACED GRAPH "..."`: an edge collection AND `GRAPH` together '
             "is illegal (likewise a trailing quoted string after the edge collection)",
             good="end the traversal at the bare edge collection",
             bad_example='FOR o IN OUTBOUND c PLACED GRAPH "your_graph_name"',
@@ -159,11 +159,11 @@ _BASE_RULES = BaseRules(
         ),
         AntiPattern(bad="`CASE WHEN ... END`", good="use the ternary `cond ? a : b`"),
         AntiPattern(
-            bad="`MATCH (a)-[:R]->(b)` — Cypher",
+            bad="`MATCH (a)-[:R]->(b)`: Cypher",
             good="read with `FOR x IN Collection` and traverse with `FOR y IN OUTBOUND x EdgeColl`",
         ),
         AntiPattern(
-            bad="`RETURN { ... }` followed by `SORT` or `LIMIT` — `RETURN` ends the "
+            bad="`RETURN { ... }` followed by `SORT` or `LIMIT`: `RETURN` ends the "
             "`FOR` block, so nothing may come after it",
             good="put `SORT` and `LIMIT` before `RETURN`",
             bad_example="RETURN { title: f.title, n: LENGTH(members) } SORT LENGTH(members) DESC LIMIT 10",
@@ -187,11 +187,11 @@ _BASE_RULES = BaseRules(
 _LIKE_RULES = FeatureRule(
     body=(
         "SQL LIKE patterns: use the `LIKE(text, pattern, caseInsensitive)` "
-        'function — e.g. `FILTER LIKE(p.name, "%foo%")` for `name LIKE '
+        'function, e.g. `FILTER LIKE(p.name, "%foo%")` for `name LIKE '
         "'%foo%'`. For `ILIKE`, pass `true` as the third argument: "
         '`LIKE(p.name, "%foo%", true)`. AQL keeps SQL\'s `%` and `_` '
         "wildcards. Do NOT use Cypher's `STARTS WITH` / `ENDS WITH` (written "
-        "with a space) — they are not AQL."
+        "with a space). They are not AQL."
     )
 )
 
@@ -211,7 +211,7 @@ _JOIN_RULES = FeatureRule(
         "(`o.orderkey` is null when the customer has no orders; reading a field "
         "off the null placeholder is safe, but do NOT start a further traversal "
         "FROM that null `o`.) Do NOT translate `JOIN ... ON` key equality into a "
-        "`FILTER` on foreign-key columns — the edge encodes the join and FK "
+        "`FILTER` on foreign-key columns. The edge encodes the join and FK "
         "columns are not stored on the documents."
     )
 )
@@ -256,7 +256,7 @@ _ORDER_LIMIT_RULES = FeatureRule(
     body=(
         "Sorting: `SORT expr ASC|DESC`. Paging: `LIMIT n` or "
         "`LIMIT offset, n` (offset comes first, unlike SQL's `OFFSET n`). "
-        "Place `SORT` and `LIMIT` BEFORE `RETURN` — `RETURN` terminates the "
+        "Place `SORT` and `LIMIT` BEFORE `RETURN`. `RETURN` terminates the "
         "`FOR` block, so a trailing `SORT`/`LIMIT` is a syntax error. Sort by the "
         "underlying expression, NOT a `RETURN` projection key: use `SORT "
         "LENGTH(members) DESC`, not `SORT member_count DESC` referring to the "
@@ -273,7 +273,7 @@ _CTE_RULES = FeatureRule(
     body=(
         "SQL CTEs (`WITH x AS (...)`) -> AQL `LET x = (FOR ... RETURN ...)` "
         "subquery assignments. Note: AQL's top-level `WITH` keyword declares "
-        "collection bindings for transactions, NOT a CTE — use `LET` for the "
+        "collection bindings for transactions, NOT a CTE. Use `LET` for the "
         "CTE pattern."
     )
 )
@@ -282,14 +282,14 @@ _UNION_RULES = FeatureRule(
     body=(
         "Set operations: AQL has `UNION(arr1, arr2)` and `UNION_DISTINCT(arr1, "
         "arr2)` as array functions. `UNION_DISTINCT` is a FUNCTION, NOT an infix "
-        "keyword — never place it BETWEEN two `FOR ... RETURN` blocks the way "
+        "keyword. Never place it BETWEEN two `FOR ... RETURN` blocks the way "
         "SQL's `UNION` joins two SELECTs. Bind each side with `LET` and combine:\n"
         "    LET a = (FOR ... RETURN ...)\n"
         "    LET b = (FOR ... RETURN ...)\n"
         "    RETURN UNION_DISTINCT(a, b)\n"
         "(the inline `FOR x IN UNION_DISTINCT((FOR a IN ... RETURN a), (FOR b IN "
         "... RETURN b)) RETURN x` form is equivalent.) `UNION_DISTINCT` already "
-        "removes duplicates — do NOT add `DISTINCT` (AQL also forbids `RETURN "
+        "removes duplicates. Do NOT add `DISTINCT` (AQL also forbids `RETURN "
         "DISTINCT` on a top-level function result); use plain `UNION(a, b)` for "
         "`UNION ALL`. For `INTERSECT`/`EXCEPT`, use `INTERSECTION(...)` and "
         "`MINUS(...)`."
@@ -336,17 +336,17 @@ _TEMPORAL_RULES = FeatureRule(
     body=(
         "SQL date/timestamp literals → AQL: ArangoDB has no native date type. "
         "A date/timestamp is stored either as an ISO-8601 string or as a numeric "
-        "epoch-millis value — check the schema for which.\n"
+        "epoch-millis value. Check the schema for which.\n"
         "- ISO-8601 strings sort lexically, so compare them DIRECTLY: a SQL "
         "`shipdate >= '1995-03-01'` range becomes `FILTER doc.shipdate >= "
         "'1995-03-01' AND doc.shipdate < '1995-04-01'`. Keep the operators "
         "unchanged; only zero-padded `YYYY-MM-DD` (and `YYYY-MM-DDThh:mm:ss`) "
         "literals sort correctly.\n"
-        "- Do NOT wrap literals in Cypher-style `date(...)` / `datetime(...)` — "
-        "those constructors are not AQL.\n"
+        "- Do NOT wrap literals in Cypher-style `date(...)` / `datetime(...)`. "
+        "Those constructors are not AQL.\n"
         "- For date arithmetic, or when the stored values are numeric "
         "timestamps, use the AQL date functions: `DATE_TIMESTAMP(x)` (to epoch "
-        "millis), `DATE_DIFF`, `DATE_ADD`, `DATE_FORMAT` — e.g. "
+        "millis), `DATE_DIFF`, `DATE_ADD`, `DATE_FORMAT`, e.g. "
         "`FILTER DATE_DIFF(doc.from, doc.to, 'd') > 30`."
     )
 )
@@ -369,7 +369,7 @@ _FEATURE_RULES: dict[SqlFeature, FeatureRule] = {
 class AqlTarget:
     """AQL (ArangoDB) target language implementation.
 
-    Implements :class:`rows2graph.targets.TargetLanguage` structurally —
+    Implements :class:`rows2graph.targets.TargetLanguage` structurally:
     there is no abstract base class to inherit from. The target is stateless:
     AQL traversals use bare edge collections (the anonymous-graph form), so no
     named-graph name needs to be threaded into the prompt.

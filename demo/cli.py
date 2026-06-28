@@ -34,16 +34,16 @@ matching server config file::
         --validation server \\
         --server  config/servers/neo4j.yaml
 
-Managed validation provisions a throwaway database automatically — select
+Managed validation provisions a throwaway database automatically: select
 ``--validation server`` and omit ``--server`` (requires a running Docker
 daemon; the container starts on first validation and is removed at exit)::
 
     uv run python demo/cli.py --sql "..." --mapping config/mappings/tpch.yaml --model config/models/anthropic.yaml --target cypher --validation server
 
 Exit codes:
-    0 — translation succeeded (validator returned no errors).
-    1 — translation reached ``--max-iterations`` without passing validation.
-    2 — argument / config error before any LLM call.
+    0: translation succeeded (validator returned no errors).
+    1: translation reached ``--max-iterations`` without passing validation.
+    2: argument / config error before any LLM call.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ from rows2graph import (
 )
 
 # Two consoles: pretty output (stdout) and logs/errors (stderr). Splitting
-# the streams keeps shell pipelines well-behaved — the user can redirect
+# the streams keeps shell pipelines well-behaved: the user can redirect
 # stdout to capture the generated query block while stderr keeps the
 # diagnostic stream visible on the terminal.
 console = Console()
@@ -185,7 +185,7 @@ def _die(message: str, code: int = 2) -> NoReturn:
 
 
 def _read_sql(sql_arg: str) -> str:
-    """Return the SQL string — read stdin if --sql is the literal ``-``."""
+    """Return the SQL string: read stdin if --sql is the literal ``-``."""
     if sql_arg == "-":
         return sys.stdin.read()
     return sql_arg
@@ -341,7 +341,7 @@ def _conversation_panel(messages: list[dict[str, str]]) -> Panel:
             body.append("\n\n")
         body.append(f"▸ {role}\n", style=_ROLE_STYLE.get(role, "bold"))
         if role == "system":
-            body.append(f"({len(content)} chars — schema + translation rules)", style="dim")
+            body.append(f"({len(content)} chars, schema + translation rules)", style="dim")
         else:
             body.append(content)
     return Panel(

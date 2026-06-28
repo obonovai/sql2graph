@@ -37,8 +37,8 @@ def _ollama_usage(response: Any) -> TokenUsage:
 
     Ollama reports ``prompt_eval_count`` (prompt tokens) and ``eval_count``
     (generated tokens). On a streamed response only the final ``done`` chunk
-    carries them, so absent values fall back to 0 (a ``None`` response — an
-    empty stream — yields a zeroed :class:`TokenUsage`). Ollama has no prompt
+    carries them, so absent values fall back to 0 (a ``None`` response, an
+    empty stream, yields a zeroed :class:`TokenUsage`). Ollama has no prompt
     cache, so the cache fields stay 0.
     """
     return TokenUsage(
@@ -58,7 +58,7 @@ class OllamaConfig(BaseModel):
     ``max_retries`` controls how many additional attempts are made when
     the upstream Ollama call raises a retryable error (connection refused,
     timeout, or a 5xx :class:`ollama.ResponseError`). 4xx responses are
-    not retried — they indicate a client-side mistake the loop can't fix.
+    not retried; they indicate a client-side mistake the loop can't fix.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -97,13 +97,13 @@ def _options_for_call(base: dict[str, Any], temperature: float | None) -> dict[s
 class OllamaLLMClient:
     """Synchronous Ollama chat client.
 
-    The framework uses synchronous calls because the generate–validate–fix
-    loop is inherently sequential — there is no benefit to async dispatch
+    The framework uses synchronous calls because the generate-validate-fix
+    loop is inherently sequential; there is no benefit to async dispatch
     when each iteration depends on the previous one's result.
 
     Retries are handwritten because the ``ollama`` Python SDK does not ship
     its own retry layer. Backoff is exponential with a 1-second base
-    (0s, 1s, 2s, 4s, ...) and no jitter — collisions between concurrent
+    (0s, 1s, 2s, 4s, ...) and no jitter; collisions between concurrent
     Ollama clients are not a concern for a local-first server.
     """
 
@@ -125,7 +125,7 @@ class OllamaLLMClient:
                 )
                 return ChatReply(text=response.message.content or "", usage=_ollama_usage(response))
             except ResponseError as exc:
-                # Don't retry 4xx — they indicate a malformed request that
+                # Don't retry 4xx; they indicate a malformed request that
                 # another attempt won't fix (unknown model, bad params, ...).
                 if exc.status_code < 500:
                     raise
@@ -137,7 +137,7 @@ class OllamaLLMClient:
             if attempt < self._max_retries:
                 delay = float(1 << attempt)  # 1s, 2s, 4s, ...
                 logger.warning(
-                    "Ollama call failed (attempt %d/%d): %s — retrying in %.1fs",
+                    "Ollama call failed (attempt %d/%d): %s, retrying in %.1fs",
                     attempt + 1,
                     self._max_retries + 1,
                     last_exc,
@@ -145,7 +145,7 @@ class OllamaLLMClient:
                 )
                 time.sleep(delay)
 
-        # Exhausted retries — re-raise the last exception so the caller sees
+        # Exhausted retries: re-raise the last exception so the caller sees
         # the actual cause rather than a wrapped one. last_exc is non-None
         # whenever we reach here.
         assert last_exc is not None
@@ -162,7 +162,7 @@ class AsyncOllamaLLMClient:
     Mirrors :class:`OllamaLLMClient`; the only differences are :meth:`chat`
     is ``async def`` and uses :class:`ollama.AsyncClient`, and the retry
     backoff sleeps via :func:`asyncio.sleep` rather than blocking the event
-    loop. Same :class:`OllamaConfig` — both clients can be built from the
+    loop. Same :class:`OllamaConfig`; both clients can be built from the
     same loaded config.
     """
 
@@ -184,7 +184,7 @@ class AsyncOllamaLLMClient:
         for attempt in range(self._max_retries + 1):
             # Stream only on the first attempt. On retries, fall back to
             # non-streaming so the caller's UI buffer (if any) isn't
-            # polluted by deltas from a discarded prior attempt — the
+            # polluted by deltas from a discarded prior attempt; the
             # retry is meant to be invisible from the caller's perspective.
             should_stream = stream_to is not None and attempt == 0
             try:
@@ -224,7 +224,7 @@ class AsyncOllamaLLMClient:
             if attempt < self._max_retries:
                 delay = float(1 << attempt)
                 logger.warning(
-                    "Ollama call failed (attempt %d/%d): %s — retrying in %.1fs",
+                    "Ollama call failed (attempt %d/%d): %s, retrying in %.1fs",
                     attempt + 1,
                     self._max_retries + 1,
                     last_exc,

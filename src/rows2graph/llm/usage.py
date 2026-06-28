@@ -1,17 +1,17 @@
 """Token-usage accounting for LLM calls.
 
 This is a leaf module: it imports only :mod:`pydantic` and the standard
-library, so every other module in :mod:`rows2graph.llm` — and
-:mod:`rows2graph.state` — can import it without risking an import cycle.
+library, so every other module in :mod:`rows2graph.llm` (and
+:mod:`rows2graph.state`) can import it without risking an import cycle.
 
 Two small value types live here:
 
-* :class:`TokenUsage` — the backend-agnostic token counts for one or more
+* :class:`TokenUsage`: the backend-agnostic token counts for one or more
   LLM calls. ``input_tokens``/``output_tokens`` are the common core; the two
   cache fields are Anthropic-specific (always ``0`` for Ollama, which has no
-  prompt cache). Instances are additive, so the generate–validate–fix loop can
+  prompt cache). Instances are additive, so the generate-validate-fix loop can
   accumulate per-call usage with ``+``.
-* :class:`ChatReply` — what an :class:`~rows2graph.llm.LLMClient` returns from
+* :class:`ChatReply`, what an :class:`~rows2graph.llm.LLMClient` returns from
   ``chat``: the assistant turn's text plus the :class:`TokenUsage` it cost.
 """
 
@@ -26,7 +26,7 @@ class TokenUsage(BaseModel):
     """Token counts accumulated over one or more LLM calls.
 
     ``input_tokens`` and ``output_tokens`` are backend-agnostic. For Anthropic,
-    ``input_tokens`` is the *uncached* prompt portion only — tokens served from
+    ``input_tokens`` is the *uncached* prompt portion only; tokens served from
     or written to the prompt cache are reported separately in
     ``cache_read_tokens`` and ``cache_creation_tokens``. Both cache fields are
     always ``0`` for Ollama, which has no prompt cache. ``total_tokens`` is the

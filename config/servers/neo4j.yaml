@@ -1,4 +1,4 @@
-# Neo4j server connection — used only when running the demo with
+# Neo4j server connection, used only when running the demo with
 # --validation server --target cypher.
 #
 # The framework validates each candidate Cypher query by submitting it as

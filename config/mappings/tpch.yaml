@@ -7,7 +7,7 @@
 # 8 relational tables -> 7 node labels + 7 edge types.
 # The `partsupp` join table becomes a SUPPLIES edge with properties.
 #
-# This file describes ONLY the schema mapping — no LLM, server, or
+# This file describes ONLY the schema mapping: no LLM, server, or
 # translation-loop settings. Load it with rows2graph.SchemaMapping.from_yaml.
 
 nodes:

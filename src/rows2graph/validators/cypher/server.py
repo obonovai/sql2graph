@@ -4,8 +4,8 @@ The validator submits each candidate query as ``EXPLAIN <query>`` against a
 live Neo4j instance. ``EXPLAIN`` parses and plans the query without
 executing it, so the check is safe to run for arbitrary statements
 (including writes and deletes) and catches the entire class of errors
-the syntax validator misses — non-existent labels, non-existent
-relationship types, non-existent properties — that the LLM is most prone
+the syntax validator misses (non-existent labels, non-existent
+relationship types, non-existent properties) that the LLM is most prone
 to hallucinate.
 
 The :class:`Neo4jConfig` Pydantic model is colocated with the validator
@@ -47,7 +47,7 @@ class Neo4jConfig(BaseModel):
     database: str = "neo4j"
     # Server-side notification filter forwarded to the driver. ``"OFF"`` stops
     # the server sending advisory notifications (e.g. unknown-label/property
-    # warnings against an empty database) — managed validation sets this to keep
+    # warnings against an empty database); managed validation sets this to keep
     # output clean. ``None`` leaves the driver default (notifications enabled).
     notifications_min_severity: Literal["OFF", "INFORMATION", "WARNING"] | None = None
 
@@ -84,8 +84,8 @@ class AsyncCypherServerValidator:
     """Async sibling of :class:`CypherServerValidator`.
 
     Uses :class:`neo4j.AsyncGraphDatabase` to drive the same ``EXPLAIN``
-    round-trip without blocking the event loop. Same :class:`Neo4jConfig`
-    — both validators consume the same loaded config.
+    round-trip without blocking the event loop. Same :class:`Neo4jConfig`:
+    both validators consume the same loaded config.
     """
 
     def __init__(self, config: Neo4jConfig) -> None:

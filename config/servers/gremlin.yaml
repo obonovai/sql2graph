@@ -1,4 +1,4 @@
-# Apache TinkerPop Gremlin Server connection — used only when running the
+# Apache TinkerPop Gremlin Server connection, used only when running the
 # demo with --validation server --target gremlin.
 #
 # The framework validates each candidate Gremlin-Groovy script by
@@ -8,7 +8,7 @@
 #
 # Recommended local backend for development / CI / thesis evaluation:
 #   docker run --rm -p 8182:8182 tinkerpop/gremlin-server
-# This launches an empty TinkerGraph instance — *schemaless*. Validation
+# This launches an empty TinkerGraph instance, *schemaless*. Validation
 # catches script-level parse errors and unsupported steps but NOT label /
 # property hallucinations (TinkerGraph accepts `.hasLabel('Doesnotexist')`
 # against an empty graph and returns an empty result). For schema-aware

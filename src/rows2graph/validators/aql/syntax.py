@@ -2,7 +2,7 @@
 
 Analogous to :class:`rows2graph.validators.cypher.syntax.CypherSyntaxValidator`:
 a deployment-free, regex-based sanity check for AQL strings. Catches obvious
-structural defects but not collection-name or graph-name hallucinations —
+structural defects but not collection-name or graph-name hallucinations;
 prefer the server validator when an ArangoDB instance is available.
 """
 
@@ -40,8 +40,8 @@ def _aql_syntax_errors(query: str) -> list[str]:
         errors.append("Unbalanced curly braces")
 
     # A top-level FOR without a RETURN is malformed (each FOR level must
-    # terminate with a RETURN, COLLECT, or INSERT/UPDATE/REPLACE/REMOVE
-    # — RETURN being by far the most common).
+    # terminate with a RETURN, COLLECT, or INSERT/UPDATE/REPLACE/REMOVE,
+    # RETURN being by far the most common).
     if re.match(r"^\s*FOR\b", query, re.IGNORECASE):
         if not re.search(r"\bRETURN\b", query, re.IGNORECASE):
             errors.append("FOR query is missing a RETURN clause")

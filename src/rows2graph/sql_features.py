@@ -3,20 +3,20 @@ and which tables it reads.
 
 The system prompt assembled by :mod:`rows2graph.prompts` is the largest
 per-translation input the LLM sees. Historically every translation received
-the full rule set for the target language — including, for example, Cypher's
+the full rule set for the target language, including, for example, Cypher's
 14-line ``LIKE``/``ILIKE`` mapping table even on queries with no string
 predicates. This module turns that into an opt-in: parse the SQL once with
 :mod:`sqlglot`, derive a :class:`SqlFeature` set, and let the target language
 emit only the chunks corresponding to features actually present.
 
-:func:`analyze_sql` is the single entry point — it parses once and returns a
+:func:`analyze_sql` is the single entry point: it parses once and returns a
 :class:`SqlAnalysis` carrying the feature set, the real source tables, and a
 ``parse_ok`` flag. :func:`detect_features` is a thin delegate kept for callers
 (and the prompt builder) that only want the features.
 
 On any parser failure :func:`detect_features` returns :data:`ALL_FEATURES`,
 which restores the pre-refactor behaviour ("ship every rule"). That fallback
-is load-bearing — a silently-stripped rule would be a regression in
+is load-bearing: a silently-stripped rule would be a regression in
 translation quality, while a few extra tokens on an unparseable query is
 harmless. The ``parse_ok`` flag on :class:`SqlAnalysis` is how a caller that
 *does* care about parseability (e.g. a pre-flight check) learns the parse
@@ -87,7 +87,7 @@ class SqlAnalysis:
 # does NOT match identifiers, codes like ``'12-34-5678'``, or phone strings.
 _DATE_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$")
 
-# sqlglot ``DataType.Type`` members whose name contains DATE or TIME — every
+# sqlglot ``DataType.Type`` members whose name contains DATE or TIME: every
 # temporal cast target (DATE, TIMESTAMP, DATETIME, TIME, TIMESTAMPTZ, …).
 _TEMPORAL_CAST_TYPES = frozenset(t for t in exp.DataType.Type if "DATE" in t.name or "TIME" in t.name)
 
@@ -101,7 +101,7 @@ def analyze_sql(sql_query: str, *, dialect: str | None = None) -> SqlAnalysis:
     SQL the library targets.
 
     On parser failure returns ``SqlAnalysis(ALL_FEATURES, frozenset(),
-    parse_ok=False)`` — the full rule set (so the prompt is never
+    parse_ok=False)``, the full rule set (so the prompt is never
     silently-trimmed) paired with ``parse_ok=False`` so a caller that cares can
     notice the failure.
     """
@@ -138,7 +138,7 @@ def _extract_source_tables(tree: Any) -> frozenset[str]:
     the latter reports CTE names and derived-table aliases as "tables" (a
     ``WITH recent AS (...) SELECT ... FROM recent`` would falsely surface
     ``recent``), whereas :func:`traverse_scope` enumerates only genuine table
-    sources. Only the bare identifier (``exp.Table.name``) is kept — schema /
+    sources. Only the bare identifier (``exp.Table.name``) is kept: schema /
     catalog qualifiers are dropped so ``public.orders`` compares as ``orders``
     against a schema-agnostic mapping.
 
@@ -154,7 +154,7 @@ def _extract_source_tables(tree: Any) -> frozenset[str]:
             for src in scope.sources.values()
             if isinstance(src, exp.Table)
         )
-    except Exception:  # noqa: BLE001 — table extraction must never crash a translation
+    except Exception:  # noqa: BLE001 (table extraction must never crash a translation)
         return frozenset()
 
 
@@ -164,20 +164,20 @@ def _extract_column_refs(tree: Any) -> frozenset[tuple[str, str]]:
     Built on the same scope resolver as :func:`_extract_source_tables`. A column
     is attributed to a real table in two cases:
 
-    * **Qualified** (``f.title``) — resolve the qualifier through
+    * **Qualified** (``f.title``): resolve the qualifier through
       ``scope.sources``; keep it only when that source is a genuine
       :class:`~sqlglot.expressions.Table` (so a CTE/derived-table alias is
       excluded, and a SELECT alias like ``member_count`` never resolves).
-    * **Unqualified** (``title``) — attributed to the sole table *only* in a
+    * **Unqualified** (``title``): attributed to the sole table *only* in a
       "leaf" scope: exactly one table source and no child sub-scopes. The
-      leaf gate matters — an outer single-source scope would otherwise absorb a
+      leaf gate matters: an outer single-source scope would otherwise absorb a
       nested subquery's unqualified column (e.g. ``... WHERE id IN (SELECT
       person_id FROM knows)`` would mis-attribute ``person_id`` to the outer
       table). Multi-source scopes drop unqualified columns entirely (an
       under-count, never a false attribution).
 
     Only the bare table identifier is kept (schema qualifier dropped), matching
-    :func:`_extract_source_tables`. Fails *open* — see that function for why an
+    :func:`_extract_source_tables`. Fails *open*; see that function for why an
     empty result is the safe degradation.
     """
     try:
@@ -196,7 +196,7 @@ def _extract_column_refs(tree: Any) -> frozenset[tuple[str, str]]:
                 elif sole_table is not None and not has_child_scopes:
                     refs.add((sole_table.name, col.name))
         return frozenset(refs)
-    except Exception:  # noqa: BLE001 — column extraction must never crash a translation
+    except Exception:  # noqa: BLE001 (column extraction must never crash a translation)
         return frozenset()
 
 
@@ -237,7 +237,7 @@ def _any(tree: Any, node_type: type[Any]) -> bool:
 
     Typed with :class:`Any` because sqlglot's ``AggFunc`` and ``Func`` are not
     declared as :class:`~sqlglot.expressions.Expression` subclasses in its
-    type stubs, even though they are at runtime — strict typing here would
+    type stubs, even though they are at runtime; strict typing here would
     block legitimate calls.
     """
     return next(iter(tree.find_all(node_type)), None) is not None

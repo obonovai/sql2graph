@@ -1,4 +1,4 @@
-# `config/` — runtime inputs for the demo CLI
+# `config/`: runtime inputs for the demo CLI
 
 This directory holds the YAML files that the demo CLI takes as parameters.
 Three orthogonal categories live here, one per subdirectory:
@@ -32,7 +32,7 @@ Both `models/` and `servers/` YAML files support environment-variable
 interpolation. A string of the form `${VAR}` is replaced by
 `os.environ["VAR"]` at config-load time; if `VAR` is unset, the loader
 raises `KeyError` with a precise message. Mapping YAMLs do **not** support
-interpolation — they hold no secrets and are deployment-invariant.
+interpolation: they hold no secrets and are deployment-invariant.
 
 Recommended pattern:
 

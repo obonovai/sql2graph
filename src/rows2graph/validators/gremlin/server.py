@@ -5,19 +5,19 @@ to a live Gremlin Server and consumes the result. Any parse or step-
 compatibility error surfaces as a :class:`Exception` (commonly
 ``GremlinServerError``) and is captured as a validation message.
 
-Default backend is **Apache TinkerPop Gremlin Server with TinkerGraph**
-— the official reference implementation, runnable in one line via the
+Default backend is **Apache TinkerPop Gremlin Server with TinkerGraph**,
+the official reference implementation, runnable in one line via the
 ``tinkerpop/gremlin-server`` Docker image and free for development /
 CI / thesis evaluation. The same validator works against any
 TinkerPop-compatible server (the script form is portable):
 
-* **JanusGraph** — production-grade, recommended when stronger
+* **JanusGraph**: production-grade, recommended when stronger
   validation is needed because a registered JanusGraph schema lets the
   server reject label / property hallucinations the schemaless
   TinkerGraph cannot.
-* **Amazon Neptune** — managed AWS service; switch ``url`` to the
+* **Amazon Neptune**: managed AWS service; switch ``url`` to the
   Neptune endpoint and configure IAM auth.
-* **Azure Cosmos DB Gremlin API** — managed Azure service; switch
+* **Azure Cosmos DB Gremlin API**: managed Azure service; switch
   ``url`` to the Cosmos endpoint. Note that Cosmos supports only a
   subset of Gremlin steps, so script-level validation may pass while
   the server rejects unsupported steps at execution time.
@@ -29,7 +29,7 @@ validator that consumes it, mirroring the placement of
 
 Caveat: TinkerGraph is *schemaless*. Running validation against an
 empty TinkerGraph catches script-level parse errors and unsupported
-steps, but does NOT catch label / property hallucinations — the
+steps, but does NOT catch label / property hallucinations: the
 server happily accepts `.hasLabel('Doesnotexist')` against an empty
 graph and returns an empty result. Use JanusGraph with a registered
 schema for schema-aware validation comparable to Neo4j's ``EXPLAIN``.
@@ -55,7 +55,7 @@ class GremlinConfig(BaseModel):
     what :data:`rows2graph.validators.ServerConfig` uses to dispatch
     :func:`rows2graph.validators.load_server_config` to this class.
 
-    ``username`` and ``password`` are optional — TinkerGraph in its
+    ``username`` and ``password`` are optional: TinkerGraph in its
     default Docker configuration accepts unauthenticated connections.
     Set both for authenticated backends (Neptune IAM, JanusGraph with
     SASL, etc.).
@@ -109,7 +109,7 @@ class AsyncGremlinServerValidator:
     ``gremlinpython``'s async surface area is inconsistent across
     releases, so the safer path is to wrap the sync :class:`Client`
     operations in :func:`asyncio.to_thread`. The validator is I/O-bound
-    against a remote server — the thread hop is negligible compared to
+    against a remote server; the thread hop is negligible compared to
     the network round-trip.
     """
 

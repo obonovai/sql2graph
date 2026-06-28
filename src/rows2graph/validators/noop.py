@@ -1,7 +1,7 @@
 """Pass-through validator.
 
 Returns the empty error list for any input, so the translator's
-generate–validate–fix loop exits after the first iteration without ever
+generate-validate-fix loop exits after the first iteration without ever
 invoking the LLM a second time. Used by ``--validation none`` when the
 caller wants to inspect raw LLM output (typical during prompt engineering
 or when benchmarking pure single-shot translation quality).

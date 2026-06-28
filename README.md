@@ -12,18 +12,18 @@ correction, up to a configurable number of iterations.
 
 The framework exposes both a synchronous orchestrator (`SQLTranslator`) and an
 asynchronous sibling (`AsyncSQLTranslator`) so callers can pick the model that
-matches their environment — sync for scripts, evaluation notebooks, and the
+matches their environment: sync for scripts, evaluation notebooks, and the
 CLI; async for UIs and concurrent multi-translation services. Both support an
 optional typed event callback that surfaces every loop milestone in real time;
 the async path additionally supports token-by-token streaming.
 
 The codebase is structured as a *framework + reference demo*:
 
-* `src/rows2graph/` — a library exposing typed components (schema mapping,
+* `src/rows2graph/`: a library exposing typed components (schema mapping,
   LLM client, target language, validator, orchestrator) connected through
   small structural Protocols. Both sync and async variants of the LLM
   client, validator, and translator ship side by side.
-* `demo/cli.py` — a parametrized command-line client that exercises the
+* `demo/cli.py`: a parametrized command-line client that exercises the
   library API. Use it directly, or copy it as a starting point for embedding
   the framework into a larger system.
 
@@ -82,16 +82,16 @@ The codebase is structured as a *framework + reference demo*:
                   └──────────────┘
 ```
 
-`AsyncSQLTranslator` mirrors this flow step-for-step — same prompts, same
-state, same iteration semantics — with `await` at the LLM and validator
+`AsyncSQLTranslator` mirrors this flow step-for-step (same prompts, same
+state, same iteration semantics) with `await` at the LLM and validator
 call sites. Both translators accept an optional `on_event` callback that
 fires at every milestone (`GeneratedEvent`, `ValidatedEvent`,
 `FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`,
 `CompletedEvent`); the async path also accepts `stream_to` for
 token-by-token output.
 
-When a fix iteration makes no progress — the model repeats its previous
-candidate, or the validator returns the same error signature twice running —
+When a fix iteration makes no progress (the model repeats its previous
+candidate, or the validator returns the same error signature twice running)
 the loop escalates once: it re-asks from a *fresh* context (system prompt +
 a single corrective turn, discarding the repetition-poisoned history) at a
 higher `escalation_temperature`, and the target language can inject a
@@ -112,24 +112,24 @@ schema reference.
 The system prompt is assembled *per query*, not once per translator. Before
 the first LLM call, `detect_features` (in `src/rows2graph/sql_features.py`)
 parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
-operation clusters present — `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
+operation clusters present: `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
 `CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`. Both the generic
 rules block and the target-language section (see
 `src/rows2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
 chunks corresponding to features actually in the query, so the LLM is not
 distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
 no string predicates. On any parser failure the function returns
-`ALL_FEATURES`, which restores the pre-refactor "ship every rule" behaviour
-— unparseable input degrades prompt focus, never translation correctness.
+`ALL_FEATURES`, which restores the pre-refactor "ship every rule" behaviour.
+Unparseable input degrades prompt focus, never translation correctness.
 
 The Anthropic backends (sync and async) send the assembled system block
 with `cache_control: ephemeral` set, so iterations 2+ of any multi-iteration
 translation read the schema + rules from Anthropic's prompt cache instead
-of re-billing them as input tokens. See `src/rows2graph/llm/anthropic.py`
-— the `Anthropic call:` log line reports `cache_read` and `cache_write`
+of re-billing them as input tokens. See `src/rows2graph/llm/anthropic.py`.
+The `Anthropic call:` log line reports `cache_read` and `cache_write`
 counts alongside the regular input/output totals so cache hit rate is
 observable per call. Those per-call counts are also accumulated across the
-generate–validate–fix loop and returned on `TranslationResult.token_usage`
+generate-validate-fix loop and returned on `TranslationResult.token_usage`
 (a `TokenUsage` with `input_tokens`, `output_tokens`, Anthropic-only
 `cache_read_tokens` / `cache_creation_tokens`, and a computed `total_tokens`),
 so callers can report exactly how many tokens each translation cost. Ollama
@@ -149,8 +149,8 @@ backend. Python 3.12+ is required.
 
 ## Quick start
 
-The demo CLI takes two required YAML configs — a schema mapping and an LLM
-model config — plus an optional server config for validation against a live
+The demo CLI takes two required YAML configs (a schema mapping and an LLM
+model config) plus an optional server config for validation against a live
 database. Under `--validation server` you either pass `--server` (your own
 database) or omit it to auto-provision a throwaway one (see below).
 
@@ -190,14 +190,14 @@ YAML configs live under `config/`, split by concern:
 
 | Subdirectory | What it is | When you need it |
 |---|---|---|
-| `config/mappings/` | Schema mapping (nodes + edges). | Always — one per relational schema. |
-| `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always — one per backend. |
+| `config/mappings/` | Schema mapping (nodes + edges). | Always: one per relational schema. |
+| `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always: one per backend. |
 | `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only for `--validation server` against *your own* database; omit `--server` to auto-provision a throwaway one (needs Docker). |
 
 These categories are orthogonal: the same mapping can be paired with any
 model, the same model drives any mapping, the same server config validates
 any run against that database. Two mappings, two models, two servers ship in
-`config/` — copy and adapt as needed.
+`config/`. Copy and adapt as needed.
 
 See `config/README.md` and `docs/API.md` for the YAML schemas.
 
@@ -267,13 +267,13 @@ asyncio.run(main())
 uv run mypy src/                  # Strict type checking
 uv run ruff check .               # Linting
 uv run ruff format .              # Formatting
-uv run pytest                     # Static tests (mocked — no LLM or DB calls)
+uv run pytest                     # Static tests (mocked, no LLM or DB calls)
 uv run pytest -m integration      # Integration tests (real Anthropic + Neo4j)
 ```
 
 The static suite (~100 tests) is what runs by default; the `integration`
 marker is excluded via `pyproject.toml`. Integration tests gracefully skip
-when their credentials are absent — see `tests/README.md` for the env-var
+when their credentials are absent. See `tests/README.md` for the env-var
 reference and a `docker run` recipe for Neo4j.
 
 The project enforces `mypy --strict` across all source files and the same
@@ -281,9 +281,9 @@ ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 
 ## Acknowledgments
 
-The generate–validate–fix loop pattern was inspired by prior work on LLM
+The generate-validate-fix loop pattern was inspired by prior work on LLM
 code generation paired with deterministic-validator feedback loops, where
 a generated artifact is checked by a compiler-like tool and validator
 errors are fed back as additional context for retry. `rows2graph` adapts
-that core pattern with a plain-Python loop — no graph-orchestration
-framework — and targets SQL-to-graph query translation.
+that core pattern with a plain-Python loop (no graph-orchestration
+framework) and targets SQL-to-graph query translation.

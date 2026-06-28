@@ -1,20 +1,20 @@
-"""rows2graph — LLM-driven SQL → graph query translator.
+"""rows2graph: LLM-driven SQL → graph query translator.
 
 Public API. The framework exposes three layers:
 
-1. **Schema mapping** — :class:`SchemaMapping`, :class:`NodeMapping`,
+1. **Schema mapping**: :class:`SchemaMapping`, :class:`NodeMapping`,
    :class:`EdgeMapping`. Describes how a relational schema maps to a
    property-graph model. Loaded from YAML via
    :meth:`SchemaMapping.from_yaml`.
-2. **Pluggable components** — :class:`LLMClient`, :class:`TargetLanguage`,
+2. **Pluggable components**: :class:`LLMClient`, :class:`TargetLanguage`,
    :class:`QueryValidator` (all :class:`~typing.Protocol`-typed). Concrete
    implementations ship for two LLM backends (Ollama, Anthropic on
    Vertex AI), three target languages (Cypher, AQL, Gremlin), and three
    validation modes (syntax, server, none). Factories
    (:func:`make_llm`, :func:`make_target`, :func:`make_validator`) build
    the components from their typed config objects.
-3. **Orchestration** — :class:`SQLTranslator` ties the three components
-   together via the generate–validate–fix loop. Returns a typed
+3. **Orchestration**: :class:`SQLTranslator` ties the three components
+   together via the generate-validate-fix loop. Returns a typed
    :class:`TranslationResult` per call.
 
 A minimal end-to-end usage::

@@ -1,30 +1,30 @@
 """Query validators and their typed configuration.
 
-A :class:`QueryValidator` is the second half of the generate–validate–fix
+A :class:`QueryValidator` is the second half of the generate-validate-fix
 loop: it inspects a candidate query and returns a list of error strings
 (empty means valid). Three families ship:
 
 * **Syntax** validators
   (:class:`~rows2graph.validators.cypher.syntax.CypherSyntaxValidator`,
   :class:`~rows2graph.validators.aql.syntax.AqlSyntaxValidator`,
-  :class:`~rows2graph.validators.gremlin.syntax.GremlinSyntaxValidator`) —
+  :class:`~rows2graph.validators.gremlin.syntax.GremlinSyntaxValidator`):
   regex-based, deployment-free; catch obvious structural defects.
 * **Server** validators
   (:class:`~rows2graph.validators.cypher.server.CypherServerValidator`,
   :class:`~rows2graph.validators.aql.server.AqlServerValidator`,
-  :class:`~rows2graph.validators.gremlin.server.GremlinServerValidator`) —
+  :class:`~rows2graph.validators.gremlin.server.GremlinServerValidator`):
   delegate validation to a live graph database via its
   parse-without-executing endpoint (Neo4j ``EXPLAIN``, ArangoDB
   ``db.aql.validate``, Gremlin Server script submission). Catches
   label/collection/property hallucinations on schema-aware backends
   (Neo4j, ArangoDB, JanusGraph); on schemaless TinkerGraph the Gremlin
   server validator only catches parse / step-compatibility errors.
-* **No-op** (:class:`~rows2graph.validators.noop.NoopValidator`) — always
+* **No-op** (:class:`~rows2graph.validators.noop.NoopValidator`): always
   reports success, so the loop exits after the first iteration. Used when
   measuring raw single-shot LLM quality.
 
-The :class:`QueryValidator` Protocol is structural — implementations need
-not inherit from anything in this module — which keeps the extension
+The :class:`QueryValidator` Protocol is structural (implementations need
+not inherit from anything in this module), which keeps the extension
 surface clean.
 
 Server-validator configs (:class:`Neo4jConfig`, :class:`ArangoDBConfig`,
@@ -88,7 +88,7 @@ class AsyncQueryValidator(Protocol):
     async def close(self) -> None: ...
 
 
-# User-facing validation modes (``managed`` is derived, not chosen directly — see
+# User-facing validation modes (``managed`` is derived, not chosen directly; see
 # ``resolve_validation_mode``). The canonical set, so callers/CLIs/web UIs don't
 # each hardcode their own copy.
 VALID_VALIDATION_MODES: tuple[str, ...] = ("none", "syntax", "server")
@@ -198,7 +198,7 @@ def make_async_validator(
     """Construct an :class:`AsyncQueryValidator` from a target/mode pair.
 
     Parallels :func:`make_validator` with the same target/mode/server_config
-    contract — only the returned validator's interface is async.
+    contract; only the returned validator's interface is async.
     """
     if mode == "none":
         return AsyncNoopValidator()

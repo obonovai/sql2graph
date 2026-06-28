@@ -11,9 +11,9 @@ see `API.md`.
 The framework deliberately optimises for four properties, in this order:
 
 1. **Separability of concerns at the configuration boundary.** The three
-   external resources the framework depends on — a relational-to-graph
-   *mapping*, an *LLM provider*, and (optionally) a *graph database server*
-   for validation — are orthogonal. A schema mapping is deployment-invariant;
+   external resources the framework depends on (a relational-to-graph
+   *mapping*, an *LLM provider*, and optionally a *graph database server*
+   for validation) are orthogonal. A schema mapping is deployment-invariant;
    an LLM provider is mapping-agnostic; a server is LLM-agnostic. The
    framework reflects this by giving each its own typed configuration
    class and its own YAML subdirectory (`config/mappings/`,
@@ -25,11 +25,11 @@ The framework deliberately optimises for four properties, in this order:
    options. The current layout demonstrates the cross-product at the
    directory level instead.
 
-2. **Simplicity over framework ceremony.** The full generate–validate–fix
+2. **Simplicity over framework ceremony.** The full generate-validate-fix
    loop is implemented as a single `while` loop in
    `src/rows2graph/translator.py`. Comparable LLM-feedback-loop projects
    in this space typically reach for LangGraph + LangChain + a tracing
-   layer — easily ten heavy dependencies. For one retry edge a plain
+   layer, easily ten heavy dependencies. For one retry edge a plain
    `while` loop with explicit state is shorter, easier to trace through,
    and has an order of magnitude less import surface.
 
@@ -134,14 +134,14 @@ without validating it again.
 ## Async path
 
 `AsyncSQLTranslator` lives next to `SQLTranslator` in
-`src/rows2graph/async_translator.py` and exposes the same surface — same
+`src/rows2graph/async_translator.py` and exposes the same surface (same
 constructor parameters, same `translate()` return type, same iteration
-semantics — with `await` at the LLM and validator call sites. Both
+semantics) with `await` at the LLM and validator call sites. Both
 translators co-exist; the sync path stays the default for scripts,
 notebooks, and the CLI.
 
 **Why bother, given that the loop is sequential per translation?** A
-single translation will not finish faster under async — each iteration's
+single translation will not finish faster under async: each iteration's
 `chat → validate → fix` chain genuinely depends on the previous result.
 The wins are elsewhere:
 
@@ -170,7 +170,7 @@ paths against the same fake LLM.
 and `_extract_anthropic_text` out of both sync and async `chat()`
 implementations, so prompt caching, usage logging, and response extraction
 have one definition each. The translator loop body is the one place that
-genuinely duplicates — kept structurally identical, watched by parity
+genuinely duplicates, kept structurally identical, watched by parity
 tests.
 
 **Streaming.** When `AsyncLLMClient.chat(messages, stream_to=cb)` receives
@@ -237,7 +237,7 @@ invocation in `_emit(handler, event)` (defined at the bottom of
 `translator.py` / `async_translator.py`), which catches all exceptions,
 logs them at WARNING, and returns. A misbehaving handler cannot abort a
 user's translation. The trade-off is that handler bugs surface in logs
-rather than as direct exceptions — acceptable for an observer pattern.
+rather than as direct exceptions, acceptable for an observer pattern.
 
 **Why typed events instead of subscribing to logger output?** The Streamlit
 UI's earlier revision parsed library log strings ("Initial query
@@ -282,13 +282,13 @@ If we built one giant prompt per call instead, we would lose that
 accumulated context.
 
 The three prompt builders are plain function calls that append to a
-shared `messages` list — no graph nodes, no middleware, no separate
+shared `messages` list, no graph nodes, no middleware, no separate
 agents.
 
 ### Anthropic prompt caching
 
-The Anthropic backends — both `AnthropicLLMClient` and
-`AsyncAnthropicLLMClient` — emit the assembled system block with
+The Anthropic backends (both `AnthropicLLMClient` and
+`AsyncAnthropicLLMClient`) emit the assembled system block with
 `cache_control: {"type": "ephemeral"}` set. The schema + rules block is
 identical across all iterations of a single translation, so iterations 2+
 read it from Anthropic's prompt cache instead of paying for it as input
@@ -308,7 +308,7 @@ the TTL reads.
 
 The system prompt is rebuilt for every translation, not cached once per
 translator. The motivation is empirical: small models lose accuracy when
-the system prompt contains rules irrelevant to the input — for example,
+the system prompt contains rules irrelevant to the input. For example,
 Cypher's 14-line `LIKE`/`ILIKE` mapping table on a query with no string
 predicates is pure noise. The framework strips those rules out by
 detecting which SQL operation clusters the input uses and emitting only
@@ -331,7 +331,7 @@ members:
 | `UNION` | `exp.Union`, `exp.Intersect`, `exp.Except` |
 | `WINDOW` | `exp.Window` |
 | `CASE` | `exp.Case` |
-| `SUBQUERY` | `exp.Subquery`, `exp.Exists` (CTEs are excluded — they get their own bucket) |
+| `SUBQUERY` | `exp.Subquery`, `exp.Exists` (CTEs are excluded: they get their own bucket) |
 | `DISTINCT` | `exp.Distinct` |
 | `TEMPORAL` | an ISO-shaped date/timestamp `exp.Literal`, `exp.Cast` to a DATE/TIMESTAMP type, or `exp.CurrentDate`/`exp.CurrentTimestamp` (see `_has_temporal`) |
 
@@ -347,7 +347,7 @@ The feature set flows through two layers:
 
 1. **Generic rules in `prompts.py`.** `_GENERIC_FEATURE_RULES` (a small
    `dict[SqlFeature, str]` near the top of the module) holds the
-   one-line, target-agnostic rules — currently `JOIN` and `AGGREGATION`.
+   one-line, target-agnostic rules: currently `JOIN` and `AGGREGATION`.
    `build_system_prompt` iterates `SqlFeature` in declaration order and
    emits each line only if its feature is in the detected set.
 2. **Target-specific rule chunks.**
@@ -357,13 +357,13 @@ The feature set flows through two layers:
    (see `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`)
    holding the per-operation rule chunks, and append only the chunks for
    features present, in `SqlFeature` declaration order. The mapping is
-   **total** over `SqlFeature` for every target — each language defines a
+   **total** over `SqlFeature` for every target: each language defines a
    chunk for *every* feature, and a parametrized parity test
    (`test_target_feature_rules_cover_every_sql_feature`) fails the suite
    if any target drops one. This is deliberate: an earlier design let
    `system_prompt_section` look features up with `_FEATURE_RULES.get(...)`
    and *silently skip* a missing one, which made "deliberately not
-   applicable" and "accidentally forgotten" indistinguishable — `TEMPORAL`
+   applicable" and "accidentally forgotten" indistinguishable. `TEMPORAL`
    shipped in `CypherTarget` alone for exactly that reason. Where a feature
    is a near no-op in a language, the chunk says so explicitly rather than
    being omitted (AQL/Gremlin `TEMPORAL` instruct the model to compare
@@ -390,7 +390,7 @@ four-part change, all enforced by tests: a `SqlFeature` enum member, a
 detector branch in `detect_features`, and a `FeatureRule` chunk in
 **every** target's `_FEATURE_RULES` (the parity test rejects a partial
 roll-out). For a feature with no meaningful work in some language, the
-chunk states the no-op explicitly — coverage stays total, so a genuine
+chunk states the no-op explicitly. Coverage stays total, so a genuine
 "not applicable" reads differently from an accidental omission.
 
 ---
@@ -408,7 +408,7 @@ A YAML file with `provider: "ollama"` deserialises to `OllamaConfig`; one
 with `provider: "anthropic"` to `AnthropicConfig`. The loader functions
 (`load_model_config`, `load_server_config`) return the precise subtype, so
 the downstream factories (`make_llm`, `make_validator`) dispatch via a
-single `isinstance` check — the same factory-by-tag pattern as the
+single `isinstance` check, the same factory-by-tag pattern as the
 original design, but with the tag validated by Pydantic at load time
 rather than carried in a separate field of a larger config blob.
 
@@ -423,8 +423,8 @@ field (validated `>= 0`). `AnthropicConfig` forwards it to the SDK's
 built-in retry layer, which already does exponential backoff with jitter
 on 408/409/429/5xx and connection errors. `OllamaConfig` is consumed by a
 handwritten exponential-backoff loop inside
-`OllamaLLMClient.chat()` / `AsyncOllamaLLMClient.chat()` — the `ollama`
-SDK has no native retry — that retries on `RequestError` (connection
+`OllamaLLMClient.chat()` / `AsyncOllamaLLMClient.chat()` (the `ollama`
+SDK has no native retry) that retries on `RequestError` (connection
 issues) and `ResponseError` with `status_code >= 500`, sleeping 1s, 2s,
 4s, …. 4xx responses propagate immediately on the assumption that they
 signal client-side mistakes a retry cannot fix (unknown model, malformed
@@ -476,7 +476,7 @@ implementation.
 * **The sync loop is easy to read and modify.** It is one screen of
   Python in `translator.py` with no framework machinery hiding control
   flow. The async path (`async_translator.py`) is a structural mirror,
-  not a separate framework — `await` at the same call sites, same
+  not a separate framework: `await` at the same call sites, same
   prompts, same events, same `TranslationResult`. The trade-off is two
   near-identical loop bodies; the upside is that neither path imports
   any orchestration layer.
@@ -520,9 +520,9 @@ overhead.
   `tests/test_static.py` that drive both translators with the same fake
   LLM and assert identical event sequences. If a future change
   introduces a real algorithmic divergence between the two, this would
-  be the place to factor a shared helper out — but trying to share the
+  be the place to factor a shared helper out, but trying to share the
   loop bodies themselves would force one path to compromise (probably
-  the sync one — a sync function that wraps an async coroutine via
+  the sync one: a sync function that wraps an async coroutine via
   `asyncio.run` is awkward and erases the sync path's "no event loop"
   property).
 * **Streaming is async-only.** The `stream_to` callback is on
@@ -539,7 +539,7 @@ The structural idea behind `rows2graph` is independent of both SQL and
 graph databases: *generate an artifact with an LLM, validate it with a
 deterministic compiler-like tool, then retry with the validator's errors
 as additional context*. Any domain that pairs an LLM-generatable
-artifact with a fast, programmatic validator fits the same shape — SQL
+artifact with a fast, programmatic validator fits the same shape: SQL
 migrations checked by a planner, configuration files checked by a schema
 validator, regex patterns checked against a sample corpus, infra
 manifests checked by `terraform validate`, security rules checked by
@@ -550,5 +550,5 @@ graph-orchestration runtime to express. The loop is a `while` block, the
 state is one Pydantic model, the extension points are three Protocols,
 and the per-query prompt is rebuilt from feature-gated chunks. A reader
 adapting the pattern to a new domain mostly replaces the schema mapping,
-the target language module, and the validator — the orchestrator stays
+the target language module, and the validator; the orchestrator stays
 unchanged.

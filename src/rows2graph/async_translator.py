@@ -1,14 +1,14 @@
 """Async generate-validate-fix orchestrator.
 
 Mirror of :mod:`rows2graph.translator` for callers that want non-blocking
-translation — e.g. a Streamlit UI that should stay responsive during long
+translation, e.g. a Streamlit UI that should stay responsive during long
 LLM calls, or a service that needs to handle several concurrent
 translations on a single event loop.
 
 The loop is *the same loop*: one initial generate, up to ``max_iterations``
 validate/fix rounds, terminate on success or max-iterations. Only the calls
 to the LLM and validator change from blocking to ``await`` ones. Iteration
-numbering, event emission, the final :class:`TranslationResult` — all
+numbering, event emission, the final :class:`TranslationResult`: all
 identical to the sync path, by design. Code that observes events
 (:mod:`rows2graph.events`) does not need to know which translator produced
 them.
@@ -83,14 +83,14 @@ class AsyncSQLTranslator:
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
-        # See SQLTranslator.__init__ — same stall-escalation knobs, async sibling.
+        # See SQLTranslator.__init__: same stall-escalation knobs, async sibling.
         self._fix_temperature = fix_temperature
         self._escalation_temperature = escalation_temperature
-        # See SQLTranslator.__init__ — same input-side pre-flight policy.
+        # See SQLTranslator.__init__: same input-side pre-flight policy.
         self._parse_error_action = parse_error_action
         self._unmapped_tables_action = unmapped_tables_action
         self._unmapped_columns_action = unmapped_columns_action
-        # See SQLTranslator.last_messages — same contract, async sibling.
+        # See SQLTranslator.last_messages: same contract, async sibling.
         self.last_messages: list[dict[str, str]] = []
 
     async def __aenter__(self) -> Self:
@@ -122,12 +122,12 @@ class AsyncSQLTranslator:
         generate and each fix) streams its text deltas through that
         callback as they arrive. The full assembled response still
         feeds the validator after each call completes. The callback is
-        invoked many times per LLM call — once per text delta — and runs
+        invoked many times per LLM call (once per text delta) and runs
         on the same task as the translator itself.
 
         When ``on_conversation`` is set, the handler receives a snapshot of the
-        full message list each time the conversation changes — after each prompt
-        and per-token while an assistant turn streams — which drives live
+        full message list each time the conversation changes (after each prompt
+        and per-token while an assistant turn streams), which drives live
         conversation displays. Setting it implies streaming from the LLM even
         when ``stream_to`` is ``None``.
         """
@@ -136,7 +136,7 @@ class AsyncSQLTranslator:
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
 
         # Pre-flight: parse the SQL once and decide whether to warn or reject
-        # before any expensive work — see SQLTranslator.translate. A reject runs
+        # before any expensive work (see SQLTranslator.translate). A reject runs
         # before warmup so it never boots a managed database for a query we will
         # not translate.
         analysis = analyze_sql(sql_query)
@@ -191,7 +191,7 @@ class AsyncSQLTranslator:
         logger.info("Initial query generated:\n%s", state.generated_query)
         _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
-        # See SQLTranslator.translate — same stall-detection/escalation logic.
+        # See SQLTranslator.translate: same stall-detection/escalation logic.
         previous_signature: frozenset[str] | None = None
         previous_norm_query: str | None = None
         escalated = False
@@ -270,7 +270,7 @@ class AsyncSQLTranslator:
             if no_progress:
                 escalated = True
                 logger.info(
-                    "No progress on iteration %d — escalating with a fresh context",
+                    "No progress on iteration %d: escalating with a fresh context",
                     state.validation_iteration,
                 )
                 _emit(
@@ -378,7 +378,7 @@ def _emit_conversation(handler: ConversationCallback | None, messages: list[dict
         return
     try:
         handler(_snapshot(messages))
-    except Exception:  # noqa: BLE001 — the whole point is to swallow user errors
+    except Exception:  # noqa: BLE001 (the whole point is to swallow user errors)
         logger.warning("Conversation handler raised", exc_info=True)
 
 
@@ -392,7 +392,7 @@ def _stream_with_conversation(
     When ``on_conversation`` is set, the returned callback streams the assembling
     assistant turn into the snapshot (so consumers see the model "typing") and
     still forwards deltas to ``stream_to`` if the caller supplied one. When
-    ``on_conversation`` is ``None`` it returns ``stream_to`` unchanged — so
+    ``on_conversation`` is ``None`` it returns ``stream_to`` unchanged, so
     non-live callers keep their behaviour, including no streaming when
     ``stream_to`` is also ``None``.
     """

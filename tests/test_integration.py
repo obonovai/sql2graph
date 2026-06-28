@@ -1,6 +1,6 @@
 """Integration tests against real LLMs and databases.
 
-These tests are deselected by default — pyproject.toml's
+These tests are deselected by default: pyproject.toml's
 ``addopts = "-m 'not integration'"`` excludes the ``integration`` marker
 from the default ``pytest`` run. Opt in with::
 
@@ -104,7 +104,7 @@ def docker_available() -> None:
 
 @pytest.fixture
 def small_schema() -> SchemaMapping:
-    """A minimal two-node, one-edge schema — small enough to keep prompts cheap."""
+    """A minimal two-node, one-edge schema, small enough to keep prompts cheap."""
     return SchemaMapping(
         nodes=[
             NodeMapping(
@@ -190,7 +190,7 @@ def test_real_anthropic_async_translates_simple_select(
     anthropic_config: AnthropicConfig,
     small_schema: SchemaMapping,
 ) -> None:
-    """Async path is structurally equivalent — same kind of result for the same input."""
+    """Async path is structurally equivalent: same kind of result for the same input."""
 
     async def run() -> str | None:
         llm = make_async_llm(anthropic_config)
@@ -280,7 +280,7 @@ def test_real_full_loop_anthropic_with_neo4j_server_validation(
     ) as translator:
         result = translator.translate("SELECT full_name FROM persons WHERE id = 1")
 
-    # We do not pin the exact final query — model output varies. But the
+    # We do not pin the exact final query; model output varies. But the
     # loop must converge to *some* server-validated query within 3 iterations.
     assert result.validation_passed, (
         f"server validation did not pass: status={result.status} "

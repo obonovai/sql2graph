@@ -6,7 +6,7 @@
 #
 # This is the LDBC SNB Interactive v1 reference impl applied to a clean
 # `snake_case` Postgres schema (no `p_*`/`f_*`/`m_*` prefixes). The SQL the
-# LLM is shown — and the SQL that ships in evaluation/datasets/ldbc.yaml —
+# LLM is shown (and the SQL that ships in evaluation/datasets/ldbc.yaml)
 # must use these column names, since they are what's actually loaded in the
 # graphonauts2 Postgres container that drives execution-based evaluation.
 #
@@ -16,7 +16,7 @@
 # `location_ip`).
 #
 # Multi-valued attributes (`person_email`, `person_speaks`) are intentionally
-# omitted — they map to list-valued properties in the LDBC graph spec which
+# omitted: they map to list-valued properties in the LDBC graph spec which
 # the current NodeMapping schema cannot express.
 #
 # Subtype tables: `place.type` distinguishes City/Country/Continent;

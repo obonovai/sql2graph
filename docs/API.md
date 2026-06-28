@@ -60,7 +60,7 @@ def make_llm(config: OllamaConfig | AnthropicConfig) -> LLMClient
 def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient
 ```
 
-`OllamaConfig` and `AnthropicConfig` are typed Pydantic models — same
+`OllamaConfig` and `AnthropicConfig` are typed Pydantic models: same
 config drives both the sync and async backends. See the YAML reference
 below for their field layouts; both include `max_retries: int = 3`.
 
@@ -73,7 +73,7 @@ When `AsyncLLMClient.chat` is called with a non-None `stream_to`, the
 implementation switches to its provider's streaming endpoint and invokes
 the callback for each text delta as it arrives, returning the assembled
 text when the stream completes. With `stream_to=None` (the default) the
-call is a single-round-trip request — useful for callers that don't need
+call is a single-round-trip request, useful for callers that don't need
 a live display.
 
 ### Target language components
@@ -94,12 +94,12 @@ block plus the rule chunks gated on those features (see
 [Per-query prompt assembly](#) in `docs/ARCHITECTURE.md`).
 
 For the `"gremlin"` target the framework emits Gremlin-Groovy script form
-(e.g. `g.V().hasLabel('Person').valueMap()`) — portable across Apache
+(e.g. `g.V().hasLabel('Person').valueMap()`), portable across Apache
 TinkerPop Gremlin Server / TinkerGraph (the recommended local backend),
 JanusGraph, Amazon Neptune, and Azure Cosmos DB Gremlin API. Server-side
 validation against schemaless TinkerGraph catches script-level parse
-errors and unsupported steps but NOT label / property hallucinations —
-use JanusGraph with a registered schema for schema-aware validation
+errors and unsupported steps but NOT label / property hallucinations.
+Use JanusGraph with a registered schema for schema-aware validation
 comparable to Neo4j's `EXPLAIN`.
 
 ### Validator components
@@ -144,16 +144,16 @@ Docker daemon and raises `RuntimeError` from `validate()` if none is
 reachable. For Cypher, the managed Neo4j connection sets
 `Neo4jConfig.notifications_min_severity="OFF"` (an optional config field) so the
 empty database's advisory notifications (e.g. unknown label/property) are not
-logged — this does not change which queries pass or fail.
+logged. This does not change which queries pass or fail.
 
 Concrete async classes (also exported from the top-level package):
 `AsyncCypherSyntaxValidator`, `AsyncAqlSyntaxValidator`,
 `AsyncGremlinSyntaxValidator`, `AsyncNoopValidator`,
 `AsyncCypherServerValidator` (uses `neo4j.AsyncGraphDatabase`),
 `AsyncAqlServerValidator` (wraps python-arango calls in
-`asyncio.to_thread` — the underlying SDK has no async driver), and
+`asyncio.to_thread`: the underlying SDK has no async driver), and
 `AsyncGremlinServerValidator` (wraps `gremlinpython`'s `Client` in
-`asyncio.to_thread` for the same reason — the async surface area of
+`asyncio.to_thread` for the same reason: the async surface area of
 `gremlinpython` is inconsistent across releases). Same constructor
 signatures as their sync siblings.
 
@@ -207,19 +207,19 @@ Both translators are context managers: use `with SQLTranslator(...)` or
 validator are closed even on exception.
 
 After each `translate()` call, `translator.last_messages` holds the full
-system↔LLM conversation for that call — a `list[dict[str, str]]` of
+system↔LLM conversation for that call, a `list[dict[str, str]]` of
 `{"role", "content"}` turns (system prompt, generate prompt, raw model
 responses, and each fix prompt). It is overwritten on the next call;
 `TranslationResult` itself deliberately omits the chat history.
 
 For a *live* view, `AsyncSQLTranslator.translate(on_conversation=...)` takes a
 `ConversationCallback` (`Callable[[list[dict[str, str]]], None]`) that receives the
-growing message snapshot as it changes — after each prompt and per-token while an
+growing message snapshot as it changes, after each prompt and per-token while an
 assistant turn streams. Setting it implies streaming from the LLM even without
 `stream_to`. (Only the async translator exposes it; the sync `SQLTranslator` keeps
 just `last_messages`.)
 
-Same `TranslationResult`, same iteration semantics, same prompts — see
+Same `TranslationResult`, same iteration semantics, same prompts. See
 `docs/ARCHITECTURE.md` § "Async path" for the rationale and the parity
 contract.
 
@@ -279,7 +279,7 @@ EventHandler = Callable[[TranslationEvent], None]
 Iteration numbering: `iteration=N` refers to validation pass N.
 `FixGeneratedEvent.iteration=N` means "the fix produced after iteration N
 failed; this candidate will be validated as iteration N+1." A handler is
-typically a `match` over the union — see the end-to-end example below.
+typically a `match` over the union. See the end-to-end example below.
 
 Handler exceptions are caught and logged at WARNING by the translator;
 they cannot abort a translation. Consumers should treat the handler as
@@ -373,7 +373,7 @@ asyncio.run(main())
 
 ## YAML schema reference
 
-### `config/mappings/<name>.yaml` — schema mapping
+### `config/mappings/<name>.yaml`: schema mapping
 
 The file *is* the mapping: there is no `schema_mapping:` outer key.
 
@@ -425,7 +425,7 @@ Field reference:
 Loaded with `SchemaMapping.from_yaml(path)`. Strict mode (`extra="forbid"`)
 rejects unknown keys.
 
-### `config/models/<name>.yaml` — LLM model config
+### `config/models/<name>.yaml`: LLM model config
 
 Discriminator: `provider`.
 
@@ -461,7 +461,7 @@ set `api_key` explicitly (with `${ENV_VAR}` interpolation, e.g.
 `api_key: "${ANTHROPIC_API_KEY}"`). Set budget caps and usage alerts in
 the [Anthropic console](https://console.anthropic.com).
 
-### `config/servers/<name>.yaml` — graph DB connection
+### `config/servers/<name>.yaml`: graph DB connection
 
 Discriminator: `type`. Used only with `--validation server`. All string
 fields support `${ENV_VAR}` interpolation; an unset variable raises
@@ -478,7 +478,7 @@ database: "neo4j"
 ```
 
 The validator runs `EXPLAIN <query>`, which parses and plans without
-executing — safe for any statement.
+executing, safe for any statement.
 
 #### ArangoDB (`type: "arangodb"`)
 

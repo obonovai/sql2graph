@@ -41,30 +41,30 @@ _START_RE = re.compile(
 
 # Always emitted. Covers the Cypher data model, core syntax/operators, an
 # explicit "these are NOT valid Cypher" anti-pattern block with bad->good
-# rewrites, and worked SQL->Cypher examples — the same five-section structure
+# rewrites, and worked SQL->Cypher examples, the same five-section structure
 # every target's base block uses to keep small local models on the rails rather
 # than emitting SQL-flavoured guesses. Every claim is verified against the
 # Neo4j 5 Cypher manual. NOTE: the substrings "CONTAINS", "window function", and
-# "datetime(" are deliberately kept OUT of this always-on block — they gate the
+# "datetime(" are deliberately kept OUT of this always-on block; they gate the
 # LIKE, WINDOW, and TEMPORAL feature chunks, and leaking them here would defeat
 # the focused-prompt tests.
 _BASE_RULES = BaseRules(
     language="Cypher",
     output_mandate=(
         "Generate ONE valid Cypher query for Neo4j 5 for the schema above. Output "
-        "ONLY the query — no prose, no explanation, no markdown fences, no "
+        "ONLY the query: no prose, no explanation, no markdown fences, no "
         "alternative versions, and nothing before or after the query."
     ),
     data_model=[
         "- Each NODE label is a node (e.g. `Customer`, `Order`). Read it with `MATCH (c:Customer)`.",
         "- Each EDGE type is a DIRECTED relationship, written `(a)-[:PLACED]->(b)`. "
         "Follow the schema's direction; reverse the arrow (`<-[:PLACED]-`) to traverse against it.",
-        "- A junction / link table is an EDGE, not a node. Do not `MATCH` a node for it — "
+        "- A junction / link table is an EDGE, not a node. Do not `MATCH` a node for it; "
         "realize it as the relationship between the two tables it links.",
         "- Use the graph PROPERTY names from the schema (e.g. `firstName`), NOT the "
         "original SQL column names (e.g. `first_name`).",
         "- Foreign-key columns are NOT stored as properties. A join on a FK is the "
-        "relationship itself — never filter on `*key`/`*_id` columns in `WHERE`.",
+        "relationship itself; never filter on `*key`/`*_id` columns in `WHERE`.",
     ],
     core_syntax=[
         "- Read with `MATCH`; filter with `WHERE`; output with `RETURN`. A SQL alias "
@@ -81,10 +81,10 @@ _BASE_RULES = BaseRules(
     anti_patterns=[
         AntiPattern(bad="`==` or `!=`", good="use `=` and `<>`"),
         AntiPattern(bad="`UPPER(s)` / `LOWER(s)` / `LEN(s)`", good="use `toUpper(s)` / `toLower(s)` / `size(s)`"),
-        AntiPattern(bad="`SELECT ... FROM ...` — this is SQL", good="read with `MATCH (x:Label)`"),
+        AntiPattern(bad="`SELECT ... FROM ...` (this is SQL)", good="read with `MATCH (x:Label)`"),
         AntiPattern(
             bad="a `WHERE` join on key columns such as `WHERE o.custkey = c.custkey`",
-            good="the schema relationship `(c)-[:PLACED]->(o)` already encodes that join — "
+            good="the schema relationship `(c)-[:PLACED]->(o)` already encodes that join; "
             "write the pattern, not the key predicate",
             bad_example="MATCH (c:Customer), (o:Order) WHERE o.custkey = c.custkey",
             good_example="MATCH (c:Customer)-[:PLACED]->(o:Order)",
@@ -109,14 +109,14 @@ _BASE_RULES = BaseRules(
     ],
 )
 
-# The LIKE-mapping table is unchanged from the pre-refactor prompt — empirical
+# The LIKE-mapping table is unchanged from the pre-refactor prompt; empirical
 # testing on TPC-H showed it was the single most effective addition for
 # translation accuracy on small models.
 _LIKE_RULES = FeatureRule(
     body=(
         "SQL string-pattern predicates → Cypher: SQL LIKE/ILIKE patterns use "
         "`%` (any sequence) and `_` (any single char) as wildcards. Cypher's "
-        "`=~` operator uses Java regex — `%` is a literal percent sign there, "
+        "`=~` operator uses Java regex; `%` is a literal percent sign there, "
         "not a wildcard. Translate using Cypher's dedicated string operators:\n"
         "- `col LIKE '%x%'`           → `col CONTAINS 'x'`\n"
         "- `col LIKE 'x%'`            → `col STARTS WITH 'x'`\n"
@@ -137,7 +137,7 @@ _JOIN_RULES = FeatureRule(
         "pattern segment between node variables, using the relationship type and "
         "direction from the schema. Use `OPTIONAL MATCH` for outer joins "
         "(LEFT/RIGHT/FULL). Do NOT translate JOIN ON predicates into `WHERE` "
-        "conditions on foreign-key columns — the schema's relationship already "
+        "conditions on foreign-key columns; the schema's relationship already "
         "encodes the join.\n"
         "- Through-node join: when two tables join via foreign keys that both "
         "reference a SHARED parent table (e.g. customer and supplier both carry "
@@ -158,13 +158,13 @@ _JOIN_RULES = FeatureRule(
 _AGGREGATION_RULES = FeatureRule(
     body=(
         "SQL aggregations → Cypher: use `count(...)`, `sum(...)`, `avg(...)`, "
-        "`min(...)`, `max(...)`, `collect(...)`. Cypher has NO `GROUP BY` clause — "
+        "`min(...)`, `max(...)`, `collect(...)`. Cypher has NO `GROUP BY` clause; "
         "grouping is implicit in the non-aggregate expressions of `RETURN` (or of "
         "the upstream `WITH`): list the group keys alongside the aggregate and they "
         "become the grouping.\n"
         "- `count(x)` ignores nulls, so it counts only the rows where `x` is "
         "present; `count(*)` counts every row. For a SQL `LEFT JOIN ... COUNT(...)` "
-        "use `OPTIONAL MATCH` plus `count(var)` on the optional variable — "
+        "use `OPTIONAL MATCH` plus `count(var)` on the optional variable; "
         "unmatched parents then count 0, which is the correct LEFT-JOIN count:\n"
         "    MATCH (s:Supplier)\n"
         "    OPTIONAL MATCH (s)-[:SUPPLIES]->(p:Part)\n"
@@ -199,7 +199,7 @@ _CTE_RULES = FeatureRule(
     body=(
         "SQL CTEs (`WITH name AS (...)`) → Cypher: chain `WITH` clauses that "
         "project the intermediate results forward. Cypher's `WITH` is the "
-        "pipeline operator (different meaning from SQL's `WITH`) — each `WITH` "
+        "pipeline operator (different meaning from SQL's `WITH`); each `WITH` "
         "is a step in a pipeline. Inline correlated logic instead of trying to "
         "re-create a named CTE block."
     )
@@ -219,7 +219,7 @@ _WINDOW_RULES = FeatureRule(
     body=(
         "SQL window functions (`OVER (PARTITION BY ... ORDER BY ...)`) have no "
         "direct Cypher equivalent. Emulate by projecting through `WITH`, "
-        "`collect`-ing into an ordered list, and `UNWIND`-ing with an index — "
+        "`collect`-ing into an ordered list, and `UNWIND`-ing with an index, "
         "e.g. `WITH partition_key, collect(row) AS rows ... UNWIND range(0, "
         "size(rows)-1) AS i ...`. If APOC is available, `apoc.coll.*` helpers "
         "simplify ranking."
@@ -262,7 +262,7 @@ _TEMPORAL_RULES = FeatureRule(
         "and timestamps as typed temporal values, NOT strings. Comparing a "
         "temporal property against a bare quoted string (`po.creationDate >= "
         "'2010-06-01'`) compares a temporal against a STRING and does not behave "
-        "as a date range — wrap the literal in the matching constructor:\n"
+        "as a date range; wrap the literal in the matching constructor:\n"
         "- a DATE literal (`'YYYY-MM-DD'`) → `date('YYYY-MM-DD')`, e.g. "
         "`WHERE li.shipdate >= date('1995-03-01') AND li.shipdate <= "
         "date('1995-03-31')`.\n"
@@ -324,7 +324,7 @@ class CypherTarget:
         return extract_query(_START_RE, llm_response)
 
     def repair_hint(self, errors: list[str]) -> str | None:  # noqa: ARG002
-        """No Cypher-specific repair overrides yet — keep the default fix flow.
+        """No Cypher-specific repair overrides yet; keep the default fix flow.
 
         Cypher's `ORDER BY`/`LIMIT` follow `RETURN` (as in SQL), so the AQL
         clause-ordering trap does not arise here.

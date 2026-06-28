@@ -2,7 +2,7 @@
 
 This module defines the Pydantic models that the framework uses to describe a
 relational-to-graph schema mapping. The mapping is the only piece of user input
-that the framework needs to interpret semantically — the LLM consumes it as
+that the framework needs to interpret semantically: the LLM consumes it as
 part of the system prompt to translate SQL queries into the target graph query
 language.
 
@@ -13,8 +13,8 @@ table to a primary-key column in another). Junction tables become edges with
 properties drawn from their non-foreign-key columns; self-referential edges
 are permitted by allowing ``source_node == target_node``.
 
-Cross-field invariants — for example, that every edge's ``source_node`` and
-``target_node`` refers to a label defined in ``nodes`` — are enforced as
+Cross-field invariants (for example, that every edge's ``source_node`` and
+``target_node`` refers to a label defined in ``nodes``) are enforced as
 Pydantic ``model_validator`` checks at load time, so malformed YAML fails fast
 with a precise error message rather than silently misleading the LLM.
 
@@ -22,7 +22,7 @@ The schema mapping is *deployment-invariant*: the same mapping can drive a
 translation against any LLM provider and any deployed graph database. LLM
 provider settings live in ``rows2graph.llm``; graph database connection
 settings live in ``rows2graph.validators``. Keeping these orthogonal
-concerns in separate modules — and separate YAML files — is the central
+concerns in separate modules (and separate YAML files) is the central
 architectural commitment of this refactor.
 """
 
@@ -79,14 +79,14 @@ class EdgeMapping(_StrictModel):
     ``source_table`` is a dedicated junction table (e.g. ``forum_person``,
     ``partsupp``), additional non-FK columns can become edge properties.
 
-    Self-references — ``source_node == target_node`` — are supported (e.g.
+    Self-references (``source_node == target_node``) are supported (e.g.
     ``Person -[:KNOWS]-> Person``, ``Person -[:MANAGES]-> Person``).
 
     Attributes:
         type: Relationship type used verbatim in generated queries
             (e.g. ``[:KNOWS]``).
-        source_node: ``label`` of an existing node — checked at load time.
-        target_node: ``label`` of an existing node — checked at load time.
+        source_node: ``label`` of an existing node, checked at load time.
+        target_node: ``label`` of an existing node, checked at load time.
         source_table: Table containing the foreign key that materialises the
             edge.
         source_foreign_key: Foreign key column in ``source_table``.
@@ -107,7 +107,7 @@ class SchemaMapping(_StrictModel):
     """The full relational-to-graph schema mapping.
 
     The YAML file at ``config/mappings/<name>.yaml`` deserialises directly
-    into this class — there is no top-level ``schema_mapping:`` wrapper. This
+    into this class. There is no top-level ``schema_mapping:`` wrapper. This
     keeps the YAML file purely about the mapping; orthogonal concerns
     (LLM, server, translation loop) live elsewhere.
 

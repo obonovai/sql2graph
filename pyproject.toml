@@ -1,7 +1,7 @@
 [project]
 name = "rows2graph"
 version = "0.1.0"
-description = "LLM-driven SQL-to-graph-database query translator with a generate–validate–fix loop."
+description = "LLM-driven SQL-to-graph-database query translator with a generate-validate-fix loop."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -81,7 +81,7 @@ module = ["testcontainers.*", "docker.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-# Integration tests are deselected by default — they call real LLMs and
+# Integration tests are deselected by default: they call real LLMs and
 # real databases, which costs money and requires services. Opt in with
 # ``uv run pytest -m integration`` (or ``-m "integration or not integration"``
 # to run everything). See tests/README.md for required env vars.

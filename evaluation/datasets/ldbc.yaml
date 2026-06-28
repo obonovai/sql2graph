@@ -121,7 +121,7 @@ queries:
   difficulty: medium
   sql_features:
   - join
-  description: Two-hop traversal — friends of a given person (cf. LDBC IS-3).
+  description: Two-hop traversal, friends of a given person (cf. LDBC IS-3).
 - id: ldbc_q07
   sql: |-
     SELECT po.id, po.content, p.first_name, p.last_name, t.name
@@ -253,7 +253,7 @@ queries:
   - aggregation
   - join
   - order_limit
-  description: Optional traversal (LEFT JOIN) — forums and their member count including empty forums.
+  description: Optional traversal (LEFT JOIN), forums and their member count including empty forums.
 - id: ldbc_q12
   sql: |-
     SELECT p.id, p.first_name, p.last_name, COUNT(*) AS friend_count

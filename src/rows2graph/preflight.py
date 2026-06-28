@@ -4,20 +4,20 @@ The translator validates its *output* (the generated graph query) but,
 historically, nothing about its *input*. Three cheap checks catch inputs that
 cannot translate well:
 
-* **Parse failure** — :func:`rows2graph.sql_features.analyze_sql` could not
+* **Parse failure**: :func:`rows2graph.sql_features.analyze_sql` could not
   parse the SQL. A weak-but-useful signal (sqlglot is dialect-flexible, so a
   valid-but-exotic query can also fail), hence the default action is to *warn*
   and translate anyway rather than reject.
-* **Unmapped tables** — the SQL reads tables that have no node/edge in the
+* **Unmapped tables**: the SQL reads tables that have no node/edge in the
   :class:`~rows2graph.mapping.SchemaMapping`. A strong signal: with no mapping
   the LLM has nothing to translate those tables *to*, so the default action is
   to *reject* and skip the (wasted) LLM call.
-* **Unmapped columns** — the SQL uses a column of a *mapped* table that the
+* **Unmapped columns**: the SQL uses a column of a *mapped* table that the
   mapping doesn't expose as a property/key. The default action is to *reject*:
   a column explicitly named but absent from the mapping has no graph property to
   map to, so the translation can't be faithful (the LLM would hallucinate or
-  drop the field). The check is conservative — it only flags columns confidently
-  attributed to a node source-table — so genuine false positives are rare.
+  drop the field). The check is conservative (it only flags columns confidently
+  attributed to a node source-table), so genuine false positives are rare.
 
 This module owns the *policy* (what each :class:`PreflightAction` does) and the
 single home for table/column-name normalization (:func:`find_unmapped_tables`,
@@ -45,9 +45,9 @@ UNMAPPED_COLUMNS_STATUS = "unmapped_columns"
 class PreflightAction(StrEnum):
     """What a pre-flight signal does to a translation.
 
-    * ``IGNORE`` — do nothing; reproduces the pre-pre-flight behaviour.
-    * ``WARN`` — emit the signal's event, then translate anyway.
-    * ``REJECT`` — emit the signal's event, skip the LLM, and return a terminal
+    * ``IGNORE``: do nothing; reproduces the pre-pre-flight behaviour.
+    * ``WARN``: emit the signal's event, then translate anyway.
+    * ``REJECT``: emit the signal's event, skip the LLM, and return a terminal
       result carrying the signal's status.
     """
 
@@ -102,7 +102,7 @@ def find_unmapped_columns(column_refs: frozenset[tuple[str, str]], mapping: Sche
     tables are skipped because the mapping stores just one of a junction's
     foreign keys, so a strict check would false-flag the *other* legitimate join
     key. For a checkable table the covered SQL columns are its node property
-    values and primary key, plus — for a table that *also* backs an edge — that
+    values and primary key, plus (for a table that *also* backs an edge) that
     edge's property values and its join keys (``source_foreign_key`` /
     ``target_primary_key``). The edge union is a leniency valve: it keeps a
     node-table's FK/PK join columns from being flagged.
@@ -136,7 +136,7 @@ def parse_error_message(*, rejected: bool) -> str:
     """Human-readable explanation for a parse-failure signal."""
     tail = "translation was skipped." if rejected else "attempting translation anyway."
     return (
-        "The SQL query could not be parsed — it may be malformed or use syntax "
+        "The SQL query could not be parsed: it may be malformed or use syntax "
         f"sqlglot does not recognise; {tail}"
     )
 
@@ -172,13 +172,13 @@ def evaluate_preflight(
 ) -> PreflightOutcome | None:
     """Decide the pre-flight outcome for one translation, or ``None`` to proceed.
 
-    Signals are checked in order — parse → unmapped tables → unmapped columns —
+    Signals are checked in order (parse → unmapped tables → unmapped columns)
     and at most one fires. Parse is first because a query that did not parse has
     no reliable table/column set. The column check runs only when no table is
     unmapped: if some table is missing entirely, that is the more fundamental
     problem and its signal returns first. (Should ``unmapped_tables_action`` be
     ``IGNORE`` while a table is genuinely unmapped, control still falls through
-    to the column check — safe, because that check only inspects node tables.)
+    to the column check, safe, because that check only inspects node tables.)
     """
     if not analysis.parse_ok:
         if parse_error_action is PreflightAction.IGNORE:

@@ -52,9 +52,9 @@ def _gremlin_syntax_errors(query: str) -> list[str]:
         errors.append("Unbalanced curly braces")
 
     # A traversal that ends with a `.` is a half-written step and will
-    # never compile — this catches the most common LLM truncation mode.
+    # never compile. This catches the most common LLM truncation mode.
     if stripped.endswith("."):
-        errors.append("Query ends with `.` — traversal step is incomplete")
+        errors.append("Query ends with `.`: traversal step is incomplete")
 
     if query.count("'") % 2 != 0:
         errors.append("Unbalanced single quotes")
@@ -79,7 +79,7 @@ class AsyncGremlinSyntaxValidator:
     """Async sibling of :class:`GremlinSyntaxValidator`.
 
     Regex matching is pure CPU and microsecond-fast, so the work runs
-    inline rather than being shipped to a thread pool — the latter would
+    inline rather than being shipped to a thread pool; the latter would
     add scheduling overhead without unblocking the event loop in any
     meaningful way.
     """

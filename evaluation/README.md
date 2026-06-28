@@ -63,18 +63,18 @@ Notebooks are numbered so `jupyter nbconvert --to notebook --execute --inplace e
 uv run jupyter lab evaluation/notebooks/
 ```
 
-**Run `00` and `01` first.** `01` does the expensive LLM calls (one per gold-query × dialect) and caches results in `evaluation/outputs/records.json`. `02`–`05` consume that file. `06` joins everything into the final report.
+**Run `00` and `01` first.** `01` does the expensive LLM calls (one per gold-query × dialect) and caches results in `evaluation/outputs/records.json`. `02`-`05` consume that file. `06` joins everything into the final report.
 
-Notebook `05` is the only one that needs all three databases up; `02`–`04` are DB-free.
+Notebook `05` is the only one that needs all three databases up; `02`-`04` are DB-free.
 
 ## Outputs
 
 After a full run you'll find:
 
-- `evaluation/outputs/records.json` — every translation attempt with its TranslationResult fields plus scraped Anthropic token counts.
-- `evaluation/outputs/metrics_*.csv` — per-record metric values from each `0[2-5]` notebook.
-- `evaluation/reports/final.md` — headline + stratified tables, Pass@k curves, error-taxonomy template.
-- `evaluation/reports/figures/` — plots referenced from the markdown report.
+- `evaluation/outputs/records.json`: every translation attempt with its TranslationResult fields plus scraped Anthropic token counts.
+- `evaluation/outputs/metrics_*.csv`: per-record metric values from each `0[2-5]` notebook.
+- `evaluation/reports/final.md`: headline + stratified tables, Pass@k curves, error-taxonomy template.
+- `evaluation/reports/figures/`: plots referenced from the markdown report.
 
 ## Scope
 

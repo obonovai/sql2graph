@@ -137,7 +137,7 @@ def test_schema_rejects_unknown_edge_target_node() -> None:
 
 def test_schema_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
-        # source_tabel is a typo for source_table — strict mode catches it
+        # source_tabel is a typo for source_table; strict mode catches it
         NodeMapping(
             label="X",
             source_tabel="t",  # type: ignore[call-arg]
@@ -466,7 +466,7 @@ def test_make_async_validator_managed_dispatches() -> None:
 
 
 # ---------------------------------------------------------------------------
-# make_llm factory (constructors are mocked — we just verify dispatch)
+# make_llm factory (constructors are mocked; we just verify dispatch)
 # ---------------------------------------------------------------------------
 
 
@@ -531,7 +531,7 @@ def test_ollama_chat_retries_on_5xx_response_error() -> None:
 
 
 def test_ollama_chat_does_not_retry_on_4xx_response_error() -> None:
-    """4xx errors are client-side bugs — retrying just wastes time."""
+    """4xx errors are client-side bugs; retrying just wastes time."""
     from ollama import ResponseError
 
     from rows2graph.llm.ollama import OllamaLLMClient
@@ -623,7 +623,7 @@ def test_anthropic_chat_marks_system_prompt_cacheable() -> None:
 
 def test_anthropic_chat_omits_system_when_no_system_messages() -> None:
     """When the flat message list has no system entries, the `system`
-    kwarg is omitted entirely — adding an empty cacheable block would be
+    kwarg is omitted entirely: adding an empty cacheable block would be
     both wasteful and (for an empty string) likely rejected by the API.
     """
     from rows2graph.llm.anthropic import AnthropicLLMClient
@@ -836,7 +836,7 @@ def test_build_system_prompt_gremlin() -> None:
 def test_gremlin_base_rules_teach_projection_and_forbidden_patterns() -> None:
     # A plain SELECT detects no SqlFeature, so the always-on base block must
     # itself carry the read/projection guidance and the anti-hallucination
-    # list — the two failure modes seen in the captured error logs.
+    # list, the two failure modes seen in the captured error logs.
     prompt = build_system_prompt(_schema(), GremlinTarget(), frozenset())
     # Reading + projecting columns into one traversal.
     assert ".project(" in prompt
@@ -1061,7 +1061,7 @@ def test_translator_escalates_on_stall_then_recovers() -> None:
 
 
 def test_translator_aborts_early_when_stalled_instead_of_burning_iterations() -> None:
-    """When even the escalation makes no progress, abort as 'stalled' — not 10 identical tries."""
+    """When even the escalation makes no progress, abort as 'stalled', not 10 identical tries."""
     from rows2graph import StalledEvent, TranslationEvent
 
     fake = _FakeLLM(["MATCH (p:Person)"] * 4)  # always invalid; one response left unused
@@ -1284,7 +1284,7 @@ def test_detect_features_cte() -> None:
     feats = detect_features("WITH c AS (SELECT * FROM t) SELECT * FROM c")
     assert SqlFeature.CTE in feats
     # A bare CTE without any nested SELECT inside an expression must NOT
-    # light up SUBQUERY — distinguishing the two clusters is the whole point.
+    # light up SUBQUERY: distinguishing the two clusters is the whole point.
     assert SqlFeature.SUBQUERY not in feats
 
 
@@ -1332,7 +1332,7 @@ def test_detect_features_temporal_date_literal() -> None:
 
 def test_detect_features_temporal_not_fired_on_non_date() -> None:
     # An integer key, ordinary string equality, and a plain numeric predicate
-    # must NOT light up TEMPORAL — the detector keys on date-shaped literals.
+    # must NOT light up TEMPORAL: the detector keys on date-shaped literals.
     assert SqlFeature.TEMPORAL not in detect_features("SELECT a FROM supplier WHERE suppkey = 1337")
     assert SqlFeature.TEMPORAL not in detect_features("SELECT a FROM supplier WHERE name = 'Supplier#000000666'")
     assert SqlFeature.TEMPORAL not in detect_features("SELECT a, b FROM t WHERE x = 1")
@@ -1481,7 +1481,7 @@ def test_translator_no_preflight_events_for_mapped_query() -> None:
 
 
 def test_translator_does_not_flag_cte_name_as_unmapped() -> None:
-    # A CTE alias must not be mistaken for an unmapped table — the underlying
+    # A CTE alias must not be mistaken for an unmapped table: the underlying
     # 'persons' is mapped, so this translates normally.
     fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
     with SQLTranslator(
@@ -1544,7 +1544,7 @@ def test_analyze_sql_attributes_single_table_unqualified_columns() -> None:
 
 def test_analyze_sql_does_not_leak_subquery_columns() -> None:
     # The leaf-scope gate: the outer scope has a child subquery, so its
-    # unqualified columns are NOT attributed — `person_id` must bind to `knows`
+    # unqualified columns are NOT attributed; `person_id` must bind to `knows`
     # (its own leaf), never to `persons`.
     refs = analyze_sql("SELECT p.full_name FROM persons p WHERE p.id IN (SELECT person_id FROM knows)").column_refs
     assert ("persons", "person_id") not in refs
@@ -1580,7 +1580,7 @@ def test_find_unmapped_columns_flags_missing_property() -> None:
 
 def test_find_unmapped_columns_skips_pure_junction_tables() -> None:
     # `knows` in _schema() is only an edge source (never a node), so its columns
-    # are not checkable — a junction FK must never be flagged.
+    # are not checkable; a junction FK must never be flagged.
     assert find_unmapped_columns(frozenset({("knows", "forum_id"), ("knows", "anything")}), _schema()) == []
 
 
@@ -1715,7 +1715,7 @@ def test_cypher_prompt_includes_temporal_chunk_only_when_detected() -> None:
 def test_cypher_base_rules_carry_anti_pattern_block() -> None:
     # The always-on base block must now mirror AQL/Gremlin: a concrete data
     # model plus an explicit "NOT valid Cypher" anti-pattern list and an
-    # output-format mandate — present even with no features detected.
+    # output-format mandate, present even with no features detected.
     prompt = build_system_prompt(_schema(), CypherTarget(), frozenset())
     assert "NOT valid Cypher" in prompt
     assert "Output ONLY the query" in prompt
@@ -1786,7 +1786,7 @@ def test_gremlin_join_projection_guidance_only_when_join_detected() -> None:
 
 
 def test_translator_omits_unused_rules_from_system_message() -> None:
-    # SQL has only LIKE — the system prompt should carry the LIKE chunk
+    # SQL has only LIKE; the system prompt should carry the LIKE chunk
     # and omit the WINDOW chunk.
     fake = _FakeLLM(["MATCH (p:Person) WHERE p.name CONTAINS 'a' RETURN p"])
     with SQLTranslator(
@@ -1878,7 +1878,7 @@ class _FakeAsyncLLM:
     """In-process double for the AsyncLLMClient Protocol.
 
     When ``stream_to`` is supplied, emits the response character-by-character
-    through the callback before returning the full text — enough to exercise
+    through the callback before returning the full text, enough to exercise
     the streaming plumbing without needing a real LLM.
     """
 
@@ -2006,7 +2006,7 @@ def test_async_translator_unmapped_column_warn_and_reject() -> None:
         return result, fake, events
 
     async def reject() -> tuple[TranslationResult, _FakeAsyncLLM, list[TranslationEvent]]:
-        # No explicit action — reject is the default.
+        # No explicit action: reject is the default.
         fake = _FakeAsyncLLM(["MATCH (f:Forum) RETURN f"])
         events: list[TranslationEvent] = []
         async with AsyncSQLTranslator(
@@ -2078,7 +2078,7 @@ def test_async_translator_escalates_and_aborts_when_stalled() -> None:
 
 def test_async_translator_emits_same_event_sequence_as_sync() -> None:
     """The async translator emits the same event sequence as the sync one
-    for an identical input — events are part of the cross-translator contract."""
+    for an identical input: events are part of the cross-translator contract."""
     import asyncio
 
     from rows2graph import (
@@ -2165,7 +2165,7 @@ def test_async_cypher_syntax_validator_matches_sync() -> None:
 
 
 def test_async_translator_forwards_stream_to_into_each_llm_call() -> None:
-    """The translator must invoke the stream callback for every LLM call —
+    """The translator must invoke the stream callback for every LLM call:
     once for the initial generate, once per fix iteration."""
     import asyncio
 
@@ -2197,7 +2197,7 @@ def test_async_translator_forwards_stream_to_into_each_llm_call() -> None:
 
 
 def test_async_translator_omits_stream_to_by_default() -> None:
-    """Without stream_to, the fake LLM records zero stream calls — confirms
+    """Without stream_to, the fake LLM records zero stream calls, confirms
     the streaming path is opt-in."""
     import asyncio
 

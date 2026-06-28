@@ -9,7 +9,7 @@ from rows2graph.validators.cypher.server import Neo4jConfig
 # Neo4j server image used for managed validation. Pinned to the 5.x LTS
 # line, which the installed neo4j driver connects to over Bolt.
 IMAGE = "neo4j:5.26"
-# Deterministic password for the disposable container — it is never exposed
+# Deterministic password for the disposable container: it is never exposed
 # beyond the local Docker host and is torn down after validation.
 _PASSWORD = "managedpassword"
 

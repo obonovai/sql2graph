@@ -45,7 +45,7 @@ def _cypher_syntax_errors(query: str) -> list[str]:
         errors.append("Unbalanced curly braces")
 
     # A MATCH query without a RETURN is almost always an accidental
-    # truncation — the model dropped the projection clause.
+    # truncation: the model dropped the projection clause.
     if re.match(r"^\s*MATCH\b", query, re.IGNORECASE):
         if not re.search(r"\bRETURN\b", query, re.IGNORECASE):
             errors.append("MATCH query is missing a RETURN clause")
@@ -67,7 +67,7 @@ class AsyncCypherSyntaxValidator:
     """Async sibling of :class:`CypherSyntaxValidator`.
 
     Regex matching is pure CPU and microsecond-fast, so the work runs
-    inline rather than being shipped to a thread pool — the latter would
+    inline rather than being shipped to a thread pool; the latter would
     add scheduling overhead without unblocking the event loop in any
     meaningful way.
     """

@@ -3,9 +3,9 @@
 This package abstracts the LLM provider behind a structural :class:`Protocol`,
 :class:`LLMClient`. Two concrete implementations ship:
 
-* :class:`rows2graph.llm.ollama.OllamaLLMClient` — local-first via the
+* :class:`rows2graph.llm.ollama.OllamaLLMClient`: local-first via the
   Ollama HTTP API.
-* :class:`rows2graph.llm.anthropic.AnthropicLLMClient` — Claude on Google
+* :class:`rows2graph.llm.anthropic.AnthropicLLMClient`: Claude on Google
   Vertex AI.
 
 Each backend ships its own Pydantic configuration class
@@ -14,7 +14,7 @@ Each backend ships its own Pydantic configuration class
 Pydantic-validated *tagged union* :data:`ModelConfig`: a YAML file with
 ``provider: "ollama"`` deserialises to :class:`OllamaConfig`, one with
 ``provider: "anthropic"`` to :class:`AnthropicConfig`. The dispatch into the
-correct constructor (``make_llm``) is then a single ``isinstance`` check —
+correct constructor (``make_llm``) is then a single ``isinstance`` check,
 the same factory-by-tag pattern as the original design, but with the tag
 validated by Pydantic at load time rather than carried in a separate field
 of a larger config blob.
@@ -76,7 +76,7 @@ class AsyncLLMClient(Protocol):
     The async translator
     (:class:`rows2graph.async_translator.AsyncSQLTranslator`) consumes this
     Protocol. Implementations must define both :meth:`chat` and
-    :meth:`close` as ``async``. Same shape as :class:`LLMClient` otherwise —
+    :meth:`close` as ``async``. Same shape as :class:`LLMClient` otherwise:
     one chat method that takes a flat message list and returns the
     assistant turn's text.
 
@@ -135,7 +135,7 @@ def make_llm(config: OllamaConfig | AnthropicConfig) -> LLMClient:
 def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient:
     """Construct the appropriate :class:`AsyncLLMClient` for a loaded model config.
 
-    Parallels :func:`make_llm` — same config types, async client returned.
+    Parallels :func:`make_llm`: same config types, async client returned.
     """
     if isinstance(config, OllamaConfig):
         return AsyncOllamaLLMClient(config)

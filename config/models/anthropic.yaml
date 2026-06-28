@@ -1,7 +1,7 @@
 # Anthropic LLM backend (direct API).
 #
 # Authentication: set the ANTHROPIC_API_KEY environment variable in your
-# shell before invoking the demo. The SDK reads it automatically — there
+# shell before invoking the demo. The SDK reads it automatically; there
 # is no need to put the key in this YAML.
 #
 #     export ANTHROPIC_API_KEY="sk-ant-..."

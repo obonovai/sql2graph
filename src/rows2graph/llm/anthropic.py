@@ -1,8 +1,8 @@
 """Anthropic LLM backend (direct API).
 
-Anthropic's Python SDK exposes Claude through several routing backends —
-the direct API at ``api.anthropic.com``, AWS Bedrock, and Google Vertex AI
-— all sharing the same ``Messages`` interface. This module wraps the
+Anthropic's Python SDK exposes Claude through several routing backends
+(the direct API at ``api.anthropic.com``, AWS Bedrock, and Google Vertex AI)
+all sharing the same ``Messages`` interface. This module wraps the
 *direct* variant (``Anthropic``), which authenticates with an API key
 issued from the Anthropic console.
 
@@ -10,7 +10,7 @@ Naming note: an earlier revision of this module used ``AnthropicVertex``
 (``anthropic[vertex]`` extra) so that authentication went through Google
 Application Default Credentials. The thesis project later migrated to a
 purchased Anthropic license routed through the direct API; the class name
-stayed ``AnthropicLLMClient`` because the LLM is what it always was — only
+stayed ``AnthropicLLMClient`` because the LLM is what it always was; only
 the routing changed.
 
 The class implements the :class:`rows2graph.llm.LLMClient` Protocol.
@@ -36,7 +36,7 @@ class AnthropicConfig(BaseModel):
     ``api_key`` is optional in the YAML: when omitted (or set to ``None``)
     the upstream SDK falls back to the ``ANTHROPIC_API_KEY`` environment
     variable. Keeping the key in the shell environment rather than in the
-    YAML is the recommended posture — the YAML file can then be committed
+    YAML is the recommended posture: the YAML file can then be committed
     to version control without leaking secrets.
 
     The discriminator field ``provider="anthropic"`` is what
@@ -47,7 +47,7 @@ class AnthropicConfig(BaseModel):
     ``max_retries`` is forwarded to the upstream SDK's
     :class:`anthropic.Anthropic` constructor; the SDK does exponential
     backoff with jitter on 408/409/429/5xx and connection errors. The
-    default of 3 is one above the SDK's own default of 2 — a small
+    default of 3 is one above the SDK's own default of 2, a small
     deliberate bump because losing several iterations of a translation to
     a single transient blip is much more painful than retrying once more.
     """
@@ -72,14 +72,14 @@ class AnthropicLLMClient:
     leaving only user/assistant turns in ``messages``.
 
     The system block is marked ``cache_control: ephemeral`` so Anthropic's
-    prompt cache reuses it across the generate–validate–fix iterations of a
+    prompt cache reuses it across the generate-validate-fix iterations of a
     single translation (where the schema mapping + target rules + feature
     rules are byte-identical on every call). The cache silently no-ops below
     the per-model minimum (1024 tokens for most models, 2048 for Haiku) and
-    has a 5-minute TTL — both are fine for our use case.
+    has a 5-minute TTL; both are fine for our use case.
 
     Token usage from each response is logged at INFO level so the demo's
-    ``-v`` flag surfaces per-call consumption — useful for tracking spend
+    ``-v`` flag surfaces per-call consumption, useful for tracking spend
     against a budget cap. Cache hit/creation counts are logged alongside.
     """
 
@@ -189,7 +189,7 @@ class AsyncAnthropicLLMClient:
     :class:`anthropic.AsyncAnthropic`, and :meth:`close` actually does work
     (the async SDK exposes ``aclose()`` on its underlying httpx client).
 
-    Behavior — prompt caching, retry/backoff via the SDK, usage logging —
+    Behavior (prompt caching, retry/backoff via the SDK, usage logging)
     is identical to the sync client. Same :class:`AnthropicConfig`; both
     clients can be constructed from the same loaded config.
     """

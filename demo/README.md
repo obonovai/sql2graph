@@ -1,4 +1,4 @@
-# `demo/` — parametrized reference client
+# `demo/`: parametrized reference client
 
 This directory contains a runnable demonstration of the rows2graph framework.
 The CLI in `cli.py` is a *reference client*: every component is constructed
@@ -26,7 +26,7 @@ You also need *one* LLM backend reachable:
 
 `--validation server` validates against a live database. Pass `--server
 config/servers/<engine>.yaml` to use your own instance, or **omit `--server`
-to auto-provision a throwaway one** — the library starts a disposable Neo4j /
+to auto-provision a throwaway one**: the library starts a disposable Neo4j /
 ArangoDB / Gremlin container (via `testcontainers`) and removes it at exit.
 Managed provisioning needs a running Docker daemon; `--validation syntax` and
 `--validation none` need neither a database nor Docker.
@@ -149,13 +149,13 @@ cat demo/queries/tpch.sql | grep -A1 '^-- Q3' | tail -n1 | \
 | File | Purpose |
 |---|---|
 | `cli.py` | The parametrized demo CLI itself. |
-| `queries/tpch.sql` | A reference set of TPC-H SQL queries (Q1–Q14). |
-| `queries/ldbc.sql` | A reference set of LDBC SNB SQL queries (Q1–Q14). |
+| `queries/tpch.sql` | A reference set of TPC-H SQL queries (Q1-Q14). |
+| `queries/ldbc.sql` | A reference set of LDBC SNB SQL queries (Q1-Q14). |
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
-| `0` | Translation succeeded — validator reported no errors. |
+| `0` | Translation succeeded: validator reported no errors. |
 | `1` | Validation failed after `--max-iterations` attempts. The last generated query is still printed to stdout; the error list goes to stderr. |
 | `2` | Argument / config error before any LLM call. |

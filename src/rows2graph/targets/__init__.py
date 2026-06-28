@@ -13,14 +13,14 @@ Three implementations ship: :class:`rows2graph.targets.cypher.CypherTarget`
 (Neo4j), :class:`rows2graph.targets.aql.AqlTarget` (ArangoDB), and
 :class:`rows2graph.targets.gremlin.GremlinTarget` (Apache TinkerPop /
 JanusGraph / Neptune / Cosmos DB Gremlin API). All satisfy the
-:class:`TargetLanguage` :class:`~typing.Protocol` structurally — there is
+:class:`TargetLanguage` :class:`~typing.Protocol` structurally; there is
 no abstract base class to inherit from.
 
 Adding a further target language (e.g. SPARQL) requires implementing the
 Protocol in a new module and extending :func:`make_target` to recognise
 its name. Note that
 :attr:`rows2graph.state.TranslationState.target_language` is a
-``Literal["cypher", "aql", "gremlin"]`` — widening that literal is the
+``Literal["cypher", "aql", "gremlin"]``; widening that literal is the
 one non-Protocol-friendly step in adding a new target.
 """
 
@@ -52,7 +52,7 @@ class TargetLanguage(Protocol):
 
         The translator passes the latest validation errors here when building a
         fix prompt. A non-``None`` result *replaces* the generic "fix only the
-        reported errors, don't restructure" instruction — use it for errors
+        reported errors, don't restructure" instruction; use it for errors
         whose only valid fix *is* a restructure (e.g. a clause placed after a
         terminal ``RETURN``), which the validator's terse message actively
         misdirects the model away from. Return ``None`` to keep the default.

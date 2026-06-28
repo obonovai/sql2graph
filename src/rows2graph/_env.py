@@ -6,7 +6,7 @@ YAML loaders for model and server configs route the parsed data through
 raise :class:`KeyError` so the failure is loud and immediate rather than a
 later authentication error against a real service.
 
-Schema-mapping YAML does not pass through this step — mappings hold no
+Schema-mapping YAML does not pass through this step: mappings hold no
 secrets, and disallowing interpolation there enforces the invariant that
 mappings are deployment-invariant.
 """
@@ -24,7 +24,7 @@ def interpolate_env(data: Any) -> Any:
     """Walk a parsed-YAML structure, replacing ``${VAR}`` tokens in strings.
 
     Raises ``KeyError`` if a referenced variable is not present in
-    ``os.environ`` — fail-fast at load time beats failing later with an
+    ``os.environ``: fail-fast at load time beats failing later with an
     opaque "authentication failed" from a graph database.
     """
     if isinstance(data, dict):

@@ -2,8 +2,8 @@
 
 The :meth:`~rows2graph.translator.SQLTranslator.translate` method accepts an
 optional ``on_event`` callback that fires at every milestone of the
-generate-validate-fix loop. This gives consumers — notably the Streamlit UI
-— a structured, decoupled hook for live progress display, replacing the
+generate-validate-fix loop. This gives consumers (notably the Streamlit UI)
+a structured, decoupled hook for live progress display, replacing the
 older pattern of subscribing to log records and matching message strings.
 
 Events are immutable :func:`dataclasses.dataclass` instances. The
@@ -28,7 +28,7 @@ Iteration numbering matches the existing log lines: ``iteration`` is the
 "the fix produced after iteration N's validation failed"; the resulting
 candidate is validated as iteration N+1.
 
-Exceptions raised by a handler do not abort the translation — they are
+Exceptions raised by a handler do not abort the translation; they are
 caught, logged at WARNING, and the loop continues.
 """
 
@@ -191,7 +191,7 @@ ConversationCallback = Callable[[list[dict[str, str]]], None]
 """Signature for the ``on_conversation`` callback.
 
 Receives a snapshot of the full system↔LLM message list (``{"role", "content"}``
-dicts) each time the conversation changes — after each prompt is appended and
+dicts) each time the conversation changes, after each prompt is appended and
 per-token while an assistant turn streams. Consumers typically re-render the
 snapshot for a live display.
 """

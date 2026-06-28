@@ -11,7 +11,7 @@ Run by default:
 uv run pytest
 ```
 
-No network, no real LLMs, no databases — every external dependency is mocked
+No network, no real LLMs, no databases: every external dependency is mocked
 or replaced with an in-process double. Fast (~2 s) and free.
 
 ## Integration tests (`test_integration.py`)
@@ -30,7 +30,7 @@ uv run pytest -m 'integration or not integration'
 ```
 
 Each test checks for its required credentials and skips itself when the
-relevant env var is missing — so a partial setup (e.g. Anthropic key but
+relevant env var is missing, so a partial setup (e.g. Anthropic key but
 no Neo4j) still gets useful coverage on the slice it can run.
 
 ### Required env vars
@@ -38,7 +38,7 @@ no Neo4j) still gets useful coverage on the slice it can run.
 | Variable          | Used by                          | Notes                                                                     |
 | ----------------- | -------------------------------- | ------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY` | every `*anthropic*` test         | The fixture uses Claude Haiku to keep cost minimal (~$0.01 per full run). |
-| `NEO4J_PASSWORD`  | every `*neo4j*` test             | Required — no default. Triggers skip when unset.                          |
+| `NEO4J_PASSWORD`  | every `*neo4j*` test             | Required, no default. Triggers skip when unset.                           |
 | `NEO4J_URI`       | every `*neo4j*` test (optional)  | Defaults to `bolt://localhost:7687`.                                      |
 | `NEO4J_USERNAME`  | every `*neo4j*` test (optional)  | Defaults to `neo4j`.                                                      |
 | `NEO4J_DATABASE`  | every `*neo4j*` test (optional)  | Defaults to `neo4j`.                                                      |
@@ -67,7 +67,7 @@ uv run pytest -m integration
 
 ### Managed-validation tests (Docker only)
 
-The `test_managed_*` tests need **no env vars and no pre-running database** — they
+The `test_managed_*` tests need **no env vars and no pre-running database**: they
 provision throwaway Neo4j / ArangoDB / Gremlin containers via `testcontainers`
 and tear them down afterwards. They require a running **Docker daemon** and skip
 themselves when one is not reachable. The first run pulls the database images
@@ -82,28 +82,28 @@ uv run pytest -m integration -k managed
 
 ### What gets exercised
 
-- `test_real_anthropic_translates_simple_select_to_cypher` — Anthropic
+- `test_real_anthropic_translates_simple_select_to_cypher`: Anthropic
   round-trip + syntax validator; loop converges and produces valid Cypher.
-- `test_real_anthropic_logs_token_usage` — the `"Anthropic call:"` log
+- `test_real_anthropic_logs_token_usage`: the `"Anthropic call:"` log
   line fires with non-zero input/output token counts.
-- `test_real_anthropic_async_translates_simple_select` — the async
+- `test_real_anthropic_async_translates_simple_select`: the async
   translator produces an equivalent-shaped result for the same input.
-- `test_real_neo4j_server_validator_rejects_known_bad_query` — Neo4j
+- `test_real_neo4j_server_validator_rejects_known_bad_query`: Neo4j
   `EXPLAIN` rejects a malformed query.
-- `test_real_neo4j_server_validator_accepts_well_formed_query` —
+- `test_real_neo4j_server_validator_accepts_well_formed_query`:
   Neo4j `EXPLAIN` accepts a trivially valid one.
-- `test_real_neo4j_async_server_validator_matches_sync` — async server
+- `test_real_neo4j_async_server_validator_matches_sync`: async server
   validator returns the same shape of result as the sync sibling.
-- `test_real_full_loop_anthropic_with_neo4j_server_validation` — full
+- `test_real_full_loop_anthropic_with_neo4j_server_validation`: full
   end-to-end against real Anthropic and real Neo4j.
 - `test_managed_cypher_validator_accepts_and_rejects` /
   `test_managed_aql_validator_accepts_and_rejects` /
-  `test_managed_gremlin_validator_accepts_and_rejects` — managed mode
+  `test_managed_gremlin_validator_accepts_and_rejects`: managed mode
   auto-provisions each engine, accepts a valid query and rejects a bad one.
 - `test_managed_validator_via_factory` /
-  `test_managed_async_validator_matches_sync` — `make_validator` /
+  `test_managed_async_validator_matches_sync`: `make_validator` /
   `make_async_validator` drive managed mode end-to-end (sync and async).
 
 Approximate cost per full integration run: a few cents on Anthropic, no
-cost on Neo4j (local Docker). Each test takes ~5–30 s depending on LLM
+cost on Neo4j (local Docker). Each test takes ~5-30 s depending on LLM
 latency and how many fix iterations it triggers.

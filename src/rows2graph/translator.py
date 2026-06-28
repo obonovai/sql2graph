@@ -1,4 +1,4 @@
-"""Generate–validate–fix orchestrator.
+"""Generate-validate-fix orchestrator.
 
 This module defines :class:`SQLTranslator`, the public orchestrator that
 runs the framework's core feedback loop:
@@ -14,7 +14,7 @@ runs the framework's core feedback loop:
    ``max_iterations`` validate calls (counting the initial one), or
    earlier on success.
 
-The class is deliberately small — about a single screen of orchestration —
+The class is deliberately small (about a single screen of orchestration)
 and takes its dependencies (mapping, LLM, target, validator) as
 constructor arguments rather than reading them from a configuration blob.
 This makes each piece independently testable and lets callers wire bespoke
@@ -63,10 +63,10 @@ logger = logging.getLogger(__name__)
 
 
 class SQLTranslator:
-    """The generate–validate–fix orchestrator.
+    """The generate-validate-fix orchestrator.
 
     Construct with already-instantiated components. Call :meth:`translate`
-    one or more times — the same translator instance reuses its LLM and
+    one or more times; the same translator instance reuses its LLM and
     validator resources across translations. Call :meth:`close` (or use the
     object as a context manager) when done.
     """
@@ -91,8 +91,8 @@ class SQLTranslator:
         self._max_iterations = max_iterations
         # Input-side pre-flight policy (see rows2graph.preflight). Defaults match
         # the product decision: warn-and-translate on an unparseable query (a
-        # weak signal — sqlglot can false-fail on valid exotic SQL), and reject on
-        # a query that reads tables — or names columns of a mapped table — absent
+        # weak signal: sqlglot can false-fail on valid exotic SQL), and reject on
+        # a query that reads tables (or names columns of a mapped table) absent
         # from the mapping. A column explicitly referenced but unmapped can't be
         # translated faithfully (the model has no property to map it to), so the
         # call would be wasted; the column check is conservative (only confidently
@@ -130,7 +130,7 @@ class SQLTranslator:
     ) -> TranslationResult:
         """Translate a SQL query through the full feedback loop.
 
-        Returns a :class:`TranslationResult` regardless of outcome — on
+        Returns a :class:`TranslationResult` regardless of outcome: on
         ``max_iterations_reached`` the result still carries the last
         candidate query so the caller can inspect it.
 
@@ -281,7 +281,7 @@ class SQLTranslator:
             if no_progress:
                 escalated = True
                 logger.info(
-                    "No progress on iteration %d — escalating with a fresh context",
+                    "No progress on iteration %d: escalating with a fresh context",
                     state.validation_iteration,
                 )
                 _emit(
@@ -301,7 +301,7 @@ class SQLTranslator:
                 state.messages.append(_msg("user", escalation_msg))
                 # Re-ask from a CLEAN context (system turn + this one). The
                 # accumulated history is several copies of the rejected query
-                # and its error — exactly what pins a low-temperature model to
+                # and its error, exactly what pins a low-temperature model to
                 # reproducing it. The full record still keeps the turn.
                 reply = self._llm.chat(
                     [state.messages[0], _msg("user", escalation_msg)],
@@ -374,7 +374,7 @@ def _msg(role: str, content: str) -> dict[str, Any]:
 def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:
     """Invoke an event handler, isolating its exceptions from the loop.
 
-    A misbehaving handler should not abort the user's translation — we log
+    A misbehaving handler should not abort the user's translation; we log
     the exception at WARNING and continue. The handler is responsible for
     its own thread/coroutine safety.
     """
@@ -382,5 +382,5 @@ def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:
         return
     try:
         handler(event)
-    except Exception:  # noqa: BLE001 — the whole point is to swallow user errors
+    except Exception:  # noqa: BLE001 (the whole point is to swallow user errors)
         logger.warning("Event handler raised on %s", type(event).__name__, exc_info=True)
