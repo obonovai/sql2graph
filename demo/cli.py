@@ -78,6 +78,7 @@ from rows2graph import (
     make_async_validator,
     make_target,
     resolve_validation_mode,
+    valid_modes_for_target,
 )
 
 # Two consoles: pretty output (stdout) and logs/errors (stderr). Splitting
@@ -461,6 +462,13 @@ def main(argv: list[str] | None = None) -> int:
     mapping = SchemaMapping.from_yaml(args.mapping)
     model_config = _load_model_config_or_die(args)
     server_config = _load_server_config_or_die(args)
+    if args.validation not in valid_modes_for_target(args.target):
+        _die(
+            f"--validation={args.validation} is not available for --target={args.target} "
+            f"(available: {', '.join(valid_modes_for_target(args.target))}). AQL has no "
+            "deployment-free syntax validator; use --validation server for AQL "
+            "(optionally with --server, or omit it to auto-provision)."
+        )
     validation_mode = resolve_validation_mode(args.validation, server_config=server_config)
 
     _print_settings(

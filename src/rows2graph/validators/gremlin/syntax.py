@@ -1,72 +1,40 @@
-"""Gremlin syntax-only validator.
+"""Gremlin syntax validator (grammar-based, deployment-free).
 
-A lightweight, deployment-free validator: it checks a handful of regex-
-based invariants over the candidate Gremlin-Groovy string. It does *not*
-validate against any graph database's schema (a server-side validator is
-the right tool for that), so it will not catch label / property
-hallucinations.
+Parses each candidate traversal with Apache TinkerPop's own ANTLR grammar
+(``Gremlin.g4``, vendored under
+:mod:`rows2graph.validators._grammar.generated.gremlin`) and reports any syntax
+errors. Unlike the previous regex heuristic it understands real Gremlin
+structure (traversal steps, anonymous ``__`` traversals, predicates, closures,
+string and numeric literals), so it catches the malformed traversals an LLM
+produces (unterminated steps, a trailing ``.``, unbalanced delimiters, stray
+tokens) while accepting every *syntactically* valid traversal.
 
-The trade-off matches the Cypher and AQL syntax validators: with this
-validator the framework can run end-to-end in CI or on a thesis
-reviewer's laptop without provisioning a Gremlin Server. The server
+It runs entirely in-process: no Gremlin Server, only the pure-Python
+``antlr4-python3-runtime``. It validates *syntax*, not schema; the server
 validator (:class:`rows2graph.validators.gremlin.server.GremlinServerValidator`)
-is the preferred option in any production-quality evaluation.
+remains the tool for step-compatibility and (on schema-aware backends) label /
+property checks.
 """
 
 from __future__ import annotations
 
-import re
+from rows2graph.validators._grammar.errors import parse_errors
+from rows2graph.validators._grammar.generated.gremlin.GremlinLexer import GremlinLexer
+from rows2graph.validators._grammar.generated.gremlin.GremlinParser import GremlinParser
 
-# Whitelist of Gremlin entry-point tokens that may legally start a
-# script against the configured TraversalSource ``g``. ``g.with(...)``
-# is included because configuration steps like ``g.with('evaluationTimeout',
-# 60000).V()`` are legal entry points.
-_VALID_START_RE = re.compile(
-    r"^\s*g\.(V|E|addV|addE|with)\b",
-    re.IGNORECASE,
-)
+# Entry rule of TinkerPop's Gremlin grammar; anchors EOF, so trailing input is reported.
+_START_RULE = "queryList"
 
 
 def _gremlin_syntax_errors(query: str) -> list[str]:
-    """Shared regex-based syntax check used by both sync and async validators."""
-    errors: list[str] = []
-
-    stripped = query.strip()
-    if not stripped:
-        errors.append("Query is empty")
-        return errors
-
-    if not _VALID_START_RE.match(query):
-        errors.append(
-            "Query does not start with a valid Gremlin entry point "
-            "(g.V, g.E, g.addV, g.addE, g.with)"
-        )
-
-    if query.count("(") != query.count(")"):
-        errors.append("Unbalanced parentheses")
-
-    if query.count("[") != query.count("]"):
-        errors.append("Unbalanced square brackets")
-
-    if query.count("{") != query.count("}"):
-        errors.append("Unbalanced curly braces")
-
-    # A traversal that ends with a `.` is a half-written step and will
-    # never compile. This catches the most common LLM truncation mode.
-    if stripped.endswith("."):
-        errors.append("Query ends with `.`: traversal step is incomplete")
-
-    if query.count("'") % 2 != 0:
-        errors.append("Unbalanced single quotes")
-
-    if query.count('"') % 2 != 0:
-        errors.append("Unbalanced double quotes")
-
-    return errors
+    """Shared grammar-based syntax check used by both sync and async validators."""
+    if not query.strip():
+        return ["Query is empty"]
+    return parse_errors(query, GremlinLexer, GremlinParser, _START_RULE)
 
 
 class GremlinSyntaxValidator:
-    """Regex-based sanity checks for Gremlin-Groovy traversals."""
+    """Grammar-based syntax checks for Gremlin traversals (no server required)."""
 
     def validate(self, query: str) -> list[str]:
         return _gremlin_syntax_errors(query)
@@ -78,10 +46,9 @@ class GremlinSyntaxValidator:
 class AsyncGremlinSyntaxValidator:
     """Async sibling of :class:`GremlinSyntaxValidator`.
 
-    Regex matching is pure CPU and microsecond-fast, so the work runs
-    inline rather than being shipped to a thread pool; the latter would
-    add scheduling overhead without unblocking the event loop in any
-    meaningful way.
+    Parsing is pure CPU and fast, so the work runs inline rather than being
+    shipped to a thread pool; the latter would add scheduling overhead without
+    unblocking the event loop in any meaningful way.
     """
 
     async def validate(self, query: str) -> list[str]:

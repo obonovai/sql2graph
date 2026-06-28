@@ -323,14 +323,14 @@ _SCALAR_RULES = FeatureRule(
         "`SUBSTRING(s, start, len)`→`.substring(start-1, start-1+len)` "
         "(0-indexed, end-exclusive), `CONCAT(a, b)` / `a || b`→`.concat(...)`. "
         "Where those steps are unavailable, fall back to a Groovy closure "
-        "(`.map { ... }`) only on self-hosted engines — managed endpoints "
+        "(`.map { ... }`) only on self-hosted engines; managed endpoints "
         "(Neptune, Cosmos DB) reject it."
     )
 )
 
 _NULL_RULES = FeatureRule(
     body=(
-        "NULL tests map to property presence/absence — Gremlin stores no null "
+        "NULL tests map to property presence/absence; Gremlin stores no null "
         "values, so a SQL null is an ABSENT property:\n"
         "- `col IS NULL`     → `.hasNot('col')`\n"
         "- `col IS NOT NULL` → `.has('col')` (presence-only form, no value argument)."

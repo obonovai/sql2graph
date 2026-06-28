@@ -19,7 +19,6 @@ from pydantic import ValidationError
 
 from rows2graph import (
     AnthropicConfig,
-    AqlSyntaxValidator,
     AqlTarget,
     ArangoDBConfig,
     CypherSyntaxValidator,
@@ -40,6 +39,7 @@ from rows2graph import (
     make_llm,
     make_target,
     make_validator,
+    valid_modes_for_target,
 )
 from rows2graph._env import interpolate_env
 from rows2graph.llm.usage import ChatReply, TokenUsage
@@ -320,9 +320,15 @@ def test_make_validator_cypher_syntax() -> None:
     assert isinstance(v, CypherSyntaxValidator)
 
 
-def test_make_validator_aql_syntax() -> None:
-    v = make_validator("aql", "syntax")
-    assert isinstance(v, AqlSyntaxValidator)
+def test_make_validator_aql_syntax_rejected() -> None:
+    with pytest.raises(ValueError, match="no deployment-free syntax validator"):
+        make_validator("aql", "syntax")
+
+
+def test_valid_modes_for_target() -> None:
+    assert valid_modes_for_target("cypher") == ("none", "syntax", "server")
+    assert valid_modes_for_target("gremlin") == ("none", "syntax", "server")
+    assert valid_modes_for_target("aql") == ("none", "server")
 
 
 def test_make_validator_gremlin_syntax() -> None:
@@ -731,37 +737,26 @@ def test_cypher_syntax_passes_valid_query() -> None:
     assert CypherSyntaxValidator().validate("MATCH (n) RETURN n") == []
 
 
+def test_cypher_syntax_passes_single_quoted_string_with_bracket() -> None:
+    # A single-quoted string containing a paren is valid Cypher. The old
+    # bracket-counting heuristic wrongly rejected it; the grammar accepts it.
+    assert CypherSyntaxValidator().validate("MATCH (n {name: 'a)b'}) RETURN n") == []
+
+
 def test_cypher_syntax_flags_bad_start() -> None:
-    errors = CypherSyntaxValidator().validate("WHERE x = 1")
-    assert any("valid Cypher keyword" in e for e in errors)
+    assert CypherSyntaxValidator().validate("WHERE x = 1")
 
 
-def test_cypher_syntax_flags_match_without_return() -> None:
-    errors = CypherSyntaxValidator().validate("MATCH (n) WHERE n.age > 18")
-    assert any("RETURN" in e for e in errors)
+def test_cypher_syntax_flags_malformed_pattern() -> None:
+    assert CypherSyntaxValidator().validate("MATCH (n)-[r]-( RETURN n")
+
+
+def test_cypher_syntax_flags_missing_projection() -> None:
+    assert CypherSyntaxValidator().validate("MATCH (n) RETURN")
 
 
 def test_cypher_syntax_flags_empty_query() -> None:
     assert CypherSyntaxValidator().validate("   ") == ["Query is empty"]
-
-
-def test_aql_syntax_passes_valid_query() -> None:
-    assert AqlSyntaxValidator().validate("FOR p IN persons FILTER p.age > 18 RETURN p") == []
-
-
-def test_aql_syntax_flags_bad_start() -> None:
-    errors = AqlSyntaxValidator().validate("SELECT * FROM persons")
-    assert any("valid AQL keyword" in e for e in errors)
-
-
-def test_aql_syntax_flags_missing_return() -> None:
-    errors = AqlSyntaxValidator().validate("FOR p IN persons FILTER p.age > 18")
-    assert any("RETURN" in e for e in errors)
-
-
-def test_aql_syntax_flags_unbalanced_brackets() -> None:
-    errors = AqlSyntaxValidator().validate("FOR p IN persons RETURN [p")
-    assert any("Unbalanced square brackets" in e for e in errors)
 
 
 def test_gremlin_syntax_passes_valid_query() -> None:
@@ -774,23 +769,19 @@ def test_gremlin_syntax_passes_with_anonymous_traversal() -> None:
 
 
 def test_gremlin_syntax_flags_bad_start() -> None:
-    errors = GremlinSyntaxValidator().validate("MATCH (n) RETURN n")
-    assert any("Gremlin entry point" in e for e in errors)
+    assert GremlinSyntaxValidator().validate("MATCH (n) RETURN n")
 
 
 def test_gremlin_syntax_flags_unbalanced_parens() -> None:
-    errors = GremlinSyntaxValidator().validate("g.V().hasLabel('Person'.valueMap()")
-    assert any("Unbalanced parentheses" in e for e in errors)
+    assert GremlinSyntaxValidator().validate("g.V().hasLabel('Person'.valueMap()")
 
 
 def test_gremlin_syntax_flags_unbalanced_brackets() -> None:
-    errors = GremlinSyntaxValidator().validate("g.V().has('age', P.within([1, 2).count()")
-    assert any("Unbalanced square brackets" in e for e in errors)
+    assert GremlinSyntaxValidator().validate("g.V().has('age', P.within([1, 2).count()")
 
 
 def test_gremlin_syntax_flags_trailing_dot() -> None:
-    errors = GremlinSyntaxValidator().validate("g.V().hasLabel('Person').")
-    assert any("incomplete" in e for e in errors)
+    assert GremlinSyntaxValidator().validate("g.V().hasLabel('Person').")
 
 
 def test_gremlin_syntax_flags_empty_query() -> None:
@@ -798,8 +789,7 @@ def test_gremlin_syntax_flags_empty_query() -> None:
 
 
 def test_gremlin_syntax_flags_unbalanced_quotes() -> None:
-    errors = GremlinSyntaxValidator().validate("g.V().has('label, 'x').count()")
-    assert any("Unbalanced single quotes" in e for e in errors)
+    assert GremlinSyntaxValidator().validate("g.V().has('label, 'x').count()")
 
 
 # ---------------------------------------------------------------------------
@@ -986,7 +976,7 @@ def test_translator_runs_fix_loop_on_validation_failure() -> None:
     # First response: malformed. Second response: valid.
     fake = _FakeLLM(
         [
-            "MATCH (p:Person)",  # missing RETURN
+            "MATCH (p:Person",  # malformed: unbalanced parenthesis
             "MATCH (p:Person) RETURN p",
         ]
     )
@@ -1012,7 +1002,7 @@ def test_translator_runs_fix_loop_on_validation_failure() -> None:
 
 
 def test_translator_hits_max_iterations() -> None:
-    fake = _FakeLLM(["MATCH (p:Person)"] * 3)  # always invalid
+    fake = _FakeLLM(["MATCH (p:Person"] * 3)  # always invalid
     translator = SQLTranslator(
         schema_mapping=_schema(),
         llm=fake,
@@ -1028,7 +1018,7 @@ def test_translator_hits_max_iterations() -> None:
     assert result.validation_passed is False
     assert result.status == "max_iterations_reached"
     assert result.iterations_used == 3
-    assert result.generated_query == "MATCH (p:Person)"
+    assert result.generated_query == "MATCH (p:Person"
 
 
 def test_translator_escalates_on_stall_then_recovers() -> None:
@@ -1036,7 +1026,7 @@ def test_translator_escalates_on_stall_then_recovers() -> None:
     from rows2graph import StalledEvent, TranslationEvent
 
     # gen=bad, fix=identical bad (→ stall), escalation=good.
-    fake = _FakeLLM(["MATCH (p:Person)", "MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+    fake = _FakeLLM(["MATCH (p:Person", "MATCH (p:Person", "MATCH (p:Person) RETURN p"])
     events: list[TranslationEvent] = []
     with SQLTranslator(
         schema_mapping=_schema(),
@@ -1064,7 +1054,7 @@ def test_translator_aborts_early_when_stalled_instead_of_burning_iterations() ->
     """When even the escalation makes no progress, abort as 'stalled', not 10 identical tries."""
     from rows2graph import StalledEvent, TranslationEvent
 
-    fake = _FakeLLM(["MATCH (p:Person)"] * 4)  # always invalid; one response left unused
+    fake = _FakeLLM(["MATCH (p:Person"] * 4)  # always invalid; one response left unused
     events: list[TranslationEvent] = []
     with SQLTranslator(
         schema_mapping=_schema(),
@@ -1157,7 +1147,7 @@ def test_translator_emits_event_sequence_on_fix_loop() -> None:
 
     fake = _FakeLLM(
         [
-            "MATCH (p:Person)",  # missing RETURN
+            "MATCH (p:Person",  # malformed: unbalanced parenthesis
             "MATCH (p:Person) RETURN p",
         ]
     )
@@ -1190,7 +1180,7 @@ def test_translator_emits_event_sequence_on_fix_loop() -> None:
 def test_translator_emits_max_iterations_event_when_loop_gives_up() -> None:
     from rows2graph import CompletedEvent, MaxIterationsReachedEvent, TranslationEvent
 
-    fake = _FakeLLM(["MATCH (p:Person)"] * 3)  # always invalid
+    fake = _FakeLLM(["MATCH (p:Person"] * 3)  # always invalid
     events: list[TranslationEvent] = []
     with SQLTranslator(
         schema_mapping=_schema(),
@@ -2015,7 +2005,7 @@ def test_async_translator_runs_fix_loop_on_validation_failure() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> TranslationResult:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        fake = _FakeAsyncLLM(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
             llm=fake,
@@ -2108,7 +2098,7 @@ def test_async_translator_hits_max_iterations() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> TranslationResult:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)"] * 3)
+        fake = _FakeAsyncLLM(["MATCH (p:Person"] * 3)
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
             llm=fake,
@@ -2131,7 +2121,7 @@ def test_async_translator_escalates_and_aborts_when_stalled() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> tuple[TranslationResult, _FakeAsyncLLM]:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)"] * 4)  # always invalid
+        fake = _FakeAsyncLLM(["MATCH (p:Person"] * 4)  # always invalid
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
             llm=fake,
@@ -2165,7 +2155,7 @@ def test_async_translator_emits_same_event_sequence_as_sync() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> list[TranslationEvent]:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        fake = _FakeAsyncLLM(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])
         events: list[TranslationEvent] = []
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
@@ -2227,7 +2217,7 @@ def test_async_cypher_syntax_validator_matches_sync() -> None:
     sync_v = CypherSyntaxValidator()
     cases = [
         "MATCH (p:Person) RETURN p",
-        "MATCH (p:Person)",  # missing RETURN
+        "MATCH (p:Person",  # malformed: unbalanced parenthesis
         "",  # empty
         "MATCH (p:Person RETURN p",  # unbalanced paren
     ]
@@ -2246,7 +2236,7 @@ def test_async_translator_forwards_stream_to_into_each_llm_call() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> tuple[list[str], _FakeAsyncLLM]:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])
+        fake = _FakeAsyncLLM(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])
         chunks: list[str] = []
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
@@ -2264,7 +2254,7 @@ def test_async_translator_forwards_stream_to_into_each_llm_call() -> None:
     # Both LLM responses must have streamed in their entirety. The fake LLM
     # emits one chunk per character.
     streamed = "".join(chunks)
-    assert "MATCH (p:Person)" in streamed
+    assert "MATCH (p:Person" in streamed
     assert "MATCH (p:Person) RETURN p" in streamed
     assert fake.stream_calls == 2  # initial generate + 1 fix
 
@@ -2294,7 +2284,7 @@ def test_async_translator_omits_stream_to_by_default() -> None:
 
 def test_translator_exposes_last_messages_conversation() -> None:
     """last_messages captures the full system↔model exchange (incl. a fix loop)."""
-    fake = _FakeLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])  # fail, then fix
+    fake = _FakeLLM(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])  # fail, then fix
     with SQLTranslator(
         schema_mapping=_schema(),
         llm=fake,
@@ -2340,7 +2330,7 @@ def test_async_translator_on_conversation_streams_snapshots() -> None:
     from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async def run() -> tuple[list[list[dict[str, str]]], list[dict[str, str]]]:
-        fake = _FakeAsyncLLM(["MATCH (p:Person)", "MATCH (p:Person) RETURN p"])  # fail, then fix
+        fake = _FakeAsyncLLM(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])  # fail, then fix
         snaps: list[list[dict[str, str]]] = []
         async with AsyncSQLTranslator(
             schema_mapping=_schema(),
@@ -2359,7 +2349,7 @@ def test_async_translator_on_conversation_streams_snapshots() -> None:
     assert len(snaps) > len(last)
     # At least one snapshot shows a *partial* assistant turn (mid-stream).
     partials = [s[-1]["content"] for s in snaps if s and s[-1]["role"] == "assistant"]
-    assert any(0 < len(p) < len("MATCH (p:Person)") for p in partials)
+    assert any(0 < len(p) < len("MATCH (p:Person") for p in partials)
 
 
 def test_translator_warms_up_validator_before_validation() -> None:

@@ -31,6 +31,13 @@ ArangoDB / Gremlin container (via `testcontainers`) and removes it at exit.
 Managed provisioning needs a running Docker daemon; `--validation syntax` and
 `--validation none` need neither a database nor Docker.
 
+`--validation syntax` parses the generated query with the engine's own grammar
+(ANTLR) entirely in-process. It is available for `--target cypher` and
+`--target gremlin` only: ArangoDB has no reusable offline grammar, so
+`--target aql` must use `--validation server` (pass `--server`, or omit it to
+auto-provision a throwaway ArangoDB). Selecting `--validation syntax --target aql`
+exits with an explanatory error.
+
 ## Basic invocation
 
 ```bash

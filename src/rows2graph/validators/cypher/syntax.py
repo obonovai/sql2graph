@@ -1,60 +1,41 @@
-"""Cypher syntax-only validator.
+"""Cypher syntax validator (grammar-based, deployment-free).
 
-A lightweight, deployment-free validator: it checks a handful of regex-based
-invariants over the candidate Cypher string. It does *not* validate against
-the graph database's schema (a server-side validator is the right tool for
-that), so it will not catch label/relationship-type/property hallucinations.
+Parses each candidate query with Neo4j's own ANTLR grammar (the ``Cypher25``
+lexer/parser vendored under
+:mod:`rows2graph.validators._grammar.generated.cypher`) and reports any syntax
+errors. Unlike the previous regex heuristic it understands real Cypher
+structure (clause shape, node/relationship patterns, expressions, string
+literals), so it catches the malformed queries an LLM produces (truncated
+patterns, stray tokens, bad expressions) while accepting every *syntactically*
+valid query, including single-quoted strings that contain brackets (which the
+old bracket-counting heuristic wrongly rejected).
 
-The trade-off is intentional: with this validator the framework can run
-end-to-end in a CI environment or on a thesis reviewer's laptop without
-provisioning a Neo4j instance. The server validator
-(:class:`rows2graph.validators.cypher.server.CypherServerValidator`) is the
-preferred option in any production-quality evaluation.
+It runs entirely in-process: no Neo4j instance, only the pure-Python
+``antlr4-python3-runtime``. It validates *syntax*, not schema, so it does not
+catch label / relationship-type / property hallucinations; that remains the
+job of the server validator
+(:class:`rows2graph.validators.cypher.server.CypherServerValidator`).
 """
 
 from __future__ import annotations
 
-import re
+from rows2graph.validators._grammar.errors import parse_errors
+from rows2graph.validators._grammar.generated.cypher.Cypher25Lexer import Cypher25Lexer
+from rows2graph.validators._grammar.generated.cypher.Cypher25Parser import Cypher25Parser
 
-# Whitelist of Cypher statements that may legally start a query.
-_VALID_START_RE = re.compile(
-    r"^\s*(MATCH|CREATE|MERGE|RETURN|WITH|UNWIND|CALL|OPTIONAL\s+MATCH|"
-    r"DETACH\s+DELETE|DELETE|SET|REMOVE|FOREACH|LOAD\s+CSV)",
-    re.IGNORECASE,
-)
+# Entry rule of Neo4j's Cypher grammar; anchors EOF, so trailing input is reported.
+_START_RULE = "statements"
 
 
 def _cypher_syntax_errors(query: str) -> list[str]:
-    """Shared regex-based syntax check used by both sync and async validators."""
-    errors: list[str] = []
-
+    """Shared grammar-based syntax check used by both sync and async validators."""
     if not query.strip():
-        errors.append("Query is empty")
-        return errors
-
-    if not _VALID_START_RE.match(query):
-        errors.append("Query does not start with a valid Cypher keyword (MATCH, CREATE, MERGE, RETURN, WITH, etc.)")
-
-    if query.count("(") != query.count(")"):
-        errors.append("Unbalanced parentheses")
-
-    if query.count("[") != query.count("]"):
-        errors.append("Unbalanced square brackets")
-
-    if query.count("{") != query.count("}"):
-        errors.append("Unbalanced curly braces")
-
-    # A MATCH query without a RETURN is almost always an accidental
-    # truncation: the model dropped the projection clause.
-    if re.match(r"^\s*MATCH\b", query, re.IGNORECASE):
-        if not re.search(r"\bRETURN\b", query, re.IGNORECASE):
-            errors.append("MATCH query is missing a RETURN clause")
-
-    return errors
+        return ["Query is empty"]
+    return parse_errors(query, Cypher25Lexer, Cypher25Parser, _START_RULE)
 
 
 class CypherSyntaxValidator:
-    """Regex-based sanity checks for Cypher queries."""
+    """Grammar-based syntax checks for Cypher queries (no database required)."""
 
     def validate(self, query: str) -> list[str]:
         return _cypher_syntax_errors(query)
@@ -66,10 +47,9 @@ class CypherSyntaxValidator:
 class AsyncCypherSyntaxValidator:
     """Async sibling of :class:`CypherSyntaxValidator`.
 
-    Regex matching is pure CPU and microsecond-fast, so the work runs
-    inline rather than being shipped to a thread pool; the latter would
-    add scheduling overhead without unblocking the event loop in any
-    meaningful way.
+    Parsing is pure CPU and fast, so the work runs inline rather than being
+    shipped to a thread pool; the latter would add scheduling overhead without
+    unblocking the event loop in any meaningful way.
     """
 
     async def validate(self, query: str) -> list[str]:

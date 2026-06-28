@@ -136,6 +136,15 @@ Both factories raise `ValueError` if `mode == "server"` and
 `server_config` is missing, and `TypeError` if the `server_config`'s type
 does not match `target`.
 
+`mode == "syntax"` builds the deployment-free, grammar-based validator (ANTLR,
+using each engine's own grammar) for `cypher` and `gremlin`. It is **not**
+available for `aql` (ArangoDB publishes no reusable offline grammar), so both
+factories raise `ValueError` for `("aql", "syntax")`; validate AQL with
+`server` / `managed` instead. `valid_modes_for_target(target)` returns the modes
+available for a target (`("none", "server")` for `aql`,
+`("none", "syntax", "server")` for `cypher` / `gremlin`), so CLIs and UIs can
+offer the right choices without hardcoding the rule.
+
 `mode == "managed"` needs no `server_config`: it returns a
 `ManagedServerValidator` (async: `AsyncManagedServerValidator`) that
 provisions a throwaway database for `target` via `testcontainers` on the
@@ -147,8 +156,8 @@ empty database's advisory notifications (e.g. unknown label/property) are not
 logged. This does not change which queries pass or fail.
 
 Concrete async classes (also exported from the top-level package):
-`AsyncCypherSyntaxValidator`, `AsyncAqlSyntaxValidator`,
-`AsyncGremlinSyntaxValidator`, `AsyncNoopValidator`,
+`AsyncCypherSyntaxValidator`, `AsyncGremlinSyntaxValidator`,
+`AsyncNoopValidator`,
 `AsyncCypherServerValidator` (uses `neo4j.AsyncGraphDatabase`),
 `AsyncAqlServerValidator` (wraps python-arango calls in
 `asyncio.to_thread`: the underlying SDK has no async driver), and

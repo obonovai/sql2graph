@@ -158,8 +158,7 @@ _BASE_RULES = BaseRules(
             good_example="FOR o IN OUTBOUND c PLACED RETURN o",
         ),
         AntiPattern(
-            bad="`FOR ps IN PartSupp`: iterating a junction/link table as if it "
-            "were a vertex collection",
+            bad="`FOR ps IN PartSupp`: iterating a junction/link table as if it were a vertex collection",
             good="traverse the edge collection instead",
             bad_example="FOR ps IN PartSupp FILTER ps.suppkey == s.suppkey RETURN ps",
             good_example="FOR p IN OUTBOUND s SUPPLIES RETURN p",

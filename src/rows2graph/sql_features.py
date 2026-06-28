@@ -83,6 +83,7 @@ class SqlAnalysis:
     parse_ok: bool
     column_refs: frozenset[tuple[str, str]] = frozenset()
 
+
 # An ISO-8601-ish date or timestamp string literal: ``'YYYY-MM-DD'`` optionally
 # followed by a space- or ``T``-separated ``hh:mm`` / ``hh:mm:ss``. Matches the
 # date literals SQL queries compare against (e.g. ``shipdate >= '1995-03-01'``);
@@ -170,10 +171,7 @@ def _extract_source_tables(tree: Any) -> frozenset[str]:
     """
     try:
         return frozenset(
-            src.name
-            for scope in traverse_scope(tree)
-            for src in scope.sources.values()
-            if isinstance(src, exp.Table)
+            src.name for scope in traverse_scope(tree) for src in scope.sources.values() if isinstance(src, exp.Table)
         )
     except Exception:  # noqa: BLE001 (table extraction must never crash a translation)
         return frozenset()

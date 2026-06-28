@@ -86,10 +86,8 @@ from rows2graph.validators import (
     TARGET_SERVER_TYPE,
     VALID_VALIDATION_MODES,
     AqlServerValidator,
-    AqlSyntaxValidator,
     ArangoDBConfig,
     AsyncAqlServerValidator,
-    AsyncAqlSyntaxValidator,
     AsyncCypherServerValidator,
     AsyncCypherSyntaxValidator,
     AsyncGremlinServerValidator,
@@ -111,6 +109,7 @@ from rows2graph.validators import (
     make_async_validator,
     make_validator,
     resolve_validation_mode,
+    valid_modes_for_target,
 )
 
 __all__ = [
@@ -121,12 +120,10 @@ __all__ = [
     "AnthropicConfig",
     "AnthropicLLMClient",
     "AqlServerValidator",
-    "AqlSyntaxValidator",
     "AqlTarget",
     "ArangoDBConfig",
     "AsyncAnthropicLLMClient",
     "AsyncAqlServerValidator",
-    "AsyncAqlSyntaxValidator",
     "AsyncCypherServerValidator",
     "AsyncCypherSyntaxValidator",
     "AsyncGremlinServerValidator",
@@ -183,4 +180,5 @@ __all__ = [
     "make_target",
     "make_validator",
     "resolve_validation_mode",
+    "valid_modes_for_target",
 ]

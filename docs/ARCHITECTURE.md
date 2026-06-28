@@ -88,10 +88,11 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 | `targets/aql.py`      | AQL prompt + extractor. | `AqlTarget` |
 | `validators/__init__.py` | Validator Protocols + discriminated-union config. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator` |
 | `validators/noop.py` | Pass-through (sync + async). | `NoopValidator`, `AsyncNoopValidator` |
-| `validators/cypher/syntax.py` | Regex-based Cypher validation (sync + async). | `CypherSyntaxValidator`, `AsyncCypherSyntaxValidator` |
+| `validators/_grammar/` | Shared ANTLR parse routine + committed parsers generated from the vendored grammars in `validators/grammars/`. | `parse_errors` |
+| `validators/cypher/syntax.py` | Grammar-based (ANTLR, Neo4j's own grammar) Cypher validation (sync + async). | `CypherSyntaxValidator`, `AsyncCypherSyntaxValidator` |
 | `validators/cypher/server.py` | Neo4j `EXPLAIN` validation (sync + async) + `Neo4jConfig`. | `Neo4jConfig`, `CypherServerValidator`, `AsyncCypherServerValidator` |
-| `validators/aql/syntax.py` | Regex-based AQL validation (sync + async). | `AqlSyntaxValidator`, `AsyncAqlSyntaxValidator` |
-| `validators/aql/server.py` | ArangoDB `db.aql.validate` validation (sync + async) + `ArangoDBConfig`. | `ArangoDBConfig`, `AqlServerValidator`, `AsyncAqlServerValidator` |
+| `validators/gremlin/syntax.py` | Grammar-based (ANTLR, TinkerPop's own grammar) Gremlin validation (sync + async). | `GremlinSyntaxValidator`, `AsyncGremlinSyntaxValidator` |
+| `validators/aql/server.py` | ArangoDB `db.aql.validate` validation (sync + async) + `ArangoDBConfig`. AQL has no offline grammar, so no syntax validator; it is server/managed only. | `ArangoDBConfig`, `AqlServerValidator`, `AsyncAqlServerValidator` |
 | `translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
 | `async_translator.py` | Async sibling of `translator.py`. | `AsyncSQLTranslator(...)` |
 

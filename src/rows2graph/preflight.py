@@ -135,10 +135,7 @@ def find_unmapped_columns(column_refs: frozenset[tuple[str, str]], mapping: Sche
 def parse_error_message(*, rejected: bool) -> str:
     """Human-readable explanation for a parse-failure signal."""
     tail = "translation was skipped." if rejected else "attempting translation anyway."
-    return (
-        "The SQL query could not be parsed: it may be malformed or use syntax "
-        f"sqlglot does not recognise; {tail}"
-    )
+    return f"The SQL query could not be parsed: it may be malformed or use syntax sqlglot does not recognise; {tail}"
 
 
 def unmapped_tables_message(tables: list[str], *, rejected: bool) -> str:
