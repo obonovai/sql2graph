@@ -50,6 +50,8 @@ class SqlFeature(StrEnum):
     SUBQUERY = "subquery"
     DISTINCT = "distinct"
     TEMPORAL = "temporal"
+    SCALAR = "scalar"
+    NULL = "null"
 
 
 ALL_FEATURES: frozenset[SqlFeature] = frozenset(SqlFeature)
@@ -90,6 +92,25 @@ _DATE_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$")
 # sqlglot ``DataType.Type`` members whose name contains DATE or TIME: every
 # temporal cast target (DATE, TIMESTAMP, DATETIME, TIME, TIMESTAMPTZ, …).
 _TEMPORAL_CAST_TYPES = frozenset(t for t in exp.DataType.Type if "DATE" in t.name or "TIME" in t.name)
+
+# Scalar string/number/null-coalescing functions whose translation differs per
+# target (e.g. SQL ``UPPER`` -> Cypher ``toUpper`` / AQL ``UPPER`` / Gremlin has
+# no direct step). ``DPipe`` is the ``||`` string-concatenation operator;
+# ``Nullif``/``Coalesce`` are the null-coalescing scalars. A plain ``CAST`` is
+# handled separately so a temporal cast does not double-fire the SCALAR chunk.
+_SCALAR_FUNC_TYPES = (
+    exp.Upper,
+    exp.Lower,
+    exp.Length,
+    exp.Substring,
+    exp.Trim,
+    exp.Concat,
+    exp.Coalesce,
+    exp.Nullif,
+    exp.Round,
+    exp.Abs,
+    exp.DPipe,
+)
 
 
 def analyze_sql(sql_query: str, *, dialect: str | None = None) -> SqlAnalysis:
@@ -228,6 +249,10 @@ def _detect_features(tree: Any) -> frozenset[SqlFeature]:
         found.add(SqlFeature.DISTINCT)
     if _has_temporal(tree):
         found.add(SqlFeature.TEMPORAL)
+    if _has_scalar(tree):
+        found.add(SqlFeature.SCALAR)
+    if _has_null_predicate(tree):
+        found.add(SqlFeature.NULL)
 
     return frozenset(found)
 
@@ -268,3 +293,31 @@ def _has_temporal(tree: Any) -> bool:
     if next(iter(tree.find_all(exp.CurrentTimestamp)), None) is not None:
         return True
     return False
+
+
+def _has_scalar(tree: Any) -> bool:
+    """Return ``True`` if the query uses a scalar string/number/coalesce function.
+
+    Fires on the functions in :data:`_SCALAR_FUNC_TYPES` (``UPPER``/``LOWER``/
+    ``LENGTH``/``SUBSTRING``/``TRIM``/``CONCAT``/``COALESCE``/``NULLIF``/
+    ``ROUND``/``ABS``/``||``) and on a non-temporal ``CAST``. A *temporal* cast
+    (``CAST(x AS DATE)``) is excluded so a date query gets the TEMPORAL chunk
+    without also dragging in the scalar-function chunk it does not need.
+    """
+    if any(_any(tree, node_type) for node_type in _SCALAR_FUNC_TYPES):
+        return True
+    return any(
+        isinstance(cast.to, exp.DataType) and cast.to.this not in _TEMPORAL_CAST_TYPES
+        for cast in tree.find_all(exp.Cast)
+    )
+
+
+def _has_null_predicate(tree: Any) -> bool:
+    """Return ``True`` if the query has an ``IS NULL`` / ``IS NOT NULL`` test.
+
+    sqlglot parses both as an :class:`~sqlglot.expressions.Is` node carrying a
+    :class:`~sqlglot.expressions.Null` (``IS NOT NULL`` wraps that ``Is`` in a
+    ``Not``, so finding the inner ``Is`` covers both). A bare ``Is`` against a
+    boolean (``x IS TRUE``) has no ``Null`` child and does not fire.
+    """
+    return any(next(iter(is_node.find_all(exp.Null)), None) is not None for is_node in tree.find_all(exp.Is))

@@ -1338,6 +1338,35 @@ def test_detect_features_temporal_not_fired_on_non_date() -> None:
     assert SqlFeature.TEMPORAL not in detect_features("SELECT a, b FROM t WHERE x = 1")
 
 
+def test_detect_features_scalar_functions() -> None:
+    # String/number/coalesce scalars and a non-temporal CAST light up SCALAR so
+    # the per-target function-mapping chunk ships only when it is needed.
+    assert SqlFeature.SCALAR in detect_features("SELECT UPPER(name) FROM t")
+    assert SqlFeature.SCALAR in detect_features("SELECT a || b FROM t")
+    assert SqlFeature.SCALAR in detect_features("SELECT COALESCE(a, b) FROM t")
+    assert SqlFeature.SCALAR in detect_features("SELECT LENGTH(name) FROM t")
+    assert SqlFeature.SCALAR in detect_features("SELECT CAST(x AS INTEGER) FROM t")
+
+
+def test_detect_features_scalar_not_fired_on_plain_or_temporal() -> None:
+    # A plain select has no scalar functions; a *temporal* cast belongs to
+    # TEMPORAL and must not also drag in the scalar-function chunk.
+    assert SqlFeature.SCALAR not in detect_features("SELECT a, b FROM t WHERE x = 1")
+    assert SqlFeature.SCALAR not in detect_features("SELECT a FROM t WHERE d >= CAST('1995-03-01' AS DATE)")
+
+
+def test_detect_features_null_predicate() -> None:
+    # IS NULL / IS NOT NULL light up NULL so the per-target null-handling chunk ships.
+    assert SqlFeature.NULL in detect_features("SELECT a FROM t WHERE col IS NULL")
+    assert SqlFeature.NULL in detect_features("SELECT a FROM t WHERE col IS NOT NULL")
+
+
+def test_detect_features_null_not_fired_without_null_test() -> None:
+    # Ordinary predicates must not light up NULL.
+    assert SqlFeature.NULL not in detect_features("SELECT a FROM t WHERE x = 1")
+    assert SqlFeature.NULL not in detect_features("SELECT a FROM t WHERE name = 'x'")
+
+
 def test_detect_features_parse_failure_returns_all() -> None:
     # Garbage SQL must yield the full feature set so no rule chunk is
     # silently stripped from the prompt.
@@ -1768,6 +1797,41 @@ def test_all_targets_build_with_all_features() -> None:
         assert prompt  # built without raising
 
 
+@pytest.mark.parametrize(
+    ("target_cls", "marker"),
+    [
+        (CypherTarget, "toInteger"),
+        (AqlTarget, "TO_NUMBER"),
+        (GremlinTarget, ".toUpper()"),
+    ],
+)
+def test_scalar_chunk_gated_per_target(target_cls: type, marker: str) -> None:
+    # The scalar-function mapping table must appear only when SCALAR is detected,
+    # and its marker substring must stay OUT of the always-on base block (so the
+    # token-saving gate actually holds).
+    with_scalar = build_system_prompt(_schema(), target_cls(), frozenset({SqlFeature.SCALAR}))
+    without_scalar = build_system_prompt(_schema(), target_cls(), frozenset())
+    assert marker in with_scalar
+    assert marker not in without_scalar
+
+
+@pytest.mark.parametrize(
+    ("target_cls", "marker"),
+    [
+        (CypherTarget, "IS NOT NULL"),
+        (AqlTarget, "!= null"),
+        (GremlinTarget, ".hasNot("),
+    ],
+)
+def test_null_chunk_gated_per_target(target_cls: type, marker: str) -> None:
+    # The null-handling chunk must appear only when NULL is detected and its
+    # marker must be absent from the base block.
+    with_null = build_system_prompt(_schema(), target_cls(), frozenset({SqlFeature.NULL}))
+    without_null = build_system_prompt(_schema(), target_cls(), frozenset())
+    assert marker in with_null
+    assert marker not in without_null
+
+
 def test_generic_join_rule_is_feature_gated() -> None:
     with_join = build_system_prompt(_schema(), CypherTarget(), frozenset({SqlFeature.JOIN}))
     without_join = build_system_prompt(_schema(), CypherTarget(), frozenset())
@@ -1858,6 +1922,15 @@ def test_aql_base_teaches_sort_limit_before_return() -> None:
     base = build_system_prompt(_schema(), AqlTarget(), frozenset())
     assert "must come BEFORE `RETURN`" in base
     assert "SORT LENGTH(members) DESC LIMIT 10 RETURN" in base  # GOOD ordering shown
+
+
+def test_aql_base_teaches_junction_table_is_an_edge() -> None:
+    # Parity with Cypher/Gremlin: AQL's always-on data model must warn that a
+    # junction/link table is an edge collection, not a vertex collection, so the
+    # model does not invent `FOR x IN PartSupp`.
+    base = build_system_prompt(_schema(), AqlTarget(), frozenset())
+    assert "junction / link table is an EDGE collection" in base
+    assert "never `FILTER` on `*key`/`*_id` columns" in base
 
 
 def test_aql_union_rule_warns_function_not_infix() -> None:

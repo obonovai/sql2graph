@@ -72,9 +72,8 @@ _BASE_RULES = BaseRules(
         "- Equality is `=` and inequality is `<>` (never `==` or `!=`). Combine predicates with `AND` / `OR` / `NOT`.",
         "- For a point lookup, prefer the inline property map: `MATCH (p:Person {id: 933})` "
         "rather than `MATCH (p:Person) WHERE p.id = 933` (both are valid; the map form is more idiomatic).",
-        "- Functions are camelCase: `toUpper(s)` / `toLower(s)` (NOT `UPPER`/`LOWER`), "
-        "`toInteger(x)` / `toFloat(x)` for casts, `size(s)` for the length of a string or "
-        "list, `coalesce(a, b)` for the first non-null. Concatenate strings with `+`.",
+        "- Built-in functions are camelCase, NOT SQL's UPPER-case spellings "
+        "(detailed mappings appear only when the query needs them).",
         "- `count(x)` counts non-null values of `x`; `count(*)` counts rows. Sorting/paging: "
         "`RETURN ... ORDER BY ... SKIP n LIMIT n` (it is `SKIP`, not `OFFSET`).",
     ],
@@ -259,25 +258,47 @@ _DISTINCT_RULES = FeatureRule(
 _TEMPORAL_RULES = FeatureRule(
     body=(
         "SQL date/timestamp literals → Cypher temporal values: Neo4j stores dates "
-        "and timestamps as typed temporal values, NOT strings. Comparing a "
-        "temporal property against a bare quoted string (`po.creationDate >= "
-        "'2010-06-01'`) compares a temporal against a STRING and does not behave "
-        "as a date range; wrap the literal in the matching constructor:\n"
-        "- a DATE literal (`'YYYY-MM-DD'`) → `date('YYYY-MM-DD')`, e.g. "
+        "and timestamps as typed temporal values, NOT strings, so wrap every date "
+        "literal in a constructor rather than comparing against a bare quoted "
+        "string. Choose the constructor by the SHAPE of the SQL literal (you are "
+        "not told the property's stored type, so the literal is the signal):\n"
+        "- a date-only literal `'YYYY-MM-DD'` → `date('YYYY-MM-DD')`, e.g. "
         "`WHERE li.shipdate >= date('1995-03-01') AND li.shipdate <= "
         "date('1995-03-31')`.\n"
-        "- a TIMESTAMP literal → `datetime('YYYY-MM-DDThh:mm:ss')` using the "
-        "ISO-8601 `T` separator (a space is not accepted): a SQL `'2010-06-01'` "
-        "compared against a timestamp property becomes "
-        "`datetime('2010-06-01T00:00:00')`, e.g. `WHERE po.creationDate >= "
-        "datetime('2010-06-01T00:00:00') AND po.creationDate < "
-        "datetime('2010-07-01T00:00:00')`.\n"
-        "Pick the constructor that matches the property's type in the schema: "
-        "`date(...)` for a date-only column, `datetime(...)` for a timestamp/"
-        "creation-time column. Other constructors: `localdatetime(...)` "
-        "(timezone-less timestamp), `localtime(...)` / `time(...)` (time of day), "
-        "`duration(...)` (an interval). Keep the comparison operators (`>=`, `<`, "
-        "`<=`) unchanged; only the literal is wrapped."
+        "- a literal carrying a time component (`'YYYY-MM-DD hh:mm:ss'`) → "
+        "`datetime('YYYY-MM-DDThh:mm:ss')` using the ISO-8601 `T` separator (a "
+        "space is not accepted), e.g. `WHERE po.creationDate >= "
+        "datetime('2010-06-01T00:00:00')`.\n"
+        "Other constructors if the column is plainly one of these: "
+        "`localdatetime(...)` (timezone-less timestamp), `localtime(...)` / "
+        "`time(...)` (time of day), `duration(...)` (an interval). Keep the "
+        "comparison operators (`>=`, `<`, `<=`) unchanged; only the literal is wrapped."
+    )
+)
+
+_SCALAR_RULES = FeatureRule(
+    body=(
+        "SQL scalar functions → Cypher (camelCase, NOT SQL's UPPER-case names):\n"
+        "- `UPPER(s)` / `LOWER(s)`        → `toUpper(s)` / `toLower(s)`\n"
+        "- `LENGTH(s)`                    → `size(s)` (string or list length)\n"
+        "- `SUBSTRING(s, start, len)`     → `substring(s, start-1, len)` "
+        "(Cypher is 0-indexed; SQL is 1-indexed)\n"
+        "- `TRIM(s)`                      → `trim(s)`\n"
+        "- `CONCAT(a, b)` or `a || b`     → `a + b` (string concatenation)\n"
+        "- `COALESCE(a, b)`               → `coalesce(a, b)` (first non-null)\n"
+        "- `NULLIF(a, b)`                 → `CASE WHEN a = b THEN null ELSE a END`\n"
+        "- `CAST(x AS INTEGER)` / `CAST(x AS FLOAT)` → `toInteger(x)` / `toFloat(x)`; "
+        "`CAST(x AS STRING)` → `toString(x)`."
+    )
+)
+
+_NULL_RULES = FeatureRule(
+    body=(
+        "NULL tests carry over almost verbatim: SQL `col IS NULL` → "
+        "`col IS NULL`, `col IS NOT NULL` → `col IS NOT NULL`. A property that is "
+        "absent on a node also reads as null, so `IS NULL` matches missing "
+        "properties too. Do not write `= null` (always false in Cypher); use "
+        "`IS NULL`."
     )
 )
 
@@ -293,6 +314,8 @@ _FEATURE_RULES: dict[SqlFeature, FeatureRule] = {
     SqlFeature.SUBQUERY: _SUBQUERY_RULES,
     SqlFeature.DISTINCT: _DISTINCT_RULES,
     SqlFeature.TEMPORAL: _TEMPORAL_RULES,
+    SqlFeature.SCALAR: _SCALAR_RULES,
+    SqlFeature.NULL: _NULL_RULES,
 }
 
 

@@ -88,6 +88,11 @@ _BASE_RULES = BaseRules(
         "Read its documents with `FOR x IN Customer`.",
         "- Each EDGE type is an edge collection (e.g. `PLACED`, `CONTAINS`). "
         "Edges connect documents; they are not fields on a document.",
+        "- A junction / link table is an EDGE collection, NOT a vertex "
+        "collection. Do not `FOR x IN PartSupp`; realize it as the edge between "
+        "the two collections it links.",
+        "- Foreign-key columns are NOT stored as document fields. A join on a FK "
+        "is the edge itself; never `FILTER` on `*key`/`*_id` columns.",
         "- The schema above prints each edge as `[:PLACED]` for readability. "
         "That `[: ]` is Cypher notation, NOT AQL. In a query you write the edge "
         "collection name BARE (`PLACED`), never `[:PLACED]`.",
@@ -152,6 +157,13 @@ _BASE_RULES = BaseRules(
             bad_example='FOR o IN OUTBOUND c PLACED GRAPH "your_graph_name"',
             good_example="FOR o IN OUTBOUND c PLACED RETURN o",
         ),
+        AntiPattern(
+            bad="`FOR ps IN PartSupp`: iterating a junction/link table as if it "
+            "were a vertex collection",
+            good="traverse the edge collection instead",
+            bad_example="FOR ps IN PartSupp FILTER ps.suppkey == s.suppkey RETURN ps",
+            good_example="FOR p IN OUTBOUND s SUPPLIES RETURN p",
+        ),
         AntiPattern(bad="`WHERE ...`", good="use `FILTER`"),
         AntiPattern(
             bad="`STARTS WITH` / `ENDS WITH` (Cypher, written with a space)",
@@ -212,7 +224,15 @@ _JOIN_RULES = FeatureRule(
         "off the null placeholder is safe, but do NOT start a further traversal "
         "FROM that null `o`.) Do NOT translate `JOIN ... ON` key equality into a "
         "`FILTER` on foreign-key columns. The edge encodes the join and FK "
-        "columns are not stored on the documents."
+        "columns are not stored on the documents.\n"
+        "- Through-node join: when two tables join via FKs that both reference a "
+        "SHARED parent (e.g. supplier and customer both carry `nationkey`), reach "
+        "the second from the parent with one INBOUND hop: `FOR s IN Supplier FOR "
+        "n IN OUTBOUND s LOCATED_IN FOR c IN INBOUND n LOCATED_IN ...`.\n"
+        "- Multi-path join: when several joins fan out from the same row, open one "
+        "nested `FOR` per branch from the SAME bound variable (e.g. both `FOR n IN "
+        "OUTBOUND c LOCATED_IN` and `FOR o IN OUTBOUND c PLACED` under one `FOR c "
+        "IN Customer`)."
     )
 )
 
@@ -334,20 +354,44 @@ _DISTINCT_RULES = FeatureRule(
 
 _TEMPORAL_RULES = FeatureRule(
     body=(
-        "SQL date/timestamp literals → AQL: ArangoDB has no native date type. "
-        "A date/timestamp is stored either as an ISO-8601 string or as a numeric "
-        "epoch-millis value. Check the schema for which.\n"
+        "SQL date/timestamp literals → AQL: ArangoDB has no native date type; a "
+        "date/timestamp is stored as an ISO-8601 string (the common case) or as a "
+        "numeric epoch-millis value. Default to the ISO-string form unless the "
+        "query's own arithmetic shows the values are numeric:\n"
         "- ISO-8601 strings sort lexically, so compare them DIRECTLY: a SQL "
         "`shipdate >= '1995-03-01'` range becomes `FILTER doc.shipdate >= "
         "'1995-03-01' AND doc.shipdate < '1995-04-01'`. Keep the operators "
         "unchanged; only zero-padded `YYYY-MM-DD` (and `YYYY-MM-DDThh:mm:ss`) "
         "literals sort correctly.\n"
-        "- Do NOT wrap literals in Cypher-style `date(...)` / `datetime(...)`. "
-        "Those constructors are not AQL.\n"
-        "- For date arithmetic, or when the stored values are numeric "
-        "timestamps, use the AQL date functions: `DATE_TIMESTAMP(x)` (to epoch "
-        "millis), `DATE_DIFF`, `DATE_ADD`, `DATE_FORMAT`, e.g. "
-        "`FILTER DATE_DIFF(doc.from, doc.to, 'd') > 30`."
+        "- Do NOT wrap literals in Cypher-style `date(...)` / `datetime(...)`; "
+        "those constructors are not AQL.\n"
+        "- For date arithmetic (or a genuinely numeric timestamp column) use the "
+        "AQL date functions: `DATE_TIMESTAMP(x)` (to epoch millis), `DATE_DIFF`, "
+        "`DATE_ADD`, `DATE_FORMAT`, e.g. `FILTER DATE_DIFF(doc.from, doc.to, 'd') > 30`."
+    )
+)
+
+_SCALAR_RULES = FeatureRule(
+    body=(
+        "SQL scalar functions → AQL:\n"
+        "- `UPPER(s)` / `LOWER(s)`        → `UPPER(s)` / `LOWER(s)`\n"
+        "- `LENGTH(s)`                    → `LENGTH(s)` (string or array length)\n"
+        "- `SUBSTRING(s, start, len)`     → `SUBSTRING(s, start-1, len)` "
+        "(AQL is 0-indexed; SQL is 1-indexed)\n"
+        "- `TRIM(s)`                      → `TRIM(s)`\n"
+        "- `CONCAT(a, b)` or `a || b`     → `CONCAT(a, b)` (AQL has no `||` operator)\n"
+        "- `COALESCE(a, b)`               → `a != null ? a : b` (AQL has no `COALESCE`)\n"
+        "- `NULLIF(a, b)`                 → `a == b ? null : a`\n"
+        "- `CAST(x AS INTEGER/FLOAT)`     → `TO_NUMBER(x)`; `CAST(x AS STRING)` → `TO_STRING(x)`."
+    )
+)
+
+_NULL_RULES = FeatureRule(
+    body=(
+        "NULL tests: SQL `col IS NULL` → `doc.col == null`, `col IS NOT NULL` → "
+        "`doc.col != null`. A document that lacks the attribute also compares "
+        "`== null`, so the missing-attribute case is covered. Use `==`/`!=` "
+        "against `null`; AQL has no `IS` keyword."
     )
 )
 
@@ -363,6 +407,8 @@ _FEATURE_RULES: dict[SqlFeature, FeatureRule] = {
     SqlFeature.SUBQUERY: _SUBQUERY_RULES,
     SqlFeature.DISTINCT: _DISTINCT_RULES,
     SqlFeature.TEMPORAL: _TEMPORAL_RULES,
+    SqlFeature.SCALAR: _SCALAR_RULES,
+    SqlFeature.NULL: _NULL_RULES,
 }
 
 

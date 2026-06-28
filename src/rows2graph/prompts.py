@@ -91,18 +91,21 @@ def build_system_prompt(
     schema_context = format_schema_context(schema)
     language = target.name
 
+    # These always-on lines are deliberately lean: the graph-property-naming
+    # rule and the "only valid code, no markdown" mandate are already stated in
+    # every target's base block (its `data_model` and `output_mandate`), so
+    # repeating them here would pay the same tokens twice on every translation.
+    # What stays is the semantics/label/WHERE framing that the base blocks do
+    # not redundantly cover.
     generic_rules = [
         f"- Translate the SQL query semantics faithfully into {language}.",
         "- Use the node labels and relationship types EXACTLY as defined in the schema above.",
-        "- Use the graph property names (not the SQL column names) in the generated query.",
         f"- Map SQL WHERE clauses to filter predicates in {language}.",
         *(
             _GENERIC_FEATURE_RULES[feat].format(language=language)
             for feat in SqlFeature
             if feat in features and feat in _GENERIC_FEATURE_RULES
         ),
-        f"- Your response MUST contain ONLY valid {language} code.",
-        "- Do NOT include explanations, markdown code blocks, or any non-query text.",
     ]
     rules_block = "\n".join(generic_rules)
 

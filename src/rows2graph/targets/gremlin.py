@@ -11,9 +11,14 @@ queries are method chains rooted at a ``TraversalSource`` (conventionally
 ``g``). The framework targets the Gremlin-Groovy script form because that
 is what the Gremlin Server REPL and the Python driver's
 ``Client.submit(script)`` consume, and what most public documentation and
-training data show. The same script runs against any TinkerPop-compatible
-backend (TinkerGraph, JanusGraph, Amazon Neptune, Azure Cosmos DB
-Gremlin API), so the prompt is intentionally backend-agnostic.
+training data show. The pure-traversal output runs against any
+TinkerPop-compatible backend (TinkerGraph, JanusGraph, Amazon Neptune,
+Azure Cosmos DB Gremlin API), so the prompt is intentionally
+backend-agnostic. The one exception is the inline Groovy-closure fallback
+the LIKE/WINDOW chunks offer for case-insensitive / regex / row-number
+cases: managed endpoints (Neptune, Cosmos DB) reject Lambdas, so those
+chunks steer toward closure-free forms first and flag the closure as a
+self-hosted-only last resort.
 
 The prompt section is built from the shared schema in
 :mod:`rows2graph.targets._schema`: a :class:`~rows2graph.targets._schema.BaseRules`
@@ -117,6 +122,8 @@ _BASE_RULES = BaseRules(
         AntiPattern(
             bad="terminal steps `.next()` / `.toList()` / `.value()` in the MIDDLE of a "
             "chain, and `+` string concatenation inside the traversal",
+            good="keep one continuous traversal; end it with the projection step "
+            "(`.values(...)` / `.project(...)`) and no terminal call",
         ),
     ],
     examples=[
@@ -148,7 +155,10 @@ _LIKE_RULES = FeatureRule(
         "sides in a `.filter { it.get().value('col').toLowerCase().contains("
         "'x') }` closure when case-insensitivity matters.\n"
         "Only fall back to a Groovy closure (`.filter { ... }`) when the "
-        "pattern needs regex features beyond contains/startingWith/endingWith."
+        "pattern needs regex features beyond contains/startingWith/endingWith. "
+        "Note: managed endpoints (Amazon Neptune, Azure Cosmos DB) reject Groovy "
+        "Lambdas, so prefer the `TextP` predicates above and treat a closure as a "
+        "self-hosted-only (Gremlin Server / JanusGraph) last resort."
     )
 )
 
@@ -158,14 +168,21 @@ _JOIN_RULES = FeatureRule(
         "`.in('TYPE')` / `.both('TYPE')` along the schema-declared edge label and "
         "direction. Use `.optional(__.out('TYPE'))` for outer joins "
         "(LEFT/RIGHT/FULL): the traversal is skipped instead of dropping the row "
-        "when no edge matches. Do NOT translate JOIN ON predicates into `.has(...)` "
-        "calls on foreign-key columns: the schema's edge label already encodes the "
-        "join.\n"
+        "when no edge matches, and a later `.count()` of the optional side then "
+        "yields 0 for unmatched parents (the correct LEFT-JOIN count). Do NOT "
+        "translate JOIN ON predicates into `.has(...)` calls on foreign-key "
+        "columns: the schema's edge label already encodes the join.\n"
         "When the SELECT returns columns from several joined tables, label each "
         "node as you traverse with `.as('t')`, then read them together at the end: "
         "`.select('t1', 't2').by('propA').by('propB')` (or "
         "`.project('a', 'b').by(__.select('t1').values('propA'))...`). Walk the "
-        "path ONCE: do not restart from `g.V()` for each column."
+        "path ONCE: do not restart from `g.V()` for each column.\n"
+        "- Through-node join: when two tables join via a SHARED parent, traverse "
+        "out to the parent and back in, e.g. "
+        "`.out('LOCATED_IN').as('n').in('LOCATED_IN')`.\n"
+        "- Multi-path join: to follow several edges off ONE node, label it and "
+        "re-`select` it before each branch: `.as('c').out('LOCATED_IN').as('n')"
+        ".select('c').out('PLACED').as('o')`."
     )
 )
 
@@ -219,8 +236,10 @@ _UNION_RULES = FeatureRule(
     body=(
         "Set operations: `.union(__.A, __.B)` runs both anonymous "
         "traversals from the same incoming traverser and emits the "
-        "concatenated output. For SQL `UNION` (de-duplicating), follow "
-        "with `.dedup()`; for `UNION ALL` omit it. Gremlin has no native "
+        "concatenated output. Both branches MUST end in the same projection "
+        "(same `.project(...)` keys in the same order, or the same "
+        "`.values(...)`) so the rows line up. For SQL `UNION` (de-duplicating), "
+        "follow with `.dedup()`; for `UNION ALL` omit it. Gremlin has no native "
         "`INTERSECT`/`EXCEPT` step; emulate `INTERSECT` with `.where("
         "__.B)` and `EXCEPT` with `.not(__.B)`."
     )
@@ -232,10 +251,10 @@ _WINDOW_RULES = FeatureRule(
         "have no direct Gremlin equivalent. Emulate by grouping into "
         "ordered folds, e.g. `.group().by(<partition>).by(__.order()."
         "by(<sort>).fold())`, then `.unfold()` the grouped lists. For "
-        "row-number / rank, use the `.sack()` step seeded to 0 and "
-        "incremented per traverser, or process the folded list with a "
-        "Groovy closure `.map { ... }` when running against Gremlin "
-        "Server."
+        "row-number / rank, prefer the `.sack()` step seeded to 0 and "
+        "incremented per traverser; a Groovy closure `.map { ... }` over the "
+        "folded list also works on a self-hosted Gremlin Server but is rejected "
+        "by managed endpoints (Neptune, Cosmos DB), so reach for `.sack()` first."
     )
 )
 
@@ -276,16 +295,45 @@ _TEMPORAL_RULES = FeatureRule(
     body=(
         "SQL date/timestamp literals → Gremlin: TinkerPop has no date "
         "constructor (the Cypher `date(...)` / `datetime(...)` are not Gremlin). "
-        "Compare against the value AS STORED on the property:\n"
-        "- ISO-8601 string properties: compare with the string bound directly, "
-        "`.has('shipdate', P.gte('1995-03-01')).has('shipdate', "
+        "Compare against the value as stored; default to the ISO-8601 STRING form "
+        "unless the query's own arithmetic shows the property is numeric:\n"
+        "- ISO-8601 string properties (the common case): compare with the string "
+        "bound directly, `.has('shipdate', P.gte('1995-03-01')).has('shipdate', "
         "P.lt('1995-04-01'))`. Zero-padded `YYYY-MM-DD` strings order lexically, "
         "so a range works.\n"
         "- epoch-millis (Long) properties: convert the SQL literal to "
         "milliseconds since the Unix epoch and compare numerically, "
         "`.has('createdAt', P.gte(801964800000))`.\n"
-        "Pick the form that matches the property's type in the schema; never "
-        "compare an ISO string against an epoch-millis property or vice versa."
+        "Use one form consistently; never compare an ISO string against an "
+        "epoch-millis property or vice versa."
+    )
+)
+
+_SCALAR_RULES = FeatureRule(
+    body=(
+        "SQL scalar functions → Gremlin. Cleanest portable fits first:\n"
+        "- `COALESCE(a, b)` → the `.coalesce(__.values('a'), __.values('b'))` "
+        "step (emits the first sub-traversal that returns a value); append "
+        "`__.constant(x)` for a final default.\n"
+        "- `NULLIF(a, b)` → `.choose(__.where(__.values('a').is(eq('b'))), "
+        "__.constant(null), __.values('a'))` (see the CASE guidance).\n"
+        "String transforms use the TinkerPop 3.6+ string steps where the backend "
+        "supports them: `UPPER`→`.toUpper()`, `LOWER`→`.toLower()`, "
+        "`LENGTH`→`.length()`, `TRIM`→`.trim()`, "
+        "`SUBSTRING(s, start, len)`→`.substring(start-1, start-1+len)` "
+        "(0-indexed, end-exclusive), `CONCAT(a, b)` / `a || b`→`.concat(...)`. "
+        "Where those steps are unavailable, fall back to a Groovy closure "
+        "(`.map { ... }`) only on self-hosted engines — managed endpoints "
+        "(Neptune, Cosmos DB) reject it."
+    )
+)
+
+_NULL_RULES = FeatureRule(
+    body=(
+        "NULL tests map to property presence/absence — Gremlin stores no null "
+        "values, so a SQL null is an ABSENT property:\n"
+        "- `col IS NULL`     → `.hasNot('col')`\n"
+        "- `col IS NOT NULL` → `.has('col')` (presence-only form, no value argument)."
     )
 )
 
@@ -301,6 +349,8 @@ _FEATURE_RULES: dict[SqlFeature, FeatureRule] = {
     SqlFeature.SUBQUERY: _SUBQUERY_RULES,
     SqlFeature.DISTINCT: _DISTINCT_RULES,
     SqlFeature.TEMPORAL: _TEMPORAL_RULES,
+    SqlFeature.SCALAR: _SCALAR_RULES,
+    SqlFeature.NULL: _NULL_RULES,
 }
 
 
