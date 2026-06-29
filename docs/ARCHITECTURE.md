@@ -96,6 +96,10 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 | `translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
 | `async_translator.py` | Async sibling of `translator.py`. | `AsyncSQLTranslator(...)` |
 
+The grammar-based syntax validators (Cypher and Gremlin) are documented in
+detail, with the parser-regeneration steps, in
+[SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md).
+
 ---
 
 ## State lifecycle

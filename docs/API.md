@@ -104,6 +104,9 @@ comparable to Neo4j's `EXPLAIN`.
 
 ### Validator components
 
+> Deep dive (implementation, grammar provenance, and how to regenerate the
+> parsers): see [SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md).
+
 ```python
 class QueryValidator(Protocol):
     def validate(self, query: str) -> list[str]: ...
