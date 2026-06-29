@@ -99,7 +99,11 @@ def build_system_prompt(
     # not redundantly cover.
     generic_rules = [
         f"- Translate the SQL query semantics faithfully into {language}.",
-        "- Use the node labels and relationship types EXACTLY as defined in the schema above.",
+        "- CRITICAL: Use ONLY the node labels and relationship types listed in the '### Nodes' "
+        "and '### Relationships (Edges)' sections above. Never output a label or relationship "
+        "type that is not defined there, even if another name seems more natural for the domain.",
+        "- The names in the guidance examples below (e.g. `LabelA`, `[:REL_AB]`) are placeholders "
+        "for illustration only and are NOT part of this schema; substitute the schema's real names.",
         f"- Map SQL WHERE clauses to filter predicates in {language}.",
         *(
             _GENERIC_FEATURE_RULES[feat].format(language=language)

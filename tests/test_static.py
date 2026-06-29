@@ -2024,7 +2024,7 @@ def test_target_base_block_renders_shared_examples(target_cls: type) -> None:
 def test_order_limit_chunk_has_worked_example(target_cls: type) -> None:
     # Every target's ORDER_LIMIT chunk carries a worked sort+limit example (parity);
     # it is gated, so it appears only when ORDER_LIMIT is detected.
-    sql = "SELECT name FROM supplier ORDER BY acctbal DESC LIMIT 10"
+    sql = "SELECT name FROM table_a ORDER BY value DESC LIMIT 10"
     with_ol = build_system_prompt(_schema(), target_cls(), frozenset({SqlFeature.ORDER_LIMIT}))
     without_ol = build_system_prompt(_schema(), target_cls(), frozenset())
     assert sql in with_ol
@@ -2042,7 +2042,7 @@ def test_aql_base_teaches_sort_limit_before_return() -> None:
     # with a BAD->GOOD anti-pattern showing the correct ordering.
     base = build_system_prompt(_schema(), AqlTarget(), frozenset())
     assert "must come BEFORE `RETURN`" in base
-    assert "SORT LENGTH(members) DESC LIMIT 10 RETURN" in base  # GOOD ordering shown
+    assert "SORT LENGTH(items) DESC LIMIT 10 RETURN" in base  # GOOD ordering shown
 
 
 def test_aql_base_teaches_junction_table_is_an_edge() -> None:

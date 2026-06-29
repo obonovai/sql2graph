@@ -37,11 +37,11 @@ from rows2graph.sql_features import SqlFeature
 
 # Shared canonical SQL inputs. Every target's base block renders its own
 # translation of these same queries, so the examples line up across languages.
-EX_POINT_LOOKUP_SQL = "SELECT id, first_name FROM person WHERE id = 933"
+EX_POINT_LOOKUP_SQL = "SELECT id, created_at FROM table_a WHERE id = 933"
 EX_JOIN_FILTER_SQL = (
-    "SELECT s.name, n.name AS nation FROM supplier s JOIN nation n ON n.nationkey = s.nationkey WHERE s.acctbal > 5000"
+    "SELECT a.name, b.name AS b_name FROM table_a a JOIN table_b b ON b.id = a.b_id WHERE a.value > 5000"
 )
-EX_GROUPED_COUNT_SQL = "SELECT brand, COUNT(*) AS c FROM part GROUP BY brand"
+EX_GROUPED_COUNT_SQL = "SELECT category, COUNT(*) AS c FROM table_a GROUP BY category"
 
 # Match a fenced code block with ANY (or no) info-string after the opening
 # ```. The info-string is whatever follows the ``` up to the newline (`aql`,

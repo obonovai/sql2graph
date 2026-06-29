@@ -74,11 +74,11 @@ _BASE_RULES = BaseRules(
         "encoding works, choose the single best one and emit only that."
     ),
     data_model=[
-        "- Each NODE label is a vertex (e.g. `Customer`, `Order`). Read it with `g.V().hasLabel('Customer')`.",
+        "- Each NODE label is a vertex (e.g. `LabelA`, `LabelB`). Read it with `g.V().hasLabel('LabelA')`.",
         "- Each EDGE type is a DIRECTED relationship. Traverse it with "
-        "`.out('PLACED')` in the schema's direction, or `.in('PLACED')` against it.",
+        "`.out('REL_AB')` in the schema's direction, or `.in('REL_AB')` against it.",
         "- A junction / link table is an EDGE, not a vertex; realize it as a "
-        "traversal step (`.out('SUPPLIES')`), do not look for a vertex with its name.",
+        "traversal step (`.out('REL_AB')`), do not look for a vertex with its name.",
         "- Use the graph PROPERTY names from the schema (e.g. `firstName`), NOT the "
         "original SQL column names (e.g. `first_name`).",
         "- Foreign-key columns are NOT stored as properties. A join on a FK is the "
@@ -129,13 +129,13 @@ _BASE_RULES = BaseRules(
     examples=[
         Example(
             sql=EX_POINT_LOOKUP_SQL,
-            query="g.V().has('Person', 'id', 933).project('id', 'first_name').by('id').by('firstName')",
+            query="g.V().has('LabelA', 'id', 933).project('id', 'created_at').by('id').by('createdAt')",
             label="point lookup",
         ),
         Example(
             sql=EX_JOIN_FILTER_SQL,
-            query="g.V().hasLabel('Supplier').has('acctbal', P.gt(5000)).as('s')"
-            ".out('LOCATED_IN').as('n').select('s', 'n').by('name').by('name')",
+            query="g.V().hasLabel('LabelA').has('value', P.gt(5000)).as('a')"
+            ".out('REL_AB').as('b').select('a', 'b').by('name').by('name')",
             label="single join + filter",
         ),
     ],
@@ -179,10 +179,10 @@ _JOIN_RULES = FeatureRule(
         "path ONCE: do not restart from `g.V()` for each column.\n"
         "- Through-node join: when two tables join via a SHARED parent, traverse "
         "out to the parent and back in, e.g. "
-        "`.out('LOCATED_IN').as('n').in('LOCATED_IN')`.\n"
+        "`.out('REL_AC').as('c').in('REL_BC')`.\n"
         "- Multi-path join: to follow several edges off ONE node, label it and "
-        "re-`select` it before each branch: `.as('c').out('LOCATED_IN').as('n')"
-        ".select('c').out('PLACED').as('o')`."
+        "re-`select` it before each branch: `.as('a').out('REL_AC').as('c')"
+        ".select('a').out('REL_AB').as('b')`."
     )
 )
 
@@ -199,7 +199,7 @@ _AGGREGATION_RULES = FeatureRule(
     ),
     example=Example(
         sql=EX_GROUPED_COUNT_SQL,
-        query="g.V().hasLabel('Part').group().by('brand').by(__.count())",
+        query="g.V().hasLabel('LabelA').group().by('category').by(__.count())",
         label="grouped count",
     ),
 )
@@ -215,8 +215,8 @@ _ORDER_LIMIT_RULES = FeatureRule(
         ".valueMap(...)`."
     ),
     example=Example(
-        sql="SELECT name FROM supplier ORDER BY acctbal DESC LIMIT 10",
-        query="g.V().hasLabel('Supplier').order().by('acctbal', desc).limit(10).values('name')",
+        sql="SELECT name FROM table_a ORDER BY value DESC LIMIT 10",
+        query="g.V().hasLabel('LabelA').order().by('value', desc).limit(10).values('name')",
         label="top-N",
     ),
 )
@@ -226,7 +226,7 @@ _CTE_RULES = FeatureRule(
         "SQL CTEs (`WITH name AS (...)`) → Gremlin: name intermediate "
         "results with `.as('x')` and re-select them downstream with "
         "`.select('x')`. Anonymous sub-traversals use `__.X` (e.g. "
-        "`.where(__.out('KNOWS').has('city', 'Paris'))`). Gremlin has no "
+        "`.where(__.out('REL_AB').has('name', 'X'))`). Gremlin has no "
         "named CTE block; inline the correlated logic, or factor it into "
         "a named traversal step and reuse with `.select`."
     )
@@ -298,7 +298,7 @@ _TEMPORAL_RULES = FeatureRule(
         "Compare against the value as stored; default to the ISO-8601 STRING form "
         "unless the query's own arithmetic shows the property is numeric:\n"
         "- ISO-8601 string properties (the common case): compare with the string "
-        "bound directly, `.has('shipdate', P.gte('1995-03-01')).has('shipdate', "
+        "bound directly, `.has('eventDate', P.gte('1995-03-01')).has('eventDate', "
         "P.lt('1995-04-01'))`. Zero-padded `YYYY-MM-DD` strings order lexically, "
         "so a range works.\n"
         "- epoch-millis (Long) properties: convert the SQL literal to "

@@ -56,9 +56,9 @@ _BASE_RULES = BaseRules(
         "alternative versions, and nothing before or after the query."
     ),
     data_model=[
-        "- Each NODE label is a node (e.g. `Customer`, `Order`). Read it with `MATCH (c:Customer)`.",
-        "- Each EDGE type is a DIRECTED relationship, written `(a)-[:PLACED]->(b)`. "
-        "Follow the schema's direction; reverse the arrow (`<-[:PLACED]-`) to traverse against it.",
+        "- Each NODE label is a node (e.g. `LabelA`, `LabelB`). Read it with `MATCH (a:LabelA)`.",
+        "- Each EDGE type is a DIRECTED relationship, written `(a)-[:REL_AB]->(b)`. "
+        "Follow the schema's direction; reverse the arrow (`<-[:REL_AB]-`) to traverse against it.",
         "- A junction / link table is an EDGE, not a node. Do not `MATCH` a node for it; "
         "realize it as the relationship between the two tables it links.",
         "- Use the graph PROPERTY names from the schema (e.g. `firstName`), NOT the "
@@ -70,8 +70,8 @@ _BASE_RULES = BaseRules(
         "- Read with `MATCH`; filter with `WHERE`; output with `RETURN`. A SQL alias "
         "(`col AS name`) becomes `RETURN expr AS name`.",
         "- Equality is `=` and inequality is `<>` (never `==` or `!=`). Combine predicates with `AND` / `OR` / `NOT`.",
-        "- For a point lookup, prefer the inline property map: `MATCH (p:Person {id: 933})` "
-        "rather than `MATCH (p:Person) WHERE p.id = 933` (both are valid; the map form is more idiomatic).",
+        "- For a point lookup, prefer the inline property map: `MATCH (a:LabelA {id: 933})` "
+        "rather than `MATCH (a:LabelA) WHERE a.id = 933` (both are valid; the map form is more idiomatic).",
         "- Built-in functions are camelCase, NOT SQL's UPPER-case spellings "
         "(detailed mappings appear only when the query needs them).",
         "- `count(x)` counts non-null values of `x`; `count(*)` counts rows. Sorting/paging: "
@@ -82,27 +82,27 @@ _BASE_RULES = BaseRules(
         AntiPattern(bad="`UPPER(s)` / `LOWER(s)` / `LEN(s)`", good="use `toUpper(s)` / `toLower(s)` / `size(s)`"),
         AntiPattern(bad="`SELECT ... FROM ...` (this is SQL)", good="read with `MATCH (x:Label)`"),
         AntiPattern(
-            bad="a `WHERE` join on key columns such as `WHERE o.custkey = c.custkey`",
-            good="the schema relationship `(c)-[:PLACED]->(o)` already encodes that join; "
+            bad="a `WHERE` join on key columns such as `WHERE b.a_id = a.id`",
+            good="the schema relationship `(a)-[:REL_AB]->(b)` already encodes that join; "
             "write the pattern, not the key predicate",
-            bad_example="MATCH (c:Customer), (o:Order) WHERE o.custkey = c.custkey",
-            good_example="MATCH (c:Customer)-[:PLACED]->(o:Order)",
+            bad_example="MATCH (a:LabelA), (b:LabelB) WHERE b.a_id = a.id",
+            good_example="MATCH (a:LabelA)-[:REL_AB]->(b:LabelB)",
         ),
         AntiPattern(
             bad="a standalone node for a junction table",
-            bad_example="MATCH (c:Customer)-[:R]->(ph:PartSupp)-[:R2]->(p:Part)",
-            good_example="MATCH (s:Supplier)-[:SUPPLIES]->(p:Part)",
+            bad_example="MATCH (a:LabelA)-[:R]->(j:LinkTable)-[:R2]->(b:LabelB)",
+            good_example="MATCH (a:LabelA)-[:REL_AB]->(b:LabelB)",
         ),
     ],
     examples=[
         Example(
             sql=EX_POINT_LOOKUP_SQL,
-            query="MATCH (p:Person {id: 933})\nRETURN p.id, p.firstName",
+            query="MATCH (a:LabelA {id: 933})\nRETURN a.id, a.createdAt",
             label="point lookup",
         ),
         Example(
             sql=EX_JOIN_FILTER_SQL,
-            query="MATCH (s:Supplier)-[:LOCATED_IN]->(n:Nation)\nWHERE s.acctbal > 5000\nRETURN s.name, n.name AS nation",
+            query="MATCH (a:LabelA)-[:REL_AB]->(b:LabelB)\nWHERE a.value > 5000\nRETURN a.name, b.name AS b_name",
             label="single join + filter",
         ),
     ],
@@ -139,18 +139,18 @@ _JOIN_RULES = FeatureRule(
         "conditions on foreign-key columns; the schema's relationship already "
         "encodes the join.\n"
         "- Through-node join: when two tables join via foreign keys that both "
-        "reference a SHARED parent table (e.g. customer and supplier both carry "
-        "`nationkey`), traverse THROUGH the shared node with one leg reversed:\n"
-        "    MATCH (s:Supplier)-[:LOCATED_IN]->(n:Nation)<-[:LOCATED_IN]-(c:Customer)\n"
+        "reference a SHARED parent table (e.g. LabelA and LabelB both carry "
+        "`c_id`), traverse THROUGH the shared node with one leg reversed:\n"
+        "    MATCH (a:LabelA)-[:REL_AC]->(c:LabelC)<-[:REL_BC]-(b:LabelB)\n"
         "- Multi-path join: when several joins fan out from the same table, write "
         "comma-separated patterns that REUSE the bound variable instead of "
         "repeating its label:\n"
-        "    MATCH (c:Customer)-[:LOCATED_IN]->(n:Nation),\n"
-        "          (c)-[:PLACED]->(o:Order)-[:CONTAINS]->(li:LineItem)\n"
+        "    MATCH (a:LabelA)-[:REL_AB]->(b:LabelB),\n"
+        "          (a)-[:REL_AC]->(c:LabelC)-[:REL_CD]->(d:LabelD)\n"
         "- Relationship properties: to read a column that lives on the JUNCTION/"
         "link table (the edge), bind the relationship variable and read it like a "
-        "property: `MATCH (p1:Person)-[k:KNOWS]->(p2:Person) RETURN "
-        "k.creationDate`."
+        "property: `MATCH (a1:LabelA)-[r:REL_AA]->(a2:LabelA) RETURN "
+        "r.createdAt`."
     )
 )
 
@@ -165,18 +165,18 @@ _AGGREGATION_RULES = FeatureRule(
         "present; `count(*)` counts every row. For a SQL `LEFT JOIN ... COUNT(...)` "
         "use `OPTIONAL MATCH` plus `count(var)` on the optional variable; "
         "unmatched parents then count 0, which is the correct LEFT-JOIN count:\n"
-        "    MATCH (s:Supplier)\n"
-        "    OPTIONAL MATCH (s)-[:SUPPLIES]->(p:Part)\n"
-        "    RETURN s.suppkey, count(p) AS supplied_part_count\n"
+        "    MATCH (a:LabelA)\n"
+        "    OPTIONAL MATCH (a)-[:REL_AB]->(b:LabelB)\n"
+        "    RETURN a.id, count(b) AS related_b_count\n"
         "- To group by a node (not just a scalar), carry the node variable through "
-        "`WITH`: `MATCH (c:Customer)-[:PLACED]->(o:Order), (c)-[:LOCATED_IN]->"
-        "(n:Nation) WITH c, n, count(o) AS cnt RETURN c.name, n.name, cnt`.\n"
+        "`WITH`: `MATCH (a:LabelA)-[:REL_AB]->(b:LabelB), (a)-[:REL_AC]->"
+        "(c:LabelC) WITH a, c, count(b) AS cnt RETURN a.name, c.name, cnt`.\n"
         "- SQL `HAVING` → project the aggregate through `WITH`, then add a `WHERE` "
-        "after it: `WITH p, count(friend) AS c WHERE c > 5 RETURN p, c`."
+        "after it: `WITH a, count(b) AS c WHERE c > 5 RETURN a, c`."
     ),
     example=Example(
         sql=EX_GROUPED_COUNT_SQL,
-        query="MATCH (p:Part)\nRETURN p.brand AS brand, count(p) AS c",
+        query="MATCH (a:LabelA)\nRETURN a.category AS category, count(a) AS c",
         label="grouped count",
     ),
 )
@@ -188,8 +188,8 @@ _ORDER_LIMIT_RULES = FeatureRule(
         "`RETURN ... ORDER BY ... SKIP ... LIMIT ...`."
     ),
     example=Example(
-        sql="SELECT name FROM supplier ORDER BY acctbal DESC LIMIT 10",
-        query="MATCH (s:Supplier)\nRETURN s.name\nORDER BY s.acctbal DESC\nLIMIT 10",
+        sql="SELECT name FROM table_a ORDER BY value DESC LIMIT 10",
+        query="MATCH (a:LabelA)\nRETURN a.name\nORDER BY a.value DESC\nLIMIT 10",
         label="top-N",
     ),
 )
@@ -243,9 +243,9 @@ _SUBQUERY_RULES = FeatureRule(
         "pattern.\n"
         "- For `(NOT) EXISTS` on a single relationship, prefer the pattern-"
         "predicate shorthand: put the path pattern directly in `WHERE`. "
-        "`WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.custkey = c.custkey)` → "
-        "`MATCH (c:Customer) WHERE NOT (c)-[:PLACED]->(:Order) RETURN ...`. The "
-        "positive form drops the `NOT`: `WHERE (c)-[:PLACED]->(:Order)`. Use the "
+        "`WHERE NOT EXISTS (SELECT 1 FROM table_b b WHERE b.a_id = a.id)` → "
+        "`MATCH (a:LabelA) WHERE NOT (a)-[:REL_AB]->(:LabelB) RETURN ...`. The "
+        "positive form drops the `NOT`: `WHERE (a)-[:REL_AB]->(:LabelB)`. Use the "
         "fuller `EXISTS { MATCH ... }` form only when the inner side needs its own "
         "`WHERE` or multiple hops."
     )
@@ -263,11 +263,11 @@ _TEMPORAL_RULES = FeatureRule(
         "string. Choose the constructor by the SHAPE of the SQL literal (you are "
         "not told the property's stored type, so the literal is the signal):\n"
         "- a date-only literal `'YYYY-MM-DD'` → `date('YYYY-MM-DD')`, e.g. "
-        "`WHERE li.shipdate >= date('1995-03-01') AND li.shipdate <= "
+        "`WHERE a.eventDate >= date('1995-03-01') AND a.eventDate <= "
         "date('1995-03-31')`.\n"
         "- a literal carrying a time component (`'YYYY-MM-DD hh:mm:ss'`) → "
         "`datetime('YYYY-MM-DDThh:mm:ss')` using the ISO-8601 `T` separator (a "
-        "space is not accepted), e.g. `WHERE po.creationDate >= "
+        "space is not accepted), e.g. `WHERE a.createdAt >= "
         "datetime('2010-06-01T00:00:00')`.\n"
         "Other constructors if the column is plainly one of these: "
         "`localdatetime(...)` (timezone-less timestamp), `localtime(...)` / "

@@ -84,39 +84,39 @@ _BASE_RULES = BaseRules(
         "fences, no alternative versions, and nothing before or after the query."
     ),
     data_model=[
-        "- Each NODE label is a vertex collection (e.g. `Customer`, `Order`). "
-        "Read its documents with `FOR x IN Customer`.",
-        "- Each EDGE type is an edge collection (e.g. `PLACED`, `CONTAINS`). "
+        "- Each NODE label is a vertex collection (e.g. `LabelA`, `LabelB`). "
+        "Read its documents with `FOR x IN LabelA`.",
+        "- Each EDGE type is an edge collection (e.g. `REL_AB`, `REL_BC`). "
         "Edges connect documents; they are not fields on a document.",
         "- A junction / link table is an EDGE collection, NOT a vertex "
-        "collection. Do not `FOR x IN PartSupp`; realize it as the edge between "
+        "collection. Do not `FOR x IN LinkTable`; realize it as the edge between "
         "the two collections it links.",
         "- Foreign-key columns are NOT stored as document fields. A join on a FK "
         "is the edge itself; never `FILTER` on `*key`/`*_id` columns.",
-        "- The schema above prints each edge as `[:PLACED]` for readability. "
+        "- The schema above prints each edge as `[:REL_AB]` for readability. "
         "That `[: ]` is Cypher notation, NOT AQL. In a query you write the edge "
-        "collection name BARE (`PLACED`), never `[:PLACED]`.",
+        "collection name BARE (`REL_AB`), never `[:REL_AB]`.",
     ],
     core_syntax=[
         "- A traversal starts FROM a document and names one or more bare edge "
         "collections (depth defaults to 1):\n"
         "    FOR v IN OUTBOUND startDoc EdgeCollection\n"
         "  * `startDoc` is a document variable bound by an enclosing `FOR` "
-        "(e.g. `c` from `FOR c IN Customer`), or a document id string like "
-        '`"Customer/123"`. It is NEVER a collection name and NEVER a quoted '
+        "(e.g. `a` from `FOR a IN LabelA`), or a document id string like "
+        '`"LabelA/123"`. It is NEVER a collection name and NEVER a quoted '
         "collection name.\n"
         "  * `EdgeCollection` is written bare: no brackets, no colons, no "
-        'quotes; `PLACED`, never `[:PLACED]` and never `"PLACED"`.\n'
+        'quotes; `REL_AB`, never `[:REL_AB]` and never `"REL_AB"`.\n'
         "  * This project does NOT use named graphs: never emit the `GRAPH` "
         "keyword. A traversal ends at the edge collection. Nothing (no "
         "`GRAPH`, no quoted string) may follow it except `FILTER`, a nested "
         "`FOR`, or `RETURN`.",
-        "- Follow the edge DIRECTION from the schema: for `[:PLACED] from "
-        "Customer to Order`, go OUTBOUND from a Customer to reach its Orders, or "
-        "INBOUND from an Order to reach its Customer. Use ANY only when "
+        "- Follow the edge DIRECTION from the schema: for `[:REL_AB] from "
+        "LabelA to LabelB`, go OUTBOUND from a LabelA to reach its LabelB, or "
+        "INBOUND from a LabelB to reach its LabelA. Use ANY only when "
         "direction does not matter.",
         "- To read an EDGE property, also bind the edge variable: "
-        "`FOR p, e IN OUTBOUND s SUPPLIES RETURN { part: p.name, cost: e.supplycost }`.",
+        "`FOR b, e IN OUTBOUND a REL_AB RETURN { name: b.name, weight: e.weight }`.",
         "- Express a chain of SQL JOINs as NESTED `FOR` loops, one per edge hop "
         "(see the examples). Do NOT build nested `FILTER x IN (FOR ...)` "
         "comparisons on key columns. The edge already encodes the join, and "
@@ -140,28 +140,28 @@ _BASE_RULES = BaseRules(
     ],
     anti_patterns=[
         AntiPattern(
-            bad="`[:PLACED]` or `-[:REL]->`: Cypher edge syntax (AQL has no `[:`)",
+            bad="`[:REL_AB]` or `-[:REL]->`: Cypher edge syntax (AQL has no `[:`)",
             good="name the edge collection bare after the start vertex",
-            bad_example='FOR v, e, p IN OUTBOUND[:LOCATED_IN]("Nation") GRAPH "named_graph"',
-            good_example="FOR s IN Supplier FOR n IN OUTBOUND s LOCATED_IN RETURN { supplier: s.name, nation: n.name }",
+            bad_example='FOR v, e, p IN OUTBOUND[:REL_AB]("LabelB") GRAPH "named_graph"',
+            good_example="FOR a IN LabelA FOR b IN OUTBOUND a REL_AB RETURN { a_name: a.name, b_name: b.name }",
         ),
         AntiPattern(
-            bad='`OUTBOUND "Customer"` or `OUTBOUND("Customer")`: a collection name '
+            bad='`OUTBOUND "LabelA"` or `OUTBOUND("LabelA")`: a collection name '
             "(or a function call) as the start vertex",
-            good='start from a document variable bound by an enclosing `FOR`, or a document id string `"Customer/123"`',
+            good='start from a document variable bound by an enclosing `FOR`, or a document id string `"LabelA/123"`',
         ),
         AntiPattern(
-            bad='`OUTBOUND c PLACED GRAPH "..."`: an edge collection AND `GRAPH` together '
+            bad='`OUTBOUND a REL_AB GRAPH "..."`: an edge collection AND `GRAPH` together '
             "is illegal (likewise a trailing quoted string after the edge collection)",
             good="end the traversal at the bare edge collection",
-            bad_example='FOR o IN OUTBOUND c PLACED GRAPH "your_graph_name"',
-            good_example="FOR o IN OUTBOUND c PLACED RETURN o",
+            bad_example='FOR b IN OUTBOUND a REL_AB GRAPH "your_graph_name"',
+            good_example="FOR b IN OUTBOUND a REL_AB RETURN b",
         ),
         AntiPattern(
-            bad="`FOR ps IN PartSupp`: iterating a junction/link table as if it were a vertex collection",
+            bad="`FOR j IN LinkTable`: iterating a junction/link table as if it were a vertex collection",
             good="traverse the edge collection instead",
-            bad_example="FOR ps IN PartSupp FILTER ps.suppkey == s.suppkey RETURN ps",
-            good_example="FOR p IN OUTBOUND s SUPPLIES RETURN p",
+            bad_example="FOR j IN LinkTable FILTER j.a_id == a.id RETURN j",
+            good_example="FOR b IN OUTBOUND a REL_AB RETURN b",
         ),
         AntiPattern(bad="`WHERE ...`", good="use `FILTER`"),
         AntiPattern(
@@ -177,19 +177,19 @@ _BASE_RULES = BaseRules(
             bad="`RETURN { ... }` followed by `SORT` or `LIMIT`: `RETURN` ends the "
             "`FOR` block, so nothing may come after it",
             good="put `SORT` and `LIMIT` before `RETURN`",
-            bad_example="RETURN { title: f.title, n: LENGTH(members) } SORT LENGTH(members) DESC LIMIT 10",
-            good_example="SORT LENGTH(members) DESC LIMIT 10 RETURN { title: f.title, n: LENGTH(members) }",
+            bad_example="RETURN { name: a.name, n: LENGTH(items) } SORT LENGTH(items) DESC LIMIT 10",
+            good_example="SORT LENGTH(items) DESC LIMIT 10 RETURN { name: a.name, n: LENGTH(items) }",
         ),
     ],
     examples=[
         Example(
             sql=EX_POINT_LOOKUP_SQL,
-            query="FOR p IN Person\n  FILTER p.id == 933\n  RETURN { id: p.id, first_name: p.firstName }",
+            query="FOR a IN LabelA\n  FILTER a.id == 933\n  RETURN { id: a.id, created_at: a.createdAt }",
             label="point lookup",
         ),
         Example(
             sql=EX_JOIN_FILTER_SQL,
-            query="FOR s IN Supplier\n  FILTER s.acctbal > 5000\n  FOR n IN OUTBOUND s LOCATED_IN\n    RETURN { name: s.name, nation: n.name }",
+            query="FOR a IN LabelA\n  FILTER a.value > 5000\n  FOR b IN OUTBOUND a REL_AB\n    RETURN { name: a.name, b_name: b.name }",
             label="single join + filter",
         ),
     ],
@@ -210,28 +210,28 @@ _JOIN_RULES = FeatureRule(
     body=(
         "SQL JOIN -> a nested `FOR` traversal, one `FOR` per hop, following the "
         "schema's edge direction:\n"
-        "    FOR c IN Customer\n"
-        "      FOR o IN OUTBOUND c PLACED\n"
+        "    FOR a IN LabelA\n"
+        "      FOR b IN OUTBOUND a REL_AB\n"
         "        RETURN { ... }\n"
         "For LEFT/OUTER joins, collect the optional side and keep the row when "
         "it is empty:\n"
-        "    FOR c IN Customer\n"
-        "      LET orders = (FOR o IN OUTBOUND c PLACED RETURN o)\n"
-        "      FOR o IN (LENGTH(orders) > 0 ? orders : [null])\n"
-        "        RETURN { name: c.name, orderkey: o.orderkey }\n"
-        "(`o.orderkey` is null when the customer has no orders; reading a field "
+        "    FOR a IN LabelA\n"
+        "      LET related = (FOR b IN OUTBOUND a REL_AB RETURN b)\n"
+        "      FOR b IN (LENGTH(related) > 0 ? related : [null])\n"
+        "        RETURN { name: a.name, b_id: b.id }\n"
+        "(`b.id` is null when the LabelA has no related LabelB; reading a field "
         "off the null placeholder is safe, but do NOT start a further traversal "
-        "FROM that null `o`.) Do NOT translate `JOIN ... ON` key equality into a "
+        "FROM that null `b`.) Do NOT translate `JOIN ... ON` key equality into a "
         "`FILTER` on foreign-key columns. The edge encodes the join and FK "
         "columns are not stored on the documents.\n"
         "- Through-node join: when two tables join via FKs that both reference a "
-        "SHARED parent (e.g. supplier and customer both carry `nationkey`), reach "
-        "the second from the parent with one INBOUND hop: `FOR s IN Supplier FOR "
-        "n IN OUTBOUND s LOCATED_IN FOR c IN INBOUND n LOCATED_IN ...`.\n"
+        "SHARED parent (e.g. LabelA and LabelB both carry `c_id`), reach "
+        "the second from the parent with one INBOUND hop: `FOR a IN LabelA FOR "
+        "c IN OUTBOUND a REL_AC FOR b IN INBOUND c REL_BC ...`.\n"
         "- Multi-path join: when several joins fan out from the same row, open one "
-        "nested `FOR` per branch from the SAME bound variable (e.g. both `FOR n IN "
-        "OUTBOUND c LOCATED_IN` and `FOR o IN OUTBOUND c PLACED` under one `FOR c "
-        "IN Customer`)."
+        "nested `FOR` per branch from the SAME bound variable (e.g. both `FOR c IN "
+        "OUTBOUND a REL_AC` and `FOR b IN OUTBOUND a REL_AB` under one `FOR a "
+        "IN LabelA`)."
     )
 )
 
@@ -241,23 +241,23 @@ _AGGREGATION_RULES = FeatureRule(
         "1) Aggregate the related items OF EACH parent (the common case, e.g. "
         "count/sum of orders per customer): use a correlated subquery, with a "
         "`FILTER` for `HAVING`:\n"
-        "    FOR c IN Customer\n"
-        "      LET orders = (FOR o IN OUTBOUND c PLACED RETURN o)\n"
-        "      FILTER LENGTH(orders) > 1\n"
-        "      RETURN { custkey: c.custkey, order_count: LENGTH(orders), "
-        "total: SUM(orders[*].totalprice) }\n"
+        "    FOR a IN LabelA\n"
+        "      LET related = (FOR b IN OUTBOUND a REL_AB RETURN b)\n"
+        "      FILTER LENGTH(related) > 1\n"
+        "      RETURN { id: a.id, related_count: LENGTH(related), "
+        "total: SUM(related[*].value) }\n"
         "   `LENGTH(xs)` is `COUNT(*)` over the related rows. When the subquery "
-        "returns whole documents (`RETURN o`), aggregate a field with "
+        "returns whole documents (`RETURN b`), aggregate a field with "
         "`SUM(xs[*].field)` / `AVERAGE(xs[*].field)` / `MIN(...)` / `MAX(...)`; "
-        "when it already projects the number (`RETURN o.totalprice`), use "
+        "when it already projects the number (`RETURN b.value`), use "
         "`SUM(xs)`.\n"
         "2) Global GROUP BY across a whole collection: use `COLLECT`, which "
         "always needs a following `RETURN`:\n"
-        "   - grouped count: `FOR o IN Order COLLECT status = o.orderstatus "
-        "WITH COUNT INTO n RETURN { status, n }`\n"
-        "   - grouped sum/avg: `FOR o IN Order COLLECT status = o.orderstatus "
-        "AGGREGATE total = SUM(o.totalprice), avg = AVERAGE(o.totalprice) "
-        "RETURN { status, total, avg }`\n"
+        "   - grouped count: `FOR a IN LabelA COLLECT cat = a.category "
+        "WITH COUNT INTO n RETURN { cat, n }`\n"
+        "   - grouped sum/avg: `FOR a IN LabelA COLLECT cat = a.category "
+        "AGGREGATE total = SUM(a.value), avg = AVERAGE(a.value) "
+        "RETURN { cat, total, avg }`\n"
         "   - plain total count: `FOR x IN Coll COLLECT WITH COUNT INTO n "
         "RETURN n`\n"
         "   AGGREGATE functions: SUM, AVERAGE, MIN, MAX, LENGTH, COUNT_UNIQUE. "
@@ -266,7 +266,7 @@ _AGGREGATION_RULES = FeatureRule(
     ),
     example=Example(
         sql=EX_GROUPED_COUNT_SQL,
-        query="FOR p IN Part\n  COLLECT brand = p.brand WITH COUNT INTO c\n  RETURN { brand, c }",
+        query="FOR a IN LabelA\n  COLLECT category = a.category WITH COUNT INTO c\n  RETURN { category, c }",
         label="grouped count",
     ),
 )
@@ -278,12 +278,12 @@ _ORDER_LIMIT_RULES = FeatureRule(
         "Place `SORT` and `LIMIT` BEFORE `RETURN`. `RETURN` terminates the "
         "`FOR` block, so a trailing `SORT`/`LIMIT` is a syntax error. Sort by the "
         "underlying expression, NOT a `RETURN` projection key: use `SORT "
-        "LENGTH(members) DESC`, not `SORT member_count DESC` referring to the "
+        "LENGTH(items) DESC`, not `SORT item_count DESC` referring to the "
         "RETURN alias."
     ),
     example=Example(
-        sql="SELECT name FROM supplier ORDER BY acctbal DESC LIMIT 10",
-        query="FOR s IN Supplier\n  SORT s.acctbal DESC\n  LIMIT 10\n  RETURN { name: s.name }",
+        sql="SELECT name FROM table_a ORDER BY value DESC LIMIT 10",
+        query="FOR a IN LabelA\n  SORT a.value DESC\n  LIMIT 10\n  RETURN { name: a.name }",
         label="top-N",
     ),
 )
@@ -358,8 +358,8 @@ _TEMPORAL_RULES = FeatureRule(
         "numeric epoch-millis value. Default to the ISO-string form unless the "
         "query's own arithmetic shows the values are numeric:\n"
         "- ISO-8601 strings sort lexically, so compare them DIRECTLY: a SQL "
-        "`shipdate >= '1995-03-01'` range becomes `FILTER doc.shipdate >= "
-        "'1995-03-01' AND doc.shipdate < '1995-04-01'`. Keep the operators "
+        "`eventDate >= '1995-03-01'` range becomes `FILTER doc.eventDate >= "
+        "'1995-03-01' AND doc.eventDate < '1995-04-01'`. Keep the operators "
         "unchanged; only zero-padded `YYYY-MM-DD` (and `YYYY-MM-DDThh:mm:ss`) "
         "literals sort correctly.\n"
         "- Do NOT wrap literals in Cypher-style `date(...)` / `datetime(...)`; "
