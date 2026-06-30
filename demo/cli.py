@@ -8,14 +8,31 @@ The output is rendered with `rich`: a settings header, the input SQL block,
 the generated query block, and a result-summary panel. Pretty output goes to
 stdout; logs go to stderr.
 
+The CLI has two subcommands: ``translate`` (the default) and ``build-mapping``.
+For backwards compatibility the ``translate`` subcommand is implied when the
+first argument is not a known subcommand, so the original ``--sql ...`` form
+keeps working unchanged.
+
 Invocation::
 
-    uv run python demo/cli.py \\
+    uv run python demo/cli.py translate \\
         --sql "SELECT name FROM supplier WHERE suppkey = 1337" \\
         --mapping config/mappings/tpch.yaml \\
         --model   config/models/anthropic.yaml \\
         --target  cypher \\
         --validation syntax
+
+Generate a schema-mapping draft from ``CREATE TABLE`` DDL (deterministic; no
+LLM and no database needed). Add ``--refine-llm --model ...`` to let an LLM
+improve the node/edge names::
+
+    uv run python demo/cli.py build-mapping --ddl schema.sql -o mapping.yaml
+    cat schema.sql | uv run python demo/cli.py build-mapping --ddl - > mapping.yaml
+
+A bundled TPC-H schema is included to try it out (it regenerates the shipped
+config/mappings/tpch.yaml structure)::
+
+    uv run python demo/cli.py build-mapping --ddl config/ddl/tpch.sql -o mapping.yaml
 
 Read SQL from stdin by passing ``--sql -``::
 
@@ -41,9 +58,10 @@ daemon; the container starts on first validation and is removed at exit)::
     uv run python demo/cli.py --sql "..." --mapping config/mappings/tpch.yaml --model config/models/anthropic.yaml --target cypher --validation server
 
 Exit codes:
-    0: translation succeeded (validator returned no errors).
+    0: translation succeeded (validator returned no errors), or build-mapping
+       produced a mapping.
     1: translation reached ``--max-iterations`` without passing validation.
-    2: argument / config error before any LLM call.
+    2: argument / config error before any LLM call, or unparseable DDL.
 """
 
 from __future__ import annotations
@@ -67,15 +85,19 @@ from rows2graph import (
     AnthropicConfig,
     ArangoDBConfig,
     AsyncSQLTranslator,
+    DdlParseError,
     GremlinConfig,
     Neo4jConfig,
     OllamaConfig,
     SchemaMapping,
     TranslationResult,
+    build_mapping,
+    format_audit_report,
     load_model_config,
     load_server_config,
     make_async_llm,
     make_async_validator,
+    make_llm,
     make_target,
     resolve_validation_mode,
     valid_modes_for_target,
@@ -97,13 +119,27 @@ logger = logging.getLogger("demo.cli")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Construct the argparse parser with grouped flags."""
+    """Construct the top-level parser with the ``translate``/``build-mapping`` subcommands."""
     parser = argparse.ArgumentParser(
         prog="rows2graph-demo",
         description=(
-            "Translate a SQL query into a graph database query (Cypher, AQL, or Gremlin) "
-            "using the rows2graph framework."
+            "Translate a SQL query into a graph database query (Cypher, AQL, or Gremlin), "
+            "or build a schema-mapping draft from CREATE TABLE DDL, using the rows2graph framework."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", metavar="{translate,build-mapping}")
+    _add_translate_subparser(subparsers)
+    _add_build_mapping_subparser(subparsers)
+    return parser
+
+
+def _add_translate_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``translate`` subcommand (the original SQL→graph translation flow)."""
+    parser = subparsers.add_parser(
+        "translate",
+        help="Translate a SQL query into a graph query language.",
+        description="Translate a SQL query into a graph database query (Cypher, AQL, or Gremlin).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -171,7 +207,57 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable INFO-level logging on stderr (shows each loop iteration).",
     )
 
-    return parser
+
+def _add_build_mapping_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``build-mapping`` subcommand (CREATE TABLE DDL → schema-mapping YAML)."""
+    parser = subparsers.add_parser(
+        "build-mapping",
+        help="Generate a schema-mapping YAML from CREATE TABLE DDL.",
+        description=(
+            "Build a schema-mapping draft from CREATE TABLE DDL. Deterministic by default "
+            "(no LLM, no database); pass --refine-llm to improve names with a model."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--ddl",
+        required=True,
+        help='Path to a .sql file of CREATE TABLE statements. Pass "-" to read from stdin.',
+    )
+    parser.add_argument(
+        "--dialect",
+        default=None,
+        help="SQL dialect for parsing (e.g. postgres, mysql, sqlite). Default: dialect-neutral.",
+    )
+    parser.add_argument(
+        "--refine-llm",
+        action="store_true",
+        help="Use an LLM to improve node labels and edge names (requires --model).",
+    )
+    parser.add_argument(
+        "--model",
+        type=Path,
+        default=None,
+        help="Model-config YAML (config/models/*.yaml). Required with --refine-llm.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the generated mapping YAML to this file (default: stdout).",
+    )
+    parser.add_argument(
+        "--no-report",
+        action="store_true",
+        help="Suppress the coverage/audit report (otherwise printed to stderr).",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Overwrite the output file if it already exists (default: refuse).",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +276,16 @@ def _read_sql(sql_arg: str) -> str:
     if sql_arg == "-":
         return sys.stdin.read()
     return sql_arg
+
+
+def _read_ddl(ddl_arg: str) -> str:
+    """Return the DDL text: read stdin if --ddl is ``-``, else the named file."""
+    if ddl_arg == "-":
+        return sys.stdin.read()
+    try:
+        return Path(ddl_arg).read_text()
+    except OSError as exc:
+        _die(f"could not read DDL file '{ddl_arg}': {exc}")
 
 
 def _load_server_config_or_die(
@@ -441,8 +537,86 @@ async def _run_live(translator: AsyncSQLTranslator, sql_query: str) -> Translati
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    """Parse arguments, dispatch to the chosen subcommand, return its exit code.
 
+    For backwards compatibility, when the first argument is not a known
+    subcommand (and not a help flag) the ``translate`` subcommand is implied, so
+    the original ``demo/cli.py --sql ...`` invocation still works.
+    """
+    raw = list(sys.argv[1:] if argv is None else argv)
+    known = {"translate", "build-mapping"}
+    if not raw or (raw[0] not in known and raw[0] not in ("-h", "--help")):
+        raw = ["translate", *raw]
+
+    args = build_parser().parse_args(raw)
+    if args.command == "build-mapping":
+        return _handle_build_mapping(args)
+    return _handle_translate(args)
+
+
+def _handle_build_mapping(args: argparse.Namespace) -> int:
+    """Generate a schema-mapping YAML from DDL; write it and an audit report."""
+    ddl = _read_ddl(args.ddl)
+
+    llm = None
+    if args.refine_llm:
+        if args.model is None:
+            _die("--refine-llm requires --model (a model-config YAML).")
+        llm = make_llm(_load_model_config_or_die(args))
+
+    try:
+        result = build_mapping(ddl=ddl, dialect=args.dialect, llm=llm)
+    except DdlParseError as exc:
+        _die(str(exc))
+    finally:
+        if llm is not None:
+            llm.close()
+
+    if args.output is not None:
+        if args.output.exists() and not args.force:
+            _die(f"refusing to overwrite existing file '{args.output}' (pass --force to overwrite).")
+        args.output.write_text(result.yaml)
+        err_console.print(
+            f"[green]wrote[/green] {args.output}  "
+            f"[dim]({len(result.mapping.nodes)} nodes, {len(result.mapping.edges)} edges)[/dim]"
+        )
+    else:
+        # The YAML is the primary artifact: emit it raw to stdout (pipe-friendly),
+        # keeping the report on stderr so a redirect captures only the mapping.
+        sys.stdout.write(result.yaml)
+
+    if not args.no_report:
+        err_console.print(
+            Panel(
+                format_audit_report(result.report),
+                title="[bold]Mapping audit[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
+        if result.diff is not None and not result.diff.is_empty():
+            renames = [
+                f"{r.before} [dim]->[/dim] {r.after}  [dim]({r.kind}: {r.where})[/dim]"
+                for r in (*result.diff.label_renames, *result.diff.edge_type_renames, *result.diff.property_renames)
+            ]
+            err_console.print(
+                Panel(
+                    "\n".join(renames),
+                    title="[bold]AI changes[/bold]",
+                    title_align="left",
+                    border_style="magenta",
+                    padding=(1, 2),
+                )
+            )
+        for warning in result.warnings:
+            err_console.print(f"[yellow]warning:[/yellow] {warning}")
+
+    return 0
+
+
+def _handle_translate(args: argparse.Namespace) -> int:
+    """Run the SQL→graph translation loop and print the rich result panels."""
     # Default is WARNING so the per-iteration INFO logs from the translator
     # do not duplicate what the result panel already shows. `-v` opens them
     # up for users who want to watch the loop progress.
