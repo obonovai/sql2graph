@@ -1,4 +1,25 @@
 schema: ldbc
+# Curated LDBC SNB gold set for SQL -> graph translation evaluation.
+#
+# Sources: the hand-authored translation-difficulty queries (q01-q13) plus
+# graphonauts2's validated Q-A3 country traversal (q14). The redundant former q09
+# (LIKES distinct/order, covered by q08+q12) was dropped during curation, and the
+# queries from q10 up were renumbered down by one so ids are contiguous q01-q14.
+#
+# Conventions baked in (see evaluation/README.md):
+#  - KNOWS is DIRECTED `-[:KNOWS]->`, matching the directed `friend_id` SQL joins
+#    and the directed `knows` edge actually loaded in graphonauts2's Postgres+Neo4j.
+#  - Graph property names are camelCase (firstName, creationDate) per the LDBC
+#    graph spec and config/mappings/ldbc.yaml; SQL columns are snake_case.
+#  - Every SQL query references only tables/columns present in
+#    config/mappings/ldbc.yaml (multi-valued person_email/person_speaks excluded).
+#  - RETURN column order is aligned with the SQL SELECT order (the execution
+#    comparator in 05 is positional).
+#  - Date predicates use datetime('...') on the Cypher side. graphonauts2 now
+#    loads creationDate/birthday/joinDate into Neo4j as native temporal types
+#    (DateTime/Date), so these datetime('...')/date('...') predicates match
+#    directly - no epoch-millis rewrite needed (former defect D7, resolved by
+#    the native-temporal loader change; reload Neo4j after that change).
 queries:
 - id: ldbc_q01
   sql: |-
@@ -21,13 +42,13 @@ queries:
     FROM post
     WHERE creation_date >= '2010-06-01' AND creation_date < '2010-07-01';
   expected_cypher: |-
-    MATCH (po:Post)
-    WHERE po.creationDate >= datetime('2010-06-01T00:00:00') AND po.creationDate < datetime('2010-07-01T00:00:00')
-    RETURN po.id, po.creationDate, po.content
+    MATCH (p:Post)
+    WHERE p.creationDate >= datetime('2010-06-01T00:00:00') AND p.creationDate < datetime('2010-07-01T00:00:00')
+    RETURN p.id, p.creationDate, p.content
   expected_aql: |-
-    FOR po IN Post
-      FILTER po.creationDate >= '2010-06-01' AND po.creationDate < '2010-07-01'
-      RETURN { id: po.id, creationDate: po.creationDate, content: po.content }
+    FOR p IN Post
+      FILTER p.creationDate >= '2010-06-01' AND p.creationDate < '2010-07-01'
+      RETURN { id: p.id, creationDate: p.creationDate, content: p.content }
   difficulty: easy
   sql_features: []
   description: Range query on a timestamp column.
@@ -177,37 +198,6 @@ queries:
   description: Friends-of-friends who share a tag interest (4-way join, cf. IC-10).
 - id: ldbc_q09
   sql: |-
-    SELECT DISTINCT liker.id AS liker_id, liker.first_name, liker.last_name,
-                    po.id AS post_id, po.content, l.creation_date AS liked_at
-    FROM person liker
-    JOIN likes_post l ON l.person_id = liker.id
-    JOIN post po ON po.id = l.post_id
-    JOIN person creator ON creator.id = po.creator_person_id
-    WHERE creator.id = 933
-    ORDER BY liked_at DESC
-    LIMIT 20;
-  expected_cypher: |-
-    MATCH (liker:Person)-[l:LIKES]->(po:Post)-[:HAS_CREATOR]->(creator:Person {id: 933})
-    RETURN DISTINCT liker.id AS liker_id, liker.firstName, liker.lastName, po.id AS post_id, po.content, l.creationDate AS liked_at
-    ORDER BY liked_at DESC
-    LIMIT 20
-  expected_aql: |-
-    FOR creator IN Person
-      FILTER creator.id == 933
-      FOR po IN 1..1 INBOUND creator HAS_CREATOR
-        FILTER IS_SAME_COLLECTION('Post', po)
-        FOR liker, l IN 1..1 INBOUND po LIKES
-          SORT l.creationDate DESC
-          LIMIT 20
-          RETURN DISTINCT { liker_id: liker.id, firstName: liker.firstName, lastName: liker.lastName, post_id: po.id, content: po.content, liked_at: l.creationDate }
-  difficulty: hard
-  sql_features:
-  - distinct
-  - join
-  - order_limit
-  description: Polymorphic LIKES across Post target (cf. IC-7).
-- id: ldbc_q10
-  sql: |-
     SELECT c.id AS comment_id, c.content, c.creation_date, p.first_name, p.last_name
     FROM comment c
     JOIN person p ON p.id = c.creator_person_id
@@ -231,7 +221,7 @@ queries:
   - join
   - order_limit
   description: 'REPLY_OF chain: comments replying to a specific post (cf. IS-7).'
-- id: ldbc_q11
+- id: ldbc_q10
   sql: |-
     SELECT f.id, f.title, COUNT(fhm.person_id) AS member_count
     FROM forum f
@@ -254,7 +244,7 @@ queries:
   - join
   - order_limit
   description: Optional traversal (LEFT JOIN), forums and their member count including empty forums.
-- id: ldbc_q12
+- id: ldbc_q11
   sql: |-
     SELECT p.id, p.first_name, p.last_name, COUNT(*) AS friend_count
     FROM person p
@@ -280,7 +270,7 @@ queries:
   - join
   - order_limit
   description: 'HAVING: persons with more than 5 friends.'
-- id: ldbc_q13
+- id: ldbc_q12
   sql: |-
     SELECT DISTINCT p.id, p.first_name, p.last_name
     FROM person p
@@ -321,7 +311,7 @@ queries:
   - join
   - union
   description: 'UNION: persons who either created OR liked any post in a forum.'
-- id: ldbc_q14
+- id: ldbc_q13
   sql: |-
     SELECT p.id, p.first_name, p.last_name
     FROM person p
@@ -341,3 +331,24 @@ queries:
   sql_features:
   - subquery
   description: 'DIFFERENCE / NOT EXISTS: persons with no friends.'
+- id: ldbc_q14
+  sql: |-
+    SELECT country.name AS country_name, COUNT(p.id) AS person_count
+    FROM person p
+    JOIN place city ON p.place_id = city.id
+    JOIN place country ON city.partof_id = country.id
+    GROUP BY country.name;
+  expected_cypher: |-
+    MATCH (p:Person)-[:IS_LOCATED_IN]->(:Place)-[:IS_PART_OF]->(country:Place)
+    RETURN country.name AS country_name, count(p) AS person_count
+  expected_aql: |-
+    FOR p IN Person
+      FOR city IN 1..1 OUTBOUND p IS_LOCATED_IN
+        FOR country IN 1..1 OUTBOUND city IS_PART_OF
+          COLLECT name = country.name WITH COUNT INTO person_count
+          RETURN { country_name: name, person_count: person_count }
+  difficulty: medium
+  sql_features:
+  - aggregation
+  - join
+  description: Persons per country via place -> partof -> country 2-hop traversal (cf. graphonauts2 Q-A3).

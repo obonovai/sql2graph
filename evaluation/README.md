@@ -1,25 +1,38 @@
 # Evaluation harness
 
-A notebook-based evaluation pipeline that measures how well `rows2graph`'s LLM-driven SQL → Cypher / AQL translator preserves semantics across the gold-standard TPC-H and LDBC datasets.
+Measures how well `rows2graph`'s LLM-driven SQL -> graph translator performs, across a
+matrix of **dataset x target language x model**. The reusable run/record/metric logic
+lives in the `eval_harness` package; the notebooks are the analysis surface.
+
+The first deliverable runs **DB-free**: Cypher only, Ollama `qwen3-coder:30b` only, LDBC
+only. It produces Pass@k (via Cypher syntax validation), structural (Exact Match /
+Component F1), and distance (Levenshtein / Jaccard / normalised tree-edit) metrics plus a
+report - with no databases. Execution-accuracy metrics are scaffolded but deferred (they
+need the graphonauts2 databases; see below).
 
 ## Layout
 
 ```
 evaluation/
-├── README.md                 ← this file
+├── README.md
+├── eval_harness/             ← reusable package the notebooks import
+│   ├── config.py             ← RunConfig, RUN_MATRIX, validation-mode routing
+│   ├── datasets.py           ← gold-dataset loading + work-item construction
+│   ├── runner.py             ← run_translation, AttemptRecord, records IO
+│   └── canonical.py          ← tokenise/canonicalise/components + distances (shared by 03/04)
 ├── datasets/
-│   ├── tpch.yaml             ← TPC-H gold-standard SQL / Cypher / AQL triples
-│   └── ldbc.yaml             ← LDBC SNB ditto (aligned to graphonauts2's clean schema)
+│   ├── ldbc.yaml             ← curated LDBC SNB gold set (SQL + expected_cypher/_aql)
+│   └── tpch.yaml             ← TPC-H gold set (future dataset extension)
 ├── notebooks/
-│   ├── 00_setup.ipynb            ← verify env + DB connectivity, summarise dataset
-│   ├── 01_translation_run.ipynb  ← drive SQLTranslator, save records.json
-│   ├── 02_behavioural_metrics.ipynb  ← Pass@1/k, iterations, tokens, cost
+│   ├── 00_setup.ipynb            ← Ollama liveness (hard) + DB checks (warn) + dataset summary
+│   ├── 01_translation_run.ipynb  ← drive the matrix, write records_<dataset>_<target>_<model>.json
+│   ├── 02_behavioural_metrics.ipynb  ← Pass@1/k, iterations, duration, tokens, cost
 │   ├── 03_structural_metrics.ipynb   ← Exact Match, Component F1
 │   ├── 04_distance_metrics.ipynb     ← Levenshtein, Jaccard, normalised TED
-│   ├── 05_execution_metrics.ipynb    ← Postgres / Neo4j / ArangoDB result-set metrics
-│   └── 06_report.ipynb               ← aggregate + stratify + final markdown report
-├── outputs/                  ← gitignored; per-notebook intermediate artifacts
-└── reports/                  ← gitignored; final markdown + plots
+│   ├── 05_execution_metrics.ipynb    ← DEFERRED: result-set metrics vs Postgres/Neo4j
+│   └── 06_report.ipynb               ← join + stratify + final markdown report
+├── outputs/                  ← gitignored; records_*.json + metrics_*.csv
+└── reports/                  ← gitignored; final.md + figures
 ```
 
 ## Install
@@ -28,55 +41,90 @@ evaluation/
 uv sync --extra eval
 ```
 
-This pulls in `jupyter`, `pandas`, `matplotlib`, `psycopg`, `apted`, and `tabulate` on top of the library's runtime deps (`anthropic`, `neo4j`, `python-arango`).
+Pulls `jupyter`, `pandas`, `matplotlib`, `psycopg`, `apted`, `tabulate` on top of the
+library's runtime deps.
 
-## Environment variables
+## The run matrix
 
-| Variable | Used by | Purpose |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | `01_translation_run.ipynb` | Direct-API key for Claude. |
-| `NEO4J_PASSWORD` | `00_setup`, `05_execution_metrics` | Bolt password for the local Neo4j container. |
-| `ARANGO_PASSWORD` | `00_setup`, `05_execution_metrics` | HTTP password for the local ArangoDB container. |
-| `POSTGRES_PASSWORD` | `00_setup`, `05_execution_metrics` | Defaults to `password` (matches graphonauts2's compose). |
+Everything is driven by `RUN_MATRIX` in `eval_harness/config.py`. The default is one cell:
 
-Export each in your shell before launching Jupyter.
-
-## Bring up the databases
-
-The evaluation reads SQL from graphonauts2's Postgres and runs translated graph queries against Neo4j and ArangoDB. Bring up all three from `/Users/ivona.obonova/school` (which is the parent of both repos):
-
-```bash
-docker compose -f graphonauts2/docker/postgres.compose.yml up -d
-docker compose -f graphonauts2/docker/neo4j.compose.yml up -d
-docker compose -f graphonauts2/docker/arangodb.compose.yml up -d
+```python
+RUN_MATRIX = [RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama")]
 ```
 
-Then ensure LDBC SNB SF=1 data is loaded into each. See `graphonauts2/notes/commands.md` for the canonical load commands.
+Extending the evaluation is appending rows (and adding gold columns / mappings), not editing
+notebooks. Records and metrics auto-stratify by `(dataset, target, model)`:
 
-`00_setup.ipynb` asserts every DB is reachable and contains LDBC data before downstream notebooks run.
+| To add | Do |
+|---|---|
+| another Ollama / Anthropic model | append `RunConfig(model=..., provider=...)`; for Anthropic, export `ANTHROPIC_API_KEY` and add per-model pricing in notebook 02 |
+| AQL or Gremlin target | add `expected_aql` / `expected_gremlin` to the gold YAML and append `RunConfig(target=...)`. AQL auto-routes to `server`/`managed` validation (it has no offline grammar), so it never hits the `make_validator("aql","syntax")` error |
+| TPC-H dataset | flesh out `datasets/tpch.yaml`, rely on `config/mappings/tpch.yaml`, append `RunConfig(dataset="tpch")` |
 
-## Running
-
-Notebooks are numbered so `jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/0*.ipynb` runs them in sequence. Or, interactively:
+## Running the DB-free first pass
 
 ```bash
-uv run jupyter lab evaluation/notebooks/
+# Ollama up with the model pulled (the library talks to :11434)
+ollama serve
+ollama pull qwen3-coder:30b
 ```
 
-**Run `00` and `01` first.** `01` does the expensive LLM calls (one per gold-query × dialect) and caches results in `evaluation/outputs/records.json`. `02`-`05` consume that file. `06` joins everything into the final report.
+Smoke-test one query first by uncommenting the `subset=("ldbc_q01",)` line in
+`01_translation_run.ipynb`, then run the full pass:
 
-Notebook `05` is the only one that needs all three databases up; `02`-`04` are DB-free.
+```bash
+export MPLBACKEND=Agg
+uv run jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/00_setup.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/01_translation_run.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/0{2,3,4,6}_*.ipynb
+```
+
+or interactively: `uv run jupyter lab evaluation/notebooks/`.
+
+`01` is the only notebook that calls the LLM; it writes `records_*.json` incrementally and
+resumes (query ids already on disk are skipped). `02`-`04` and `06` are DB-free and consume
+those records. Notebook `05` is **deferred** and excluded from the pass.
 
 ## Outputs
 
-After a full run you'll find:
+- `outputs/records_<dataset>_<target>_<model>.json`: every attempt with its TranslationResult
+  fields and `token_usage` (reported first-class by the library; no log scraping).
+- `outputs/metrics_{behavioural,structural,distance}.csv`: per-record metrics, keyed by
+  `(dataset, target, model, query_id, difficulty)`.
+- `reports/final.md` + `reports/figures/`: headline + stratified tables, Pass@k bars,
+  distance distributions, Component-F1 heatmap, and a manual error-taxonomy template.
 
-- `evaluation/outputs/records.json`: every translation attempt with its TranslationResult fields plus scraped Anthropic token counts.
-- `evaluation/outputs/metrics_*.csv`: per-record metric values from each `0[2-5]` notebook.
-- `evaluation/reports/final.md`: headline + stratified tables, Pass@k curves, error-taxonomy template.
-- `evaluation/reports/figures/`: plots referenced from the markdown report.
+## Execution metrics (deferred, prepared)
 
-## Scope
+Notebook `05` runs the generated query on a real graph DB and the gold SQL on Postgres
+(the oracle), comparing result multisets. It is gated behind `EVAL_EXECUTION=1` and needs
+the graphonauts2 databases, loaded with LDBC SNB SF=1:
 
-- **LDBC** has full execution-based metrics (SQL on Postgres ↔ Cypher on Neo4j ↔ AQL on ArangoDB).
-- **TPC-H** gets static-only metrics (structural, distance, behavioural). Execution metrics for TPC-H are future work since graphonauts2 doesn't ship a TPC-H Postgres.
+```bash
+docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/postgres.compose.yml up -d
+docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/neo4j.compose.yml up -d
+# ArangoDB only when an AQL row is added:
+# docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/arangodb.compose.yml up -d
+```
+
+Then load LDBC SF=1 into each (see `graphonauts2/notes/commands.md`), export
+`NEO4J_PASSWORD` and `EVAL_EXECUTION=1`, and run `05`.
+
+**Datetime storage (former defect D7, resolved):** graphonauts2 now loads
+`creationDate`/`birthday`/`joinDate` into Neo4j as native temporal types (`DateTime`/`Date`),
+so the gold Cypher `datetime('...')` / `date('...')` predicates match directly. Reload Neo4j
+after any loader change before trusting execution results.
+
+## Gold dataset notes
+
+`datasets/ldbc.yaml` is a curated mix of hand-authored translation-difficulty queries and
+graphonauts2's validated set, aligned to `config/mappings/ldbc.yaml`. Conventions:
+
+- **KNOWS is directed** (`-[:KNOWS]->`), matching the directed `friend_id` SQL joins and the
+  directed `knows` edge actually loaded in graphonauts2 (defect D2).
+- Graph properties are camelCase, SQL columns snake_case; multi-valued `person_email` /
+  `person_speaks` are excluded (the mapping does not express list properties, defect D4).
+- RETURN column order is aligned to the SQL SELECT order (the execution comparator in 05 is
+  positional).
+
+TPC-H stays static-only until a TPC-H Postgres oracle exists (graphonauts2 ships none).

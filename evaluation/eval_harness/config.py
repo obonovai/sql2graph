@@ -1,0 +1,105 @@
+"""Run configuration and the evaluation matrix.
+
+A :class:`RunConfig` is one cell of the evaluation matrix: a (dataset, target
+language, model) triple plus the knobs needed to drive the translator for it.
+:data:`RUN_MATRIX` is the list of cells a run executes; extending the evaluation
+(another model, another target language, another dataset) is appending rows here,
+not editing notebooks.
+
+The single rule the rest of the harness leans on is
+:func:`default_validation_mode`: Cypher and Gremlin have offline ANTLR grammar
+validators ("syntax"), AQL has none and must validate against a server
+("server"/"managed"). Routing through this function means appending an AQL row
+never hits the ``make_validator("aql", "syntax")`` ValueError.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
+
+Provider = Literal["ollama", "anthropic"]
+Target = Literal["cypher", "aql", "gremlin"]
+ValidationMode = Literal["none", "syntax", "server", "managed"]
+
+
+def _repo_root() -> Path:
+    """Walk up from this file to the directory holding ``pyproject.toml``."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    # Fallback: eval_harness/ -> evaluation/ -> repo root
+    return here.parents[2]
+
+
+REPO_ROOT = _repo_root()
+DATASETS_DIR = REPO_ROOT / "evaluation" / "datasets"
+MAPPINGS_DIR = REPO_ROOT / "config" / "mappings"
+OUTPUTS_DIR = REPO_ROOT / "evaluation" / "outputs"
+REPORTS_DIR = REPO_ROOT / "evaluation" / "reports"
+
+# Target -> deployment-free default validation mode. AQL has no offline grammar,
+# so it defaults to server-backed validation (which resolves to "managed" =
+# auto-provisioned DB when no server_config is supplied).
+DEFAULT_VALIDATION_MODE: dict[Target, ValidationMode] = {
+    "cypher": "syntax",
+    "gremlin": "syntax",
+    "aql": "server",
+}
+
+
+def default_validation_mode(target: Target, override: ValidationMode | None = None) -> ValidationMode:
+    """The validation mode to use for ``target``, honouring an explicit override."""
+    if override is not None:
+        return override
+    return DEFAULT_VALIDATION_MODE[target]
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    """One evaluation-matrix cell: a (dataset, target, model) triple + knobs."""
+
+    dataset: str = "ldbc"
+    target: Target = "cypher"
+    model: str = "qwen3-coder:30b"
+    provider: Provider = "ollama"
+    # None -> default_validation_mode(target). Set explicitly to force, e.g.,
+    # "server"/"managed" for a Cypher run that should catch schema hallucinations.
+    validation_mode: ValidationMode | None = None
+    max_iterations: int = 3
+    temperature: float = 0.0
+    # Ollama-specific knobs (ignored for provider="anthropic").
+    num_ctx: int = 16384
+    host: str = "http://localhost:11434"
+    outputs_dir: Path = field(default=OUTPUTS_DIR)
+    # Restrict the run to these query ids (smoke test); None = the whole dataset.
+    subset: tuple[str, ...] | None = None
+    resume: bool = True
+    # A Neo4jConfig/ArangoDBConfig/GremlinConfig when validation_mode == "server".
+    server_config: object | None = None
+
+
+def model_slug(model: str) -> str:
+    """Filename-safe model id, e.g. ``qwen3-coder:30b`` -> ``qwen3-coder_30b``."""
+    return model.replace(":", "_").replace("/", "_")
+
+
+def records_filename(rc: RunConfig) -> str:
+    """Per-cell records file, e.g. ``records_ldbc_cypher_qwen3-coder_30b.json``."""
+    return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.model)}.json"
+
+
+# The evaluation matrix. The first deliverable is a single cell; extend by
+# appending rows. Examples (uncomment / adapt once the prerequisites exist):
+#   RunConfig(dataset="ldbc", target="aql", model="qwen3-coder:30b",
+#             validation_mode="server", server_config=ArangoDBConfig(...)),
+#   RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic"),
+#   RunConfig(dataset="tpch", target="cypher", model="qwen3-coder:30b"),
+RUN_MATRIX: list[RunConfig] = [
+    RunConfig(dataset="ldbc", target="cypher", model="llama3.2:latest", provider="ollama"),
+    RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama"),
+    RunConfig(dataset="ldbc", target="cypher", model="gemma4:26b", provider="ollama"),
+    RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic"),
+]

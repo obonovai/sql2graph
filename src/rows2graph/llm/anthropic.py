@@ -106,6 +106,23 @@ class AnthropicLLMClient:
         return None
 
 
+# Current-generation models (Opus 4.7/4.8, Fable/Mythos) removed the sampling
+# parameters: sending `temperature`/`top_p`/`top_k` returns HTTP 400. Matched by
+# prefix so dated snapshots and aliases are covered.
+_NO_SAMPLING_PREFIXES = (
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-fable-5",
+    "claude-mythos-5",
+    "claude-mythos-preview",
+)
+
+
+def _model_rejects_sampling(model: str) -> bool:
+    """True if the model rejects `temperature`/`top_p`/`top_k` (HTTP 400)."""
+    return any(model.startswith(prefix) for prefix in _NO_SAMPLING_PREFIXES)
+
+
 def _build_anthropic_kwargs(
     messages: list[dict[str, Any]],
     *,
@@ -132,9 +149,13 @@ def _build_anthropic_kwargs(
     kwargs: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
-        "temperature": temperature,
         "messages": chat_messages,
     }
+    # Only send `temperature` to models that still accept it; current-generation
+    # models 400 on any sampling parameter (the escalation path also routes a
+    # higher temperature through here, so this guard covers both call sites).
+    if not _model_rejects_sampling(model):
+        kwargs["temperature"] = temperature
     if system_text is not None:
         kwargs["system"] = [
             {
