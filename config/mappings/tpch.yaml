@@ -1,14 +1,12 @@
 # Relational-to-graph mapping for the TPC-H benchmark dataset.
 #
-# Mirrors the graphonauts project's mapping:
-#   Relational source: /src/graphonauts/postgres_db/schema.py
-#   Graph loader:      /src/graphonauts/neo4j_db/loader.py
+# 8 relational tables -> 7 node labels + 8 edge types.
+# The `partsupp` join table becomes a SUPPLIED_BY edge with properties.
 #
-# 8 relational tables -> 7 node labels + 7 edge types.
-# The `partsupp` join table becomes a SUPPLIES edge with properties.
-#
-# This file describes ONLY the schema mapping: no LLM, server, or
-# translation-loop settings. Load it with rows2graph.SchemaMapping.from_yaml.
+# Edge direction always follows the foreign key (the FK-holding child table is the
+# source_node, the referenced parent table is the target_node), and each type is named
+# to read correctly in that direction (e.g. "Order PLACED_BY Customer"). Load it with
+# rows2graph.SchemaMapping.from_yaml.
 
 nodes:
   - label: "Region"
@@ -78,9 +76,8 @@ nodes:
     primary_key: "orderkey"
 
   - label: "LineItem"
-    # Note: lineitem has a composite PK (orderkey, linenumber). This mapping
-    # lists linenumber as primary_key because orderkey is materialised on
-    # the CONTAINS edge from Order rather than as a LineItem property.
+    # lineitem has a composite PK (orderkey, linenumber). This mapping lists linenumber
+    # as primary_key because orderkey is materialised on the PART_OF edge to Order.
     source_table: "lineitem"
     properties:
       linenumber: "linenumber"
@@ -120,29 +117,16 @@ edges:
     source_foreign_key: "nationkey"
     target_primary_key: "nationkey"
 
-  - type: "SUPPLIES"
-    # Materialised from the partsupp junction table. Edge properties come
-    # from the non-FK columns of partsupp.
-    source_node: "Supplier"
-    target_node: "Part"
-    source_table: "partsupp"
-    source_foreign_key: "partkey"
-    target_primary_key: "partkey"
-    properties:
-      availqty: "availqty"
-      supplycost: "supplycost"
-      comment: "comment"
-
-  - type: "PLACED"
-    source_node: "Customer"
-    target_node: "Order"
+  - type: "PLACED_BY"
+    source_node: "Order"
+    target_node: "Customer"
     source_table: "orders"
     source_foreign_key: "custkey"
     target_primary_key: "custkey"
 
-  - type: "CONTAINS"
-    source_node: "Order"
-    target_node: "LineItem"
+  - type: "PART_OF"
+    source_node: "LineItem"
+    target_node: "Order"
     source_table: "lineitem"
     source_foreign_key: "orderkey"
     target_primary_key: "orderkey"
@@ -160,3 +144,16 @@ edges:
     source_table: "lineitem"
     source_foreign_key: "suppkey"
     target_primary_key: "suppkey"
+
+  - type: "SUPPLIED_BY"
+    # Materialised from the partsupp junction table. Edge properties come from the
+    # non-FK columns of partsupp.
+    source_node: "Part"
+    target_node: "Supplier"
+    source_table: "partsupp"
+    source_foreign_key: "suppkey"
+    target_primary_key: "suppkey"
+    properties:
+      availqty: "availqty"
+      supplycost: "supplycost"
+      comment: "comment"

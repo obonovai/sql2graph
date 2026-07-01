@@ -19,9 +19,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
+from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
 from rows2graph.mapping_builder.naming import edge_type_for_fk, junction_to_edge_type, table_to_label
 from rows2graph.mapping_builder.relational import ForeignKey, RelationalSchema, Table
+from rows2graph.mapping_builder.sql_types import semantic_type_for_sql
 
 
 @dataclass
@@ -183,7 +184,35 @@ def _build_node(table: Table, label: str, report: CoverageReport) -> NodeMapping
     # it happens to also be a foreign-key column (composite-key tables).
     properties: dict[str, str] = {c.name: c.name for c in table.columns if c.name.casefold() not in fk_cols}
     properties.setdefault(pk_col, pk_col)
-    return NodeMapping(label=label, source_table=table.name, properties=properties, primary_key=pk_col)
+    return NodeMapping(
+        label=label,
+        source_table=table.name,
+        properties=properties,
+        property_types=_property_types_for(table, properties),
+        primary_key=pk_col,
+    )
+
+
+def _property_types_for(table: Table, properties: dict[str, str]) -> dict[str, SemanticType]:
+    """Derive a :class:`SemanticType` per property from its source column's SQL type.
+
+    Keyed by the graph property name; the type is read from the mapped SQL column
+    (the property *value*). Columns whose declared SQL type does not resolve to a
+    known family - or that declared none - are omitted, leaving that property
+    untyped rather than guessed. Foreign-key/join columns never reach here: they
+    are excluded from ``properties`` upstream (they become edges, not stored
+    values), so they correctly carry no type.
+    """
+    by_name = {c.name: c for c in table.columns}
+    out: dict[str, SemanticType] = {}
+    for prop_name, column_name in properties.items():
+        column = by_name.get(column_name)
+        if column is None:
+            continue
+        semantic = semantic_type_for_sql(column.data_type)
+        if semantic is not None:
+            out[prop_name] = semantic
+    return out
 
 
 def _append_fk_edge(
@@ -269,6 +298,7 @@ def _append_junction_edge(
         source_foreign_key=f1.columns[0],
         target_primary_key=target_pk,
         properties=properties,
+        property_types=_property_types_for(table, properties),
     )
     report.edge_tables.append(table.name)
     _add_edge(edge, edges, report, seen_edges, f"{source_label} -[{edge_type}]-> {target_label} ({table.name}, junction)")

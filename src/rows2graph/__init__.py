@@ -69,7 +69,7 @@ from rows2graph.llm import (
     make_async_llm,
     make_llm,
 )
-from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
+from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
 from rows2graph.mapping_builder import (
     BuildResult,
     CoverageReport,
@@ -182,6 +182,7 @@ __all__ = [
     "RenameDiff",
     "SQLTranslator",
     "SchemaMapping",
+    "SemanticType",
     "ServerConfig",
     "SqlAnalysis",
     "StalledEvent",

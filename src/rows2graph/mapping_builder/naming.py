@@ -4,10 +4,9 @@ These heuristics are deliberately *structural* and dependency-free (no
 inflection library - see the package rationale). They produce correct,
 deterministic, if sometimes clunky, names: ``region`` becomes ``Region``,
 ``orders`` becomes ``Order``, a foreign key ``regionkey -> region`` becomes
-``HAS_REGION``. Polishing these into idiomatic graph names (``IN_REGION``,
-``KNOWS``) is the job of the optional LLM refinement pass, which may rename
-labels and edge types freely; the structural names are the always-available
-baseline it starts from.
+``HAS_REGION``. Polishing these into idiomatic, readable graph names is the job
+of the LLM refinement pass, which may rename labels and edge types freely; the
+structural names are the always-available baseline it starts from.
 """
 
 from __future__ import annotations

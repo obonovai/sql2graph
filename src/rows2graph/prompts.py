@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 
-from rows2graph.mapping import SchemaMapping
+from rows2graph.mapping import SchemaMapping, SemanticType
 from rows2graph.sql_features import SqlFeature
 from rows2graph.targets import TargetLanguage
 
@@ -39,13 +39,25 @@ _GENERIC_FEATURE_RULES: dict[SqlFeature, str] = {
 }
 
 
+def _type_suffix(semantic: SemanticType | None) -> str:
+    """Render a property's declared type as `` (datetime)``, or empty when untyped.
+
+    The empty case keeps the schema block byte-for-byte identical to before the
+    type feature, so untyped mappings (and their prompt snapshots) are unchanged.
+    """
+    return f" ({semantic.value})" if semantic is not None else ""
+
+
 def format_schema_context(schema: SchemaMapping) -> str:
     """Render a schema mapping as a human-readable Markdown-ish block.
 
     The LLM consumes this block directly inside the system prompt. The format
     is deliberately verbose (explicit node labels, primary keys, property
     mappings, and edge directions) so the LLM can refer back to it without
-    having to reconstruct the graph topology from terse identifiers.
+    having to reconstruct the graph topology from terse identifiers. When a
+    property declares a :class:`~rows2graph.mapping.SemanticType`, it is shown in
+    parentheses (e.g. ``(datetime)``) so the target rules can pick a constructor
+    deterministically instead of guessing the type from a literal's shape.
     """
     lines: list[str] = []
 
@@ -55,7 +67,8 @@ def format_schema_context(schema: SchemaMapping) -> str:
         lines.append(f"  Primary key: `{node.primary_key}`")
         lines.append("  Properties:")
         for graph_prop, sql_col in node.properties.items():
-            lines.append(f"    - `{graph_prop}` <- SQL column `{sql_col}`")
+            suffix = _type_suffix(node.property_types.get(graph_prop))
+            lines.append(f"    - `{graph_prop}` <- SQL column `{sql_col}`{suffix}")
 
     lines.append("")
     lines.append("### Relationships (Edges)")
@@ -65,7 +78,8 @@ def format_schema_context(schema: SchemaMapping) -> str:
         if edge.properties:
             lines.append("  Properties:")
             for graph_prop, sql_col in edge.properties.items():
-                lines.append(f"    - `{graph_prop}` <- SQL column `{sql_col}`")
+                suffix = _type_suffix(edge.property_types.get(graph_prop))
+                lines.append(f"    - `{graph_prop}` <- SQL column `{sql_col}`{suffix}")
 
     return "\n".join(lines)
 

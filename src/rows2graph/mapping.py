@@ -28,8 +28,9 @@ architectural commitment of this refactor.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -55,6 +56,77 @@ class _StrictModel(BaseModel):
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
+class SemanticType(StrEnum):
+    """A normalized, loader-agnostic semantic type for a graph property.
+
+    This is deliberately a small, closed vocabulary rather than a raw SQL type
+    (``VARCHAR(25)``) or a physical graph-storage type (native ``DateTime`` vs
+    epoch-millis ``Long``). It records what the value *means* - a fact about the
+    data that holds regardless of which loader wrote the graph - and leaves the
+    physical rendering to each target language. The translator surfaces it in
+    the system prompt so the LLM no longer has to *guess* a property's type from
+    the shape of a SQL literal (the guess that made a ``datetime`` column compare
+    against ``date('...')`` and silently evaluate to null).
+
+    The value is best-effort: the builder derives it from the source SQL type
+    where it can (see
+    :func:`rows2graph.mapping_builder.sql_types.semantic_type_for_sql`) and
+    leaves a property untyped when it cannot. It stays overridable by hand.
+    """
+
+    STRING = "string"
+    INTEGER = "integer"
+    FLOAT = "float"
+    BOOLEAN = "boolean"
+    DATE = "date"
+    DATETIME = "datetime"
+    TIME = "time"
+    DURATION = "duration"
+
+
+def _split_property_types(data: Any) -> Any:
+    """Normalize the two accepted ``properties`` YAML shapes into two flat dicts.
+
+    A property value may be written short (``name: "column"``) or long
+    (``name: {column: "column", type: "datetime"}``). The long form is split so
+    ``properties`` always ends up ``{name: column}`` and any declared type moves
+    into a parallel ``property_types`` ``{name: type}``. This runs as a
+    ``mode="before"`` validator; when every value is already a bare string (the
+    common case, and every mapping authored before this feature) it is a no-op,
+    so untyped YAML and direct Python constructors pass through untouched.
+    """
+    if not isinstance(data, dict) or "properties" not in data:
+        return data
+    props = data["properties"]
+    if not isinstance(props, dict) or not any(isinstance(v, dict) for v in props.values()):
+        return data  # not the long form: leave the no-op (or field validation) to Pydantic
+    flat: dict[Any, Any] = {}
+    types: dict[Any, Any] = dict(data.get("property_types") or {})
+    for name, value in props.items():
+        if isinstance(value, dict):
+            unexpected = set(value) - {"column", "type"}
+            if unexpected or "column" not in value:
+                raise ValueError(
+                    f"property '{name}': expected a column string or a {{column, type}} "
+                    f"object, got keys {sorted(value)}"
+                )
+            flat[name] = value["column"]
+            if value.get("type") is not None:
+                types[name] = value["type"]
+        else:
+            flat[name] = value
+    return {**data, "properties": flat, "property_types": types}
+
+
+def _check_property_types_subset(
+    properties: dict[str, str], property_types: dict[str, SemanticType]
+) -> None:
+    """Reject a type annotation whose key is not a declared property."""
+    orphan = set(property_types) - set(properties)
+    if orphan:
+        raise ValueError(f"property_types keys {sorted(orphan)} are not declared properties")
+
+
 class NodeMapping(_StrictModel):
     """A single graph node label, sourced from one relational table.
 
@@ -68,6 +140,9 @@ class NodeMapping(_StrictModel):
         properties: Mapping from graph property name (key) to SQL column name
             (value). The LLM is instructed to use the *key* in generated
             queries.
+        property_types: Optional mapping from graph property name to a
+            :class:`SemanticType`, surfaced in the prompt so the LLM knows a
+            value's type instead of guessing it. Empty when untyped.
         primary_key: SQL column that uniquely identifies rows in
             ``source_table``. Used by the LLM to reason about joins.
     """
@@ -75,7 +150,18 @@ class NodeMapping(_StrictModel):
     label: NonBlankStr
     source_table: NonBlankStr
     properties: dict[NonBlankStr, NonBlankStr]
+    property_types: dict[NonBlankStr, SemanticType] = Field(default_factory=dict)
     primary_key: NonBlankStr
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_typed_properties(cls, data: Any) -> Any:
+        return _split_property_types(data)
+
+    @model_validator(mode="after")
+    def _validate_property_types(self) -> Self:
+        _check_property_types_subset(self.properties, self.property_types)
+        return self
 
 
 class EdgeMapping(_StrictModel):
@@ -100,6 +186,8 @@ class EdgeMapping(_StrictModel):
         source_foreign_key: Foreign key column in ``source_table``.
         target_primary_key: Primary key column in the target node's table.
         properties: Optional edge properties, same format as node properties.
+        property_types: Optional per-property :class:`SemanticType`, same
+            meaning as :attr:`NodeMapping.property_types`.
     """
 
     type: NonBlankStr
@@ -109,6 +197,17 @@ class EdgeMapping(_StrictModel):
     source_foreign_key: NonBlankStr
     target_primary_key: NonBlankStr
     properties: dict[NonBlankStr, NonBlankStr] = Field(default_factory=dict)
+    property_types: dict[NonBlankStr, SemanticType] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_typed_properties(cls, data: Any) -> Any:
+        return _split_property_types(data)
+
+    @model_validator(mode="after")
+    def _validate_property_types(self) -> Self:
+        _check_property_types_subset(self.properties, self.property_types)
+        return self
 
 
 class SchemaMapping(_StrictModel):

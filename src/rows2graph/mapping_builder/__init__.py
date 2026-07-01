@@ -12,12 +12,15 @@ The pipeline is three stages, each its own module:
 2. **project** (:mod:`~rows2graph.mapping_builder.project`) - apply the canonical
    relational-to-graph heuristics to produce a mapping that is *valid by
    construction*, plus a :class:`~rows2graph.mapping_builder.project.CoverageReport`.
-3. **refine** (:mod:`~rows2graph.mapping_builder.refine`, optional) - let an LLM
-   improve names, fenced so it can never invent an identifier.
+3. **refine** (:mod:`~rows2graph.mapping_builder.refine`) - let an LLM improve
+   names, fenced so it can never invent an identifier.
 
-:func:`build_mapping` is the single entry point. With no ``llm`` it is fully
-deterministic, offline, and free; pass an :class:`~rows2graph.llm.LLMClient` to
-opt into the naming pass.
+:func:`build_mapping` is the single entry point and always runs all three stages, so
+it requires an :class:`~rows2graph.llm.LLMClient` for the naming pass. If that pass
+fails any guardrail the deterministic mapping is kept (with a warning), so the result
+is always valid even when the model errors or is unreachable. The deterministic
+projection on its own is available via :func:`project_to_mapping` (offline and free) -
+the seam tests and a future live-database source plug into.
 """
 
 from __future__ import annotations
@@ -48,18 +51,18 @@ class BuildResult:
         mapping: The generated :class:`SchemaMapping` (deterministic, or refined
             when an LLM was supplied and its output passed the guardrail).
         yaml: ``mapping`` serialised to canonical YAML, ready to save or load.
-        skeleton_yaml: The deterministic mapping's YAML before any refinement. It
-            equals ``yaml`` when no LLM ran or the refinement was rejected; when
-            the LLM changed names it is the "original" a reviewer can compare to.
+        skeleton_yaml: The deterministic mapping's YAML before refinement. It equals
+            ``yaml`` when the naming pass kept every name or was rejected; when the LLM
+            changed names it is the "original" a reviewer can compare to.
         report: The :class:`CoverageReport` explaining how the schema was projected.
-        refined: ``True`` iff an LLM ran *and* changed the deterministic skeleton.
+        refined: ``True`` iff the naming pass changed the deterministic skeleton.
         warnings: Non-fatal issues (synthesized keys, dropped edges, rejected
             refinement). Always safe to surface to the user.
-        conversation: The refinement chat transcript (system / user / assistant);
-            empty when no LLM ran. Lets a caller show exactly what the AI was asked
-            and answered.
-        diff: The renames the LLM applied (labels, edge types, property keys), or
-            ``None`` when no LLM ran. Empty when the LLM kept every name.
+        conversation: The refinement chat transcript (system / user / assistant).
+            Always populated (the naming pass always runs), so a caller can show
+            exactly what the AI was asked and answered.
+        diff: The renames the LLM applied (labels, edge types, property keys). Always
+            present; empty when the LLM kept every name or its output was rejected.
     """
 
     mapping: SchemaMapping
@@ -72,25 +75,26 @@ class BuildResult:
     diff: MappingDiff | None = None
 
 
-def build_mapping(*, ddl: str, dialect: str | None = None, llm: LLMClient | None = None) -> BuildResult:
+def build_mapping(*, ddl: str, dialect: str | None = None, llm: LLMClient) -> BuildResult:
     """Generate a :class:`SchemaMapping` from ``CREATE TABLE`` *ddl*.
 
-    Deterministic by default: extract the schema, project it onto a valid mapping,
-    and serialise. When *llm* is provided, an additional refinement pass improves
-    naming; if that pass fails any guardrail the deterministic mapping is kept and
-    the reason is added to ``warnings``.
+    Extract the schema, project it onto a valid mapping, then always run the LLM
+    naming pass to make the labels and edge types read well. The pass is guarded: if
+    it fails any check the deterministic mapping is kept and the reason is added to
+    ``warnings``, so the result is always valid. For the deterministic projection on
+    its own (no LLM), call :func:`project_to_mapping`.
 
     Args:
         ddl: One or more ``CREATE TABLE`` statements.
         dialect: Optional sqlglot dialect (e.g. ``"postgres"``).
-        llm: Optional client enabling the naming-refinement pass.
+        llm: Client used for the naming-refinement pass.
 
     Raises:
         DdlParseError: if the DDL cannot be parsed.
     """
     schema = extract_schema_from_ddl(ddl, dialect=dialect)
     projection = project_to_mapping(schema)
-    outcome = refine_mapping(projection.mapping, schema, llm) if llm is not None else None
+    outcome = refine_mapping(projection.mapping, schema, llm)
     return _finalize(projection, outcome)
 
 
@@ -98,41 +102,37 @@ async def build_mapping_async(
     *,
     ddl: str,
     dialect: str | None = None,
-    llm: AsyncLLMClient | None = None,
+    llm: AsyncLLMClient,
     on_conversation: ConversationCallback | None = None,
 ) -> BuildResult:
     """Async, optionally streaming, counterpart of :func:`build_mapping`.
 
-    The deterministic extract/project stage is identical and synchronous; only
-    the optional refinement pass runs on the async LLM. When *on_conversation* is
-    set, the refinement streams the assistant turn as a growing snapshot so a
-    caller (the web SSE bridge) can show the chat live.
+    The deterministic extract/project stage is identical and synchronous; only the
+    naming pass runs on the async LLM. When *on_conversation* is set, the refinement
+    streams the assistant turn as a growing snapshot so a caller (the web SSE bridge)
+    can show the chat live.
 
     Raises:
         DdlParseError: if the DDL cannot be parsed.
     """
     schema = extract_schema_from_ddl(ddl, dialect=dialect)
     projection = project_to_mapping(schema)
-    outcome = (
-        await refine_mapping_async(projection.mapping, schema, llm, on_conversation=on_conversation)
-        if llm is not None
-        else None
-    )
+    outcome = await refine_mapping_async(projection.mapping, schema, llm, on_conversation=on_conversation)
     return _finalize(projection, outcome)
 
 
-def _finalize(projection: ProjectionResult, outcome: RefinementResult | None) -> BuildResult:
+def _finalize(projection: ProjectionResult, outcome: RefinementResult) -> BuildResult:
     """Assemble a :class:`BuildResult` from the deterministic projection and the
-    optional refinement outcome (shared by the sync and async entry points)."""
+    refinement outcome (shared by the sync and async entry points).
+
+    The naming pass always runs, so ``conversation`` is always populated and ``diff``
+    is always present (possibly empty). When the pass is rejected by the guardrail the
+    outcome's mapping *is* the skeleton, so ``refined`` is ``False`` and ``diff`` is
+    empty, yet the conversation still records what was attempted.
+    """
     skeleton = projection.mapping
-    mapping = outcome.mapping if outcome is not None else skeleton
-    warnings = list(projection.report.warnings)
-    conversation: list[dict[str, str]] = []
-    diff: MappingDiff | None = None
-    if outcome is not None:
-        warnings.extend(outcome.warnings)
-        conversation = outcome.messages
-        diff = diff_mappings(skeleton, mapping)
+    mapping = outcome.mapping
+    warnings = [*projection.report.warnings, *outcome.warnings]
     return BuildResult(
         mapping=mapping,
         yaml=mapping_to_yaml(mapping),
@@ -140,8 +140,8 @@ def _finalize(projection: ProjectionResult, outcome: RefinementResult | None) ->
         refined=mapping != skeleton,
         warnings=warnings,
         skeleton_yaml=mapping_to_yaml(skeleton),
-        conversation=conversation,
-        diff=diff,
+        conversation=outcome.messages,
+        diff=diff_mappings(skeleton, mapping),
     )
 
 

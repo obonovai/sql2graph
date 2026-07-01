@@ -22,17 +22,17 @@ Invocation::
         --target  cypher \\
         --validation syntax
 
-Generate a schema-mapping draft from ``CREATE TABLE`` DDL (deterministic; no
-LLM and no database needed). Add ``--refine-llm --model ...`` to let an LLM
-improve the node/edge names::
+Generate a schema-mapping draft from ``CREATE TABLE`` DDL. The structure is derived
+deterministically (no database needed) and an LLM always improves the node/edge names,
+so ``--model`` is required::
 
-    uv run python demo/cli.py build-mapping --ddl schema.sql -o mapping.yaml
-    cat schema.sql | uv run python demo/cli.py build-mapping --ddl - > mapping.yaml
+    uv run python demo/cli.py build-mapping --ddl schema.sql --model config/models/anthropic.yaml -o mapping.yaml
+    cat schema.sql | uv run python demo/cli.py build-mapping --ddl - --model config/models/ollama.yaml > mapping.yaml
 
 A bundled TPC-H schema is included to try it out (it regenerates the shipped
 config/mappings/tpch.yaml structure)::
 
-    uv run python demo/cli.py build-mapping --ddl config/ddl/tpch.sql -o mapping.yaml
+    uv run python demo/cli.py build-mapping --ddl config/ddl/tpch.sql --model config/models/anthropic.yaml -o mapping.yaml
 
 Read SQL from stdin by passing ``--sql -``::
 
@@ -214,8 +214,9 @@ def _add_build_mapping_subparser(subparsers: argparse._SubParsersAction[argparse
         "build-mapping",
         help="Generate a schema-mapping YAML from CREATE TABLE DDL.",
         description=(
-            "Build a schema-mapping draft from CREATE TABLE DDL. Deterministic by default "
-            "(no LLM, no database); pass --refine-llm to improve names with a model."
+            "Build a schema-mapping draft from CREATE TABLE DDL. The structure is derived "
+            "deterministically (no database) and an LLM always improves the node and edge "
+            "names; if that pass fails a guardrail the deterministic draft is kept."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -230,15 +231,10 @@ def _add_build_mapping_subparser(subparsers: argparse._SubParsersAction[argparse
         help="SQL dialect for parsing (e.g. postgres, mysql, sqlite). Default: dialect-neutral.",
     )
     parser.add_argument(
-        "--refine-llm",
-        action="store_true",
-        help="Use an LLM to improve node labels and edge names (requires --model).",
-    )
-    parser.add_argument(
         "--model",
         type=Path,
-        default=None,
-        help="Model-config YAML (config/models/*.yaml). Required with --refine-llm.",
+        required=True,
+        help="Model-config YAML (config/models/*.yaml) for the AI naming pass.",
     )
     parser.add_argument(
         "-o",
@@ -558,19 +554,13 @@ def _handle_build_mapping(args: argparse.Namespace) -> int:
     """Generate a schema-mapping YAML from DDL; write it and an audit report."""
     ddl = _read_ddl(args.ddl)
 
-    llm = None
-    if args.refine_llm:
-        if args.model is None:
-            _die("--refine-llm requires --model (a model-config YAML).")
-        llm = make_llm(_load_model_config_or_die(args))
-
+    llm = make_llm(_load_model_config_or_die(args))
     try:
         result = build_mapping(ddl=ddl, dialect=args.dialect, llm=llm)
     except DdlParseError as exc:
         _die(str(exc))
     finally:
-        if llm is not None:
-            llm.close()
+        llm.close()
 
     if args.output is not None:
         if args.output.exists() and not args.force:

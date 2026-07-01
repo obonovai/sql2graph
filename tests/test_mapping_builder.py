@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
-from rows2graph import EdgeMapping, NodeMapping, SchemaMapping, build_mapping, build_mapping_async
+from rows2graph import EdgeMapping, NodeMapping, SchemaMapping, SemanticType, build_mapping, build_mapping_async
 from rows2graph.llm.usage import ChatReply, TokenUsage
 from rows2graph.mapping_builder import mapping_to_yaml
 from rows2graph.mapping_builder.ddl import DdlParseError, extract_schema_from_ddl
@@ -35,6 +37,10 @@ from rows2graph.mapping_builder.project import (
 )
 from rows2graph.mapping_builder.refine import refine_mapping, refine_mapping_async, validate_against_schema
 from rows2graph.mapping_builder.relational import ForeignKey
+from rows2graph.mapping_builder.sql_types import semantic_type_for_sql
+from rows2graph.prompts import build_system_prompt, format_schema_context
+from rows2graph.sql_features import SqlFeature
+from rows2graph.targets import make_target
 
 _CONFIG = Path(__file__).resolve().parent.parent / "config" / "mappings"
 
@@ -476,6 +482,181 @@ def test_empty_edge_properties_are_omitted() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Property data types
+# ---------------------------------------------------------------------------
+
+
+def test_semantic_type_for_sql_maps_families() -> None:
+    cases = {
+        "DATE": SemanticType.DATE,
+        "TIMESTAMP": SemanticType.DATETIME,
+        "TIMESTAMPTZ": SemanticType.DATETIME,
+        "DATETIME": SemanticType.DATETIME,
+        "TIME": SemanticType.TIME,
+        "INTERVAL": SemanticType.DURATION,
+        "INT": SemanticType.INTEGER,
+        "BIGINT": SemanticType.INTEGER,
+        "DECIMAL(15,2)": SemanticType.FLOAT,
+        "DOUBLE": SemanticType.FLOAT,
+        "BOOLEAN": SemanticType.BOOLEAN,
+        "VARCHAR(25)": SemanticType.STRING,
+        "CHAR(1)": SemanticType.STRING,
+        "TEXT": SemanticType.STRING,
+    }
+    for sql, expected in cases.items():
+        assert semantic_type_for_sql(sql) is expected, sql
+    # Unknown / exotic / missing types are left untyped, not guessed.
+    for unknown in ("UUID", "JSON", "GEOMETRY", "", None):
+        assert semantic_type_for_sql(unknown) is None, unknown
+
+
+def test_projection_derives_property_types() -> None:
+    mapping = _tpch_skeleton()
+    orders = next(n for n in mapping.nodes if n.source_table == "orders")
+    assert orders.property_types["orderdate"] is SemanticType.DATE
+    assert orders.property_types["totalprice"] is SemanticType.FLOAT
+    assert orders.property_types["comment"] is SemanticType.STRING
+    # A foreign-key column becomes an edge, not a property, so it carries no type.
+    assert "custkey" not in orders.properties
+    assert "custkey" not in orders.property_types
+    # A junction edge's own (non-FK) column is typed too.
+    partsupp = next(e for e in mapping.edges if e.source_table == "partsupp")
+    assert partsupp.property_types["availqty"] is SemanticType.INTEGER
+
+
+def test_typed_property_yaml_round_trips_both_forms() -> None:
+    text = (
+        "nodes:\n"
+        "  - label: Event\n"
+        "    source_table: event\n"
+        "    properties:\n"
+        "      id: id\n"  # short form, untyped
+        "      startsAt:\n"  # long form, typed
+        "        column: starts_at\n"
+        "        type: datetime\n"
+        "    primary_key: id\n"
+        "edges: []\n"
+    )
+    mapping = SchemaMapping.from_yaml_string(text)
+    node = mapping.nodes[0]
+    assert node.properties == {"id": "id", "startsAt": "starts_at"}
+    assert node.property_types == {"startsAt": SemanticType.DATETIME}
+    # Round-trips through the serializer and stays equal.
+    assert SchemaMapping.from_yaml_string(mapping_to_yaml(mapping)) == mapping
+    # The untyped property stays short-form; the typed one is long-form.
+    out = mapping_to_yaml(mapping)
+    assert "id: id" in out
+    assert "column: starts_at" in out and "type: datetime" in out
+
+
+def test_untyped_mapping_serializes_short_form() -> None:
+    # A mapping with no types emits only bare `name: column` values (byte-compat).
+    mapping = SchemaMapping.from_yaml(_CONFIG / "tpch.yaml")
+    out = mapping_to_yaml(mapping)
+    assert "column:" not in out
+    assert all(not n.property_types for n in mapping.nodes)
+    assert all(not e.property_types for e in mapping.edges)
+
+
+def test_property_types_reject_orphan_key() -> None:
+    with pytest.raises(ValidationError):
+        NodeMapping(
+            label="X",
+            source_table="x",
+            properties={"a": "a"},
+            property_types={"missing": SemanticType.DATE},
+            primary_key="a",
+        )
+
+
+def test_long_form_property_rejects_bad_shape() -> None:
+    text = (
+        "nodes:\n"
+        "  - label: Event\n"
+        "    source_table: event\n"
+        "    properties:\n"
+        "      id: {column: id, note: oops}\n"  # unknown inner key
+        "    primary_key: id\n"
+        "edges: []\n"
+    )
+    with pytest.raises(ValidationError):
+        SchemaMapping.from_yaml_string(text)
+
+
+def test_prompt_renders_type_and_untyped_is_unchanged() -> None:
+    typed = SchemaMapping.from_yaml_string(
+        "nodes:\n"
+        "  - label: Event\n"
+        "    source_table: event\n"
+        "    properties:\n"
+        "      startsAt:\n"
+        "        column: starts_at\n"
+        "        type: datetime\n"
+        "    primary_key: startsAt\n"
+        "edges: []\n"
+    )
+    assert "`startsAt` <- SQL column `starts_at` (datetime)" in format_schema_context(typed)
+    # An untyped variant of the same schema renders exactly as before (no suffix).
+    untyped = SchemaMapping.from_yaml_string(
+        "nodes:\n"
+        "  - label: Event\n"
+        "    source_table: event\n"
+        "    properties:\n"
+        "      startsAt: starts_at\n"
+        "    primary_key: startsAt\n"
+        "edges: []\n"
+    )
+    untyped_ctx = format_schema_context(untyped)
+    assert "`startsAt` <- SQL column `starts_at`" in untyped_ctx
+    assert "(datetime)" not in untyped_ctx
+
+
+def test_cypher_temporal_rule_pins_declared_datetime() -> None:
+    ldbc = SchemaMapping.from_yaml(_CONFIG / "ldbc.yaml")
+    prompt = build_system_prompt(ldbc, make_target("cypher"), frozenset({SqlFeature.TEMPORAL}))
+    # The schema block shows the type and the temporal rule pins the q02 fix.
+    assert "(datetime)" in prompt
+    assert "datetime('2010-06-01T00:00:00')" in prompt
+    assert "PREFER the property" in prompt
+
+
+def test_model_dump_json_serialises_types_as_strings() -> None:
+    # The web layer ships mapping.model_dump() as JSON; a SemanticType must survive
+    # as a plain string so the frontend reads `property_types` without special-casing.
+    mapping = SchemaMapping.from_yaml(_CONFIG / "ldbc.yaml")
+    reloaded = json.loads(json.dumps(mapping.model_dump()))
+    post = next(n for n in reloaded["nodes"] if n["label"] == "Post")
+    assert post["property_types"]["creationDate"] == "datetime"
+
+
+def test_refine_preserves_property_type() -> None:
+    # Renaming a property KEY while keeping {column, type} is allowed; dropping the
+    # type is an SQL-side change and must be rejected in favour of the skeleton.
+    skeleton = _tpch_skeleton()
+    schema = extract_schema_from_ddl(TPCH_DDL, dialect="postgres")
+
+    # Accept: rename the property key `orderdate` -> `placedOn`, keep column + type.
+    renamed = mapping_to_yaml(skeleton).replace("orderdate:\n", "placedOn:\n")
+    ok = refine_mapping(skeleton, schema, _FakeLLM(renamed))
+    assert ok.accepted is True
+    orders = next(n for n in ok.mapping.nodes if n.source_table == "orders")
+    assert orders.property_types.get("placedOn") is SemanticType.DATE
+
+    # Reject: drop orderdate's type (collapse it to an untyped property). Build the
+    # candidate from the model so the test does not depend on YAML indentation.
+    orders_skel = next(n for n in skeleton.nodes if n.source_table == "orders")
+    untyped_types = {k: v for k, v in orders_skel.property_types.items() if k != "orderdate"}
+    downgraded = orders_skel.model_copy(update={"property_types": untyped_types})
+    candidate = SchemaMapping(
+        nodes=[downgraded if n.source_table == "orders" else n for n in skeleton.nodes],
+        edges=list(skeleton.edges),
+    )
+    bad = refine_mapping(skeleton, schema, _FakeLLM(mapping_to_yaml(candidate)))
+    assert bad.accepted is False
+    assert bad.mapping == skeleton
+
+
+# ---------------------------------------------------------------------------
 # LLM refinement + guardrail
 # ---------------------------------------------------------------------------
 
@@ -590,9 +771,10 @@ def test_refine_rejects_swapped_foreign_key_column() -> None:
 
 def test_refine_rejects_swapped_property_column() -> None:
     # A node property value is repointed from one real column to another real one.
+    # (Typed properties serialise long-form, so the column lives on a `column:` line.)
     skeleton = _tpch_skeleton()
     schema = extract_schema_from_ddl(TPCH_DDL, dialect="postgres")
-    swapped = mapping_to_yaml(skeleton).replace("name: name", "name: comment")
+    swapped = mapping_to_yaml(skeleton).replace("column: name", "column: comment")
     outcome = refine_mapping(skeleton, schema, _FakeLLM(swapped))
     assert outcome.accepted is False
     assert outcome.mapping == skeleton
@@ -679,16 +861,20 @@ def test_validate_against_schema_flags_unknown_table() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_mapping_deterministic() -> None:
-    result = build_mapping(ddl=TPCH_DDL, dialect="postgres")
+def test_build_mapping_noop_refinement() -> None:
+    # The naming pass always runs. A non-YAML reply is rejected by the guardrail, so
+    # the build falls back to the deterministic skeleton - still valid, but now with
+    # the transcript recorded and an (empty) diff rather than None.
+    result = build_mapping(ddl=TPCH_DDL, dialect="postgres", llm=_FakeLLM("(noop)"))
     assert result.refined is False
-    assert result.warnings == []
     assert SchemaMapping.from_yaml_string(result.yaml) == result.mapping
     assert result.report.as_dict()["node_count"] == 7
-    # No LLM ran: no conversation, no diff, and the "original" equals the result.
-    assert result.conversation == []
-    assert result.diff is None
     assert result.skeleton_yaml == result.yaml
+    # The naming pass ran: the chat is recorded, the diff is empty (not None), and the
+    # fallback is explained in the warnings.
+    assert result.conversation and result.conversation[0]["role"] == "system"
+    assert result.diff is not None and result.diff.is_empty()
+    assert any("rejected" in w.lower() for w in result.warnings)
 
 
 def test_build_mapping_with_llm_refines() -> None:
@@ -727,38 +913,56 @@ def _load_cli() -> Any:
     return module
 
 
-def test_cli_build_mapping_writes_loadable_yaml(tmp_path: Path) -> None:
+# The build-mapping CLI now always runs the AI naming pass, so --model is required.
+# These smoke tests stay offline by pointing --model at the bundled Ollama config
+# (a pure YAML load, no network) and patching the CLI's make_llm to a fake whose
+# non-YAML reply the guardrail rejects, so the build falls back to the deterministic
+# skeleton - which is exactly the structure these tests assert on.
+_MODEL_CONFIG = _CONFIG.parent / "models" / "ollama.yaml"
+
+
+def _patch_offline_llm(cli: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "make_llm", lambda _cfg: _FakeLLM("(noop)"))
+
+
+def test_cli_build_mapping_writes_loadable_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cli = _load_cli()
+    _patch_offline_llm(cli, monkeypatch)
     ddl_path = tmp_path / "schema.sql"
     ddl_path.write_text(TPCH_DDL)
     out_path = tmp_path / "mapping.yaml"
-    code = cli.main(["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "-o", str(out_path)])
+    code = cli.main(
+        ["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "--model", str(_MODEL_CONFIG), "-o", str(out_path)]
+    )
     assert code == 0
     mapping = SchemaMapping.from_yaml(out_path)
     assert len(mapping.nodes) == 7
 
 
-def test_cli_build_mapping_rejects_bad_ddl(tmp_path: Path) -> None:
+def test_cli_build_mapping_rejects_bad_ddl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cli = _load_cli()
+    _patch_offline_llm(cli, monkeypatch)
     ddl_path = tmp_path / "bad.sql"
     ddl_path.write_text("CREATE TABLE (((")
     with pytest.raises(SystemExit) as exc:
-        cli.main(["build-mapping", "--ddl", str(ddl_path)])
+        cli.main(["build-mapping", "--ddl", str(ddl_path), "--model", str(_MODEL_CONFIG)])
     assert exc.value.code == 2
 
 
-def test_cli_build_mapping_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
+def test_cli_build_mapping_refuses_to_overwrite_without_force(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cli = _load_cli()
+    _patch_offline_llm(cli, monkeypatch)
     ddl_path = tmp_path / "schema.sql"
     ddl_path.write_text(TPCH_DDL)
     out_path = tmp_path / "mapping.yaml"
     out_path.write_text("existing")
+    argv = ["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "--model", str(_MODEL_CONFIG), "-o", str(out_path)]
     with pytest.raises(SystemExit) as exc:
-        cli.main(["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "-o", str(out_path)])
+        cli.main(argv)
     assert exc.value.code == 2
     assert out_path.read_text() == "existing"  # left untouched
     # --force overwrites.
-    code = cli.main(["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "-o", str(out_path), "--force"])
+    code = cli.main([*argv, "--force"])
     assert code == 0
     assert SchemaMapping.from_yaml(out_path)  # now a real mapping
 
@@ -825,12 +1029,14 @@ def test_build_mapping_async_streams_and_matches_sync() -> None:
     assert result.diff.as_dict() == sync_result.diff.as_dict()  # type: ignore[union-attr]
 
 
-def test_build_mapping_async_deterministic_without_llm() -> None:
-    result = asyncio.run(build_mapping_async(ddl=TPCH_DDL, dialect="postgres"))
+def test_build_mapping_async_noop_refinement() -> None:
+    # Async counterpart: a rejected naming pass falls back to the skeleton, but the
+    # conversation is recorded and the diff is empty (not None).
+    result = asyncio.run(build_mapping_async(ddl=TPCH_DDL, dialect="postgres", llm=_FakeAsyncLLM("(noop)")))
     assert result.refined is False
-    assert result.conversation == []
-    assert result.diff is None
     assert result.skeleton_yaml == result.yaml
+    assert result.conversation and result.conversation[0]["role"] == "system"
+    assert result.diff is not None and result.diff.is_empty()
 
 
 def test_refine_mapping_async_falls_back_when_llm_errors() -> None:

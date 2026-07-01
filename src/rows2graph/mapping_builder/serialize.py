@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping
+from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
 from rows2graph.mapping_builder.project import CoverageReport
 
 
@@ -35,11 +35,26 @@ def mapping_to_yaml(mapping: SchemaMapping, *, header: str | None = None) -> str
     return body
 
 
+def _props_out(properties: dict[str, str], property_types: dict[str, SemanticType]) -> dict[str, Any]:
+    """Render the ``properties`` block, short form when untyped, long when typed.
+
+    An untyped property stays a bare ``name: column`` string, so a mapping that
+    never used types serialises byte-for-byte as before; a typed one round-trips
+    as ``name: {column: ..., type: ...}``, which
+    :func:`rows2graph.mapping._split_property_types` reads straight back.
+    """
+    out: dict[str, Any] = {}
+    for name, column in properties.items():
+        semantic = property_types.get(name)
+        out[name] = {"column": column, "type": semantic.value} if semantic is not None else column
+    return out
+
+
 def _node_dict(node: NodeMapping) -> dict[str, Any]:
     return {
         "label": node.label,
         "source_table": node.source_table,
-        "properties": dict(node.properties),
+        "properties": _props_out(node.properties, node.property_types),
         "primary_key": node.primary_key,
     }
 
@@ -54,7 +69,7 @@ def _edge_dict(edge: EdgeMapping) -> dict[str, Any]:
         "target_primary_key": edge.target_primary_key,
     }
     if edge.properties:
-        out["properties"] = dict(edge.properties)
+        out["properties"] = _props_out(edge.properties, edge.property_types)
     return out
 
 

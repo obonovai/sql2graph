@@ -1,10 +1,10 @@
-"""Optional LLM refinement of a deterministic mapping skeleton.
+"""LLM refinement of a deterministic mapping skeleton.
 
-The deterministic projection gets the *structure* right but the *names* clunky
-(``HAS_REGION`` instead of ``IN_REGION``, ``Lineitem`` instead of ``LineItem``).
-This module asks an LLM to fix exactly that - the graph-facing names (node labels,
-edge types, property keys) - while a hard guardrail keeps it from touching anything
-else.
+The deterministic projection gets the *structure* right but the *names* clunky (a
+mechanical ``HAS_<TARGET>`` edge type, or a label that still needs its casing and
+word boundaries fixed). This module asks an LLM to fix exactly that - the graph-facing
+names (node labels, edge types, property keys) - while a hard guardrail keeps it from
+touching anything else.
 
 The guardrail has two parts. :func:`validate_against_schema` checks the mapping only
 references columns that really *exist* in the extracted schema (the inverse of
@@ -29,7 +29,7 @@ from pydantic import ValidationError
 
 from rows2graph.events import ConversationCallback
 from rows2graph.llm import AsyncLLMClient, LLMClient, StreamCallback
-from rows2graph.mapping import SchemaMapping
+from rows2graph.mapping import SchemaMapping, SemanticType
 from rows2graph.mapping_builder.relational import RelationalSchema
 from rows2graph.mapping_builder.serialize import mapping_to_yaml
 
@@ -234,20 +234,37 @@ def _parse_and_validate(text: str, skeleton: SchemaMapping, schema: RelationalSc
     return candidate, []
 
 
+def _typed_columns(
+    properties: dict[str, str], property_types: dict[str, SemanticType]
+) -> set[tuple[str, str | None]]:
+    """The set of ``(column, type)`` pairs a mapping maps, independent of property keys.
+
+    Keying the type by the SQL column - the identifier the LLM may not rename -
+    lets a renamed property key still match, while a dropped or altered type is
+    caught as an SQL-side change and rejected in favour of the draft. Columns
+    casefold; the type is compared by its string value (``None`` when untyped).
+    """
+    return {
+        (column.casefold(), property_types[key].value if key in property_types else None)
+        for key, column in properties.items()
+    }
+
+
 def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozenset[Any]]:
     """The SQL-facing identity of a mapping, independent of graph-facing names.
 
     Two mappings share a signature iff they map the same tables and columns the
-    same way, regardless of labels, edge types, or property *keys*. Property
-    column values are compared as a set per node/edge (a renamed key keeps its
-    value; a dropped column changes the set). All values casefold, mirroring the
-    rest of the guardrail.
+    same way (and assign each column the same type), regardless of labels, edge
+    types, or property *keys*. Property ``(column, type)`` pairs are compared as a
+    set per node/edge (a renamed key keeps its value; a dropped column or a
+    changed type changes the set). All identifiers casefold, mirroring the rest
+    of the guardrail.
     """
     nodes = frozenset(
         (
             n.source_table.casefold(),
             n.primary_key.casefold(),
-            frozenset(v.casefold() for v in n.properties.values()),
+            frozenset(_typed_columns(n.properties, n.property_types)),
         )
         for n in mapping.nodes
     )
@@ -256,7 +273,7 @@ def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozens
             e.source_table.casefold(),
             e.source_foreign_key.casefold(),
             e.target_primary_key.casefold(),
-            frozenset(v.casefold() for v in e.properties.values()),
+            frozenset(_typed_columns(e.properties, e.property_types)),
         )
         for e in mapping.edges
     )
@@ -310,12 +327,15 @@ def _build_refine_system_prompt() -> str:
         "from a SQL schema, plus that schema. Your job is to make the draft read like "
         "an expert hand-authored it, WITHOUT changing what it maps to.\n\n"
         "You MAY change only:\n"
-        "  - node `label` values (e.g. `Lineitem` -> `LineItem`),\n"
-        "  - edge `type` values (e.g. `HAS_REGION` -> `IN_REGION`, a junction's name to a verb like `KNOWS`),\n"
+        "  - node `label` values (e.g. `foo_bar` or `Foobar` -> `FooBar`),\n"
+        "  - edge `type` values (tidy a mechanical names into a more idiomatic relationship name),\n"
+        "    but respect the direction of the edge (source node -> target node).\n"
         "  - the KEYS of any `properties` map (the graph-facing property names).\n\n"
         "You MUST NOT change any SQL identifier. Every `source_table`, `primary_key`, "
         "`source_foreign_key`, `target_primary_key`, and every `properties` VALUE must be "
-        "copied verbatim from the draft. Do not add or remove nodes or edges, and do not "
+        "copied verbatim from the draft. A `properties` VALUE may be a bare column name or "
+        "an object `{column: ..., type: ...}`; copy the column AND any `type` verbatim, "
+        "renaming only the property KEY. Do not add or remove nodes or edges, and do not "
         "drop any table. If an edge `source_node`/`target_node` references a label you "
         "rename, update those references consistently so every edge still points at a "
         "declared node.\n\n"
@@ -338,7 +358,7 @@ def _build_repair_prompt(violations: list[str]) -> str:
         "Your previous answer changed or invented SQL identifiers, which is not allowed:\n"
         f"{listed}\n\n"
         "Return the mapping again. Rename only labels, edge types, and property keys; "
-        "copy every table name, column name, and key verbatim from the draft. YAML only."
+        "copy every table name, column name, property type, and key verbatim from the draft. YAML only."
     )
 
 
