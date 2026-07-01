@@ -629,9 +629,7 @@ def _handle_translate(args: argparse.Namespace) -> int:
     if args.validation not in valid_modes_for_target(args.target):
         _die(
             f"--validation={args.validation} is not available for --target={args.target} "
-            f"(available: {', '.join(valid_modes_for_target(args.target))}). AQL has no "
-            "deployment-free syntax validator; use --validation server for AQL "
-            "(optionally with --server, or omit it to auto-provision)."
+            f"(available: {', '.join(valid_modes_for_target(args.target))})."
         )
     validation_mode = resolve_validation_mode(args.validation, server_config=server_config)
 

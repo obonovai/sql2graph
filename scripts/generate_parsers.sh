@@ -52,6 +52,11 @@ rm -rf "$OUT/gremlin"; mkdir -p "$OUT/gremlin"
 ( cd "$GRAMMARS" && run_antlr -Dlanguage=Python3 -no-listener -no-visitor -o "$OUT/gremlin" \
   Gremlin.g4 )
 
+echo "Generating AQL parser..."
+rm -rf "$OUT/aql"; mkdir -p "$OUT/aql"
+( cd "$GRAMMARS" && run_antlr -Dlanguage=Python3 -no-listener -no-visitor -lib . -o "$OUT/aql" \
+  AQLLexer.g4 AQLParser.g4 )
+
 # Keep only the runtime-required .py files; drop ANTLR dev artifacts.
 find "$OUT" -type f \( -name '*.interp' -o -name '*.tokens' \) -delete
 
@@ -72,5 +77,6 @@ done < <(find "$OUT" -type f -name '*.py' ! -name '__init__.py' -print0)
 printf '' > "$OUT/__init__.py"
 printf '' > "$OUT/cypher/__init__.py"
 printf '' > "$OUT/gremlin/__init__.py"
+printf '' > "$OUT/aql/__init__.py"
 
 echo "Done. Generated parsers under $OUT"

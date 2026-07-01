@@ -45,14 +45,19 @@ _START_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# A clause-ordering error: ArangoDB rejects a SORT/LIMIT/FILTER/COLLECT/LET that
-# follows the block-terminating RETURN. The parser blames the trailing clause
-# ("unexpected SORT declaration") or reports it expected the query to end. Both
-# misdirect the model toward the named clause when the real fix is to move
-# RETURN last. Either signal (the "unexpected <clause>" phrasing or the
-# "expecting end of query string" tail) identifies the class.
+# A clause-ordering error: ArangoDB rejects a SORT/LIMIT/FILTER/COLLECT/LET (or a
+# second RETURN) that follows the block-terminating RETURN. The validator blames
+# the trailing clause, which misdirects the model toward the named clause when
+# the real fix is to move RETURN last. The two validator backends phrase this
+# differently, so match both:
+#   * server (`db.aql.validate`): "unexpected SORT declaration" / the
+#     "expecting end of query string" tail.
+#   * offline ANTLR grammar: "mismatched|extraneous input 'SORT' expecting <EOF>"
+#     (the clause appears where the query was expected to end).
 _ORDERING_ERROR_RE = re.compile(
-    r"unexpected\s+(SORT|LIMIT|FILTER|COLLECT|LET)\b|expecting end of query string",
+    r"unexpected\s+(SORT|LIMIT|FILTER|COLLECT|LET)\b"
+    r"|expecting end of query string"
+    r"|(?:mismatched|extraneous)\s+input\s+'(?:SORT|LIMIT|FILTER|COLLECT|LET|RETURN)'",
     re.IGNORECASE,
 )
 

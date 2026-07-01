@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from rows2graph import (
     AnthropicConfig,
+    AqlSyntaxValidator,
     AqlTarget,
     ArangoDBConfig,
     CypherSyntaxValidator,
@@ -451,15 +452,15 @@ def test_make_validator_cypher_syntax() -> None:
     assert isinstance(v, CypherSyntaxValidator)
 
 
-def test_make_validator_aql_syntax_rejected() -> None:
-    with pytest.raises(ValueError, match="no deployment-free syntax validator"):
-        make_validator("aql", "syntax")
+def test_make_validator_aql_syntax() -> None:
+    v = make_validator("aql", "syntax")
+    assert isinstance(v, AqlSyntaxValidator)
 
 
 def test_valid_modes_for_target() -> None:
     assert valid_modes_for_target("cypher") == ("none", "syntax", "server")
     assert valid_modes_for_target("gremlin") == ("none", "syntax", "server")
-    assert valid_modes_for_target("aql") == ("none", "server")
+    assert valid_modes_for_target("aql") == ("none", "syntax", "server")
 
 
 def test_make_validator_gremlin_syntax() -> None:
@@ -923,6 +924,53 @@ def test_gremlin_syntax_flags_unbalanced_quotes() -> None:
     assert GremlinSyntaxValidator().validate("g.V().has('label, 'x').count()")
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "RETURN 1",
+        "RETURN DISTINCT x",
+        "FOR u IN users FILTER u.age >= 20 AND u.age < 30 SORT u.name DESC LIMIT 10 RETURN u.name",
+        "FOR u IN users LET n = u.name RETURN { name: n, id: u._id }",
+        "FOR u IN users COLLECT city = u.city INTO g RETURN { city, count: LENGTH(g) }",
+        "FOR u IN users COLLECT WITH COUNT INTO total RETURN total",
+        "FOR u IN users COLLECT AGGREGATE ma = MAX(u.age) RETURN ma",
+        "INSERT { name: 'x' } INTO users",
+        "UPDATE 'key' WITH { a: 1 } IN users OPTIONS { waitForSync: true }",
+        "UPSERT { a: 1 } INSERT { a: 1 } UPDATE { b: 2 } IN users",
+        "FOR v, e, p IN 1..3 OUTBOUND 'start/1' GRAPH 'g' RETURN v",
+        "FOR v, e IN OUTBOUND SHORTEST_PATH 'a/1' TO 'b/2' GRAPH 'g' RETURN v",
+        "RETURN u.items[* FILTER CURRENT.age > 2]",
+        "RETURN x NOT IN [1, 2, 3]",
+        "RETURN a ? b : c",
+        "FOR d IN @@coll FILTER d.k == @value RETURN d",
+        "RETURN LENGTH(FOR x IN c RETURN x)",
+        "WITH users FOR u IN users RETURN u",
+    ],
+)
+def test_aql_syntax_passes_valid_query(query: str) -> None:
+    assert AqlSyntaxValidator().validate(query) == []
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "FOR u IN RETURN u",
+        "RETURN",
+        "RETURN (1 + )",
+        "RETURN [1, 2",
+        "MATCH (n) RETURN n",
+        "SELECT * FROM users",
+        "FOR u IN users RETURN u EXTRA",
+    ],
+)
+def test_aql_syntax_flags_invalid_query(query: str) -> None:
+    assert AqlSyntaxValidator().validate(query)
+
+
+def test_aql_syntax_flags_empty_query() -> None:
+    assert AqlSyntaxValidator().validate("   ") == ["Query is empty"]
+
+
 # ---------------------------------------------------------------------------
 # Prompt assembly
 # ---------------------------------------------------------------------------
@@ -1033,8 +1081,21 @@ def test_aql_repair_hint_fires_on_clause_ordering_error() -> None:
     assert "RETURN" in hint and "before" in hint.lower()
 
 
+def test_aql_repair_hint_fires_on_offline_grammar_ordering_error() -> None:
+    # The offline ANTLR validator phrases the clause-after-RETURN error as
+    # "mismatched input 'SORT' expecting <EOF>", not the server's "unexpected
+    # SORT". repair_hint must recognise both so the corrective still fires.
+    errors = AqlSyntaxValidator().validate("FOR u IN users RETURN u.name SORT u.name DESC")
+    assert errors and "mismatched input 'SORT'" in errors[0]
+    hint = AqlTarget().repair_hint(errors)
+    assert hint is not None
+    assert "RETURN" in hint and "before" in hint.lower()
+
+
 def test_aql_repair_hint_none_for_unrelated_error() -> None:
     assert AqlTarget().repair_hint(["Unbalanced parentheses"]) is None
+    # A real offline parse error that is NOT a clause-ordering problem.
+    assert AqlTarget().repair_hint(AqlSyntaxValidator().validate("RETURN (1 + )")) is None
 
 
 def test_cypher_and_gremlin_repair_hint_always_none() -> None:

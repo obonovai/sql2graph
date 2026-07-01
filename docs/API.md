@@ -139,14 +139,13 @@ Both factories raise `ValueError` if `mode == "server"` and
 `server_config` is missing, and `TypeError` if the `server_config`'s type
 does not match `target`.
 
-`mode == "syntax"` builds the deployment-free, grammar-based validator (ANTLR,
-using each engine's own grammar) for `cypher` and `gremlin`. It is **not**
-available for `aql` (ArangoDB publishes no reusable offline grammar), so both
-factories raise `ValueError` for `("aql", "syntax")`; validate AQL with
-`server` / `managed` instead. `valid_modes_for_target(target)` returns the modes
-available for a target (`("none", "server")` for `aql`,
-`("none", "syntax", "server")` for `cypher` / `gremlin`), so CLIs and UIs can
-offer the right choices without hardcoding the rule.
+`mode == "syntax"` builds the deployment-free, grammar-based validator (ANTLR).
+Cypher and Gremlin use each engine's own published grammar; AQL uses a hand-port
+of ArangoDB's Flex+Bison grammar (ArangoDB publishes no reusable offline
+grammar), so the AQL syntax check is best-effort and the `server` / `managed`
+validator remains authoritative. `valid_modes_for_target(target)` returns
+`("none", "syntax", "server")` for all three targets, so CLIs and UIs can offer
+the right choices without hardcoding the rule.
 
 `mode == "managed"` needs no `server_config`: it returns a
 `ManagedServerValidator` (async: `AsyncManagedServerValidator`) that

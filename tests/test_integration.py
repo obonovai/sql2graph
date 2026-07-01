@@ -25,6 +25,7 @@ import pytest
 from rows2graph import (
     AnthropicConfig,
     AnthropicLLMClient,
+    AqlSyntaxValidator,
     AsyncManagedServerValidator,
     AsyncSQLTranslator,
     CypherSyntaxValidator,
@@ -319,6 +320,45 @@ def test_managed_aql_validator_accepts_and_rejects() -> None:
         validator.close()
     assert bad, "managed AQL validator should reject a malformed query"
     assert good == [], f"managed AQL validator should accept a valid query, got: {good}"
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_aql_offline_syntax_agrees_with_server() -> None:
+    """The offline (hand-ported) AQL grammar should agree with ArangoDB's own parser.
+
+    Guards the hand-port against drift: every query is validated both by the
+    deployment-free ``AqlSyntaxValidator`` and by ArangoDB's ``db.aql.validate``
+    (via the managed validator). They must agree on accept vs. reject for this
+    purely-syntactic corpus.
+    """
+    valid = [
+        "RETURN 1",
+        "FOR u IN users FILTER u.age > 20 SORT u.name DESC LIMIT 10 RETURN u.name",
+        "FOR u IN users COLLECT c = u.city INTO g RETURN { c, n: LENGTH(g) }",
+        "FOR u IN users COLLECT WITH COUNT INTO total RETURN total",
+        "RETURN x NOT IN [1, 2, 3]",
+        "RETURN a ? b : c",
+        "RETURN [1, 2, 3][*]",
+    ]
+    invalid = [
+        "FOR u IN RETURN u",
+        "RETURN",
+        "RETURN (1 + )",
+        "SELECT * FROM users",
+        "FOR u IN users RETURN u EXTRA",
+    ]
+    offline = AqlSyntaxValidator()
+    server = ManagedServerValidator("aql")
+    try:
+        for q in valid:
+            assert offline.validate(q) == [], f"offline rejected valid AQL: {q!r}"
+            assert server.validate(q) == [], f"server rejected valid AQL: {q!r}"
+        for q in invalid:
+            assert offline.validate(q), f"offline accepted invalid AQL: {q!r}"
+            assert server.validate(q), f"server accepted invalid AQL: {q!r}"
+    finally:
+        offline.close()
+        server.close()
 
 
 @pytest.mark.usefixtures("docker_available")

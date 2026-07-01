@@ -40,13 +40,13 @@ MAPPINGS_DIR = REPO_ROOT / "config" / "mappings"
 OUTPUTS_DIR = REPO_ROOT / "evaluation" / "outputs"
 REPORTS_DIR = REPO_ROOT / "evaluation" / "reports"
 
-# Target -> deployment-free default validation mode. AQL has no offline grammar,
-# so it defaults to server-backed validation (which resolves to "managed" =
-# auto-provisioned DB when no server_config is supplied).
+# Target -> deployment-free default validation mode. All three targets have an
+# in-process grammar-based syntax validator (AQL via a hand-port of ArangoDB's
+# grammar), so all default to "syntax"; pass an override for server/managed.
 DEFAULT_VALIDATION_MODE: dict[Target, ValidationMode] = {
     "cypher": "syntax",
     "gremlin": "syntax",
-    "aql": "server",
+    "aql": "syntax",
 }
 
 

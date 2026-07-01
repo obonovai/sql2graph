@@ -58,7 +58,7 @@ notebooks. Records and metrics auto-stratify by `(dataset, target, model)`:
 | To add | Do |
 |---|---|
 | another Ollama / Anthropic model | append `RunConfig(model=..., provider=...)`; for Anthropic, export `ANTHROPIC_API_KEY` and add per-model pricing in notebook 02 |
-| AQL or Gremlin target | add `expected_aql` / `expected_gremlin` to the gold YAML and append `RunConfig(target=...)`. AQL auto-routes to `server`/`managed` validation (it has no offline grammar), so it never hits the `make_validator("aql","syntax")` error |
+| AQL or Gremlin target | add `expected_aql` / `expected_gremlin` to the gold YAML and append `RunConfig(target=...)`. All three targets default to deployment-free `syntax` validation (AQL via a hand-ported ArangoDB grammar); pass an override for `server`/`managed` |
 | TPC-H dataset | flesh out `datasets/tpch.yaml`, rely on `config/mappings/tpch.yaml`, append `RunConfig(dataset="tpch")` |
 
 ## Running the DB-free first pass

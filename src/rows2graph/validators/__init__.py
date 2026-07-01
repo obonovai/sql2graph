@@ -6,11 +6,13 @@ loop: it inspects a candidate query and returns a list of error strings
 
 * **Syntax** validators
   (:class:`~rows2graph.validators.cypher.syntax.CypherSyntaxValidator`,
-  :class:`~rows2graph.validators.gremlin.syntax.GremlinSyntaxValidator`):
-  grammar-based (ANTLR, using each engine's own grammar), deployment-free;
-  catch structural / grammar errors with no database. AQL has no reusable
-  offline grammar and therefore no syntax validator; validate AQL with the
-  server (or managed) mode below.
+  :class:`~rows2graph.validators.gremlin.syntax.GremlinSyntaxValidator`,
+  :class:`~rows2graph.validators.aql.syntax.AqlSyntaxValidator`):
+  grammar-based (ANTLR), deployment-free; catch structural / grammar errors
+  with no database. Cypher and Gremlin use each engine's own published
+  grammar; AQL uses a hand-port of ArangoDB's Flex+Bison parser (ArangoDB
+  ships no reusable offline grammar), so its syntax check is best-effort and
+  the server mode below remains authoritative.
 * **Server** validators
   (:class:`~rows2graph.validators.cypher.server.CypherServerValidator`,
   :class:`~rows2graph.validators.aql.server.AqlServerValidator`,
@@ -50,6 +52,7 @@ from rows2graph.validators.aql.server import (
     ArangoDBConfig,
     AsyncAqlServerValidator,
 )
+from rows2graph.validators.aql.syntax import AqlSyntaxValidator, AsyncAqlSyntaxValidator
 from rows2graph.validators.cypher.server import (
     AsyncCypherServerValidator,
     CypherServerValidator,
@@ -110,24 +113,15 @@ def resolve_validation_mode(mode: str, *, server_config: object | None) -> str:
     return mode
 
 
-_NO_AQL_SYNTAX_MSG = (
-    "AQL has no deployment-free syntax validator: ArangoDB publishes no reusable "
-    "offline grammar. Use mode='server' with an ArangoDBConfig, or mode='managed' "
-    "to auto-provision ArangoDB."
-)
-
-
 def valid_modes_for_target(target: str) -> tuple[str, ...]:
     """Validation modes available for a target language.
 
     Centralises the per-target rule so CLIs and UIs don't each hardcode it
     (mirrors :data:`VALID_VALIDATION_MODES` and :func:`resolve_validation_mode`).
-    AQL omits ``"syntax"``: it has no offline grammar, so deployment-free
-    validation is unavailable and ``"server"`` / ``"managed"`` is required.
+    All three targets now offer the same modes; AQL's ``"syntax"`` mode uses a
+    hand-ported ArangoDB grammar (see :mod:`rows2graph.validators.aql.syntax`).
     """
-    if target == "aql":
-        return ("none", "server")
-    if target in ("cypher", "gremlin"):
+    if target in ("cypher", "gremlin", "aql"):
         return ("none", "syntax", "server")
     raise ValueError(f"Unknown target language: {target!r}")
 
@@ -177,7 +171,7 @@ def make_validator(
         if target == "gremlin":
             return GremlinSyntaxValidator()
         if target == "aql":
-            raise ValueError(_NO_AQL_SYNTAX_MSG)
+            return AqlSyntaxValidator()
         raise ValueError(f"Unknown target language: {target!r}")
 
     if mode == "server":
@@ -232,7 +226,7 @@ def make_async_validator(
         if target == "gremlin":
             return AsyncGremlinSyntaxValidator()
         if target == "aql":
-            raise ValueError(_NO_AQL_SYNTAX_MSG)
+            return AsyncAqlSyntaxValidator()
         raise ValueError(f"Unknown target language: {target!r}")
 
     if mode == "server":
@@ -269,8 +263,10 @@ def make_async_validator(
 
 __all__ = [
     "AqlServerValidator",
+    "AqlSyntaxValidator",
     "ArangoDBConfig",
     "AsyncAqlServerValidator",
+    "AsyncAqlSyntaxValidator",
     "AsyncCypherServerValidator",
     "AsyncCypherSyntaxValidator",
     "AsyncGremlinServerValidator",
