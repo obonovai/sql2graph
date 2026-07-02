@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 class Neo4jConfig(BaseModel):
     """Connection settings for a Neo4j instance.
 
-    Used only when the demo is invoked with ``--validation server`` and
-    ``--target cypher``. The discriminator field ``type="neo4j"`` is what
+    Used only under server validation for the cypher target. The
+    discriminator field ``type="neo4j"`` is what
     :data:`rows2graph.validators.ServerConfig` uses to dispatch
     :func:`rows2graph.validators.load_server_config` to this class.
 

@@ -1,4 +1,4 @@
-"""Render a :class:`~rows2graph.mapping.SchemaMapping` to YAML, and the audit to text.
+"""Render a :class:`~rows2graph.mapping.SchemaMapping` to YAML.
 
 The library has always *read* mapping YAML (``yaml.safe_load`` in
 :meth:`SchemaMapping.from_yaml`); this is the first place it *writes* it. The
@@ -14,7 +14,6 @@ from typing import Any
 import yaml
 
 from rows2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
-from rows2graph.mapping_builder.project import CoverageReport
 
 
 def mapping_to_yaml(mapping: SchemaMapping, *, header: str | None = None) -> str:
@@ -71,34 +70,3 @@ def _edge_dict(edge: EdgeMapping) -> dict[str, Any]:
     if edge.properties:
         out["properties"] = _props_out(edge.properties, edge.property_types)
     return out
-
-
-def format_audit_report(report: CoverageReport) -> str:
-    """Render the coverage report as a human-readable block (for the CLI / stderr)."""
-    lines: list[str] = []
-    lines.append(f"Nodes: {len(report.node_tables)}  Edges: {len(report.fk_edges)}")
-    if report.node_tables:
-        lines.append("")
-        lines.append("Node tables:")
-        lines.extend(f"  - {t}" for t in report.node_tables)
-    if report.edge_tables:
-        lines.append("")
-        lines.append("Junction tables collapsed to edges:")
-        lines.extend(f"  - {t}" for t in report.edge_tables)
-    if report.fk_edges:
-        lines.append("")
-        lines.append("Relationships:")
-        lines.extend(f"  - {e}" for e in report.fk_edges)
-    if report.synthesized_keys:
-        lines.append("")
-        lines.append("Synthesized primary keys (no key declared):")
-        lines.extend(f"  - {t}" for t in report.synthesized_keys)
-    if report.dropped_objects:
-        lines.append("")
-        lines.append("Dropped (not mapped):")
-        lines.extend(f"  - {name}: {reason}" for name, reason in report.dropped_objects)
-    if report.warnings:
-        lines.append("")
-        lines.append("Warnings:")
-        lines.extend(f"  - {w}" for w in report.warnings)
-    return "\n".join(lines)

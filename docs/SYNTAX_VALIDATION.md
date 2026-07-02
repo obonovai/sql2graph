@@ -278,8 +278,8 @@ That precise, located message is the main advantage over the old regex strings.
    `valid_modes_for_target` is correct. `tests/test_integration.py` cross-checks
    the offline AQL grammar against ArangoDB's own `db.aql.validate` so the
    hand-port can't silently drift.
-9. **Update downstream consumers:** the demo CLI and web backend derive the
-   allowed modes from `valid_modes_for_target`; the web backend's `/api/options`
+9. **Update downstream consumers:** the web backend derives the
+   allowed modes from `valid_modes_for_target`; its `/api/options`
    exposes `validation_modes_by_target` (built from it), and the web UI offers
    only the valid modes per target and clamps the selected mode when the target
    changes. AQL now offers `syntax` alongside the other targets.
@@ -332,7 +332,7 @@ Mode availability is per target: `cypher` and `gremlin` support
 
 - Unit tests live in `tests/test_static.py` (no network, no DB). Run them with
   `uv run pytest -m "not integration"`.
-- Type and lint gates: `uv run mypy src tests demo` (strict; the generated
+- Type and lint gates: `uv run mypy src tests` (strict; the generated
   package is excluded via the override) and `uv run ruff check .` /
   `uv run ruff format --check` (the generated dir is excluded).
 - Regeneration check: run `scripts/generate_parsers.sh` and confirm the

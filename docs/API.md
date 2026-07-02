@@ -1,9 +1,9 @@
 # API reference
 
 This document is the canonical reference for the public Python API of
-`rows2graph` and for the three YAML schemas the demo CLI consumes. For the
+`rows2graph` and for the three YAML schemas the library consumes. For the
 *why* behind the design see `ARCHITECTURE.md`; for hands-on usage see the
-top-level `README.md` and `demo/README.md`.
+top-level `README.md`.
 
 All public symbols are re-exported from the top-level package:
 

@@ -17,15 +17,10 @@ CLI; async for UIs and concurrent multi-translation services. Both support an
 optional typed event callback that surfaces every loop milestone in real time;
 the async path additionally supports token-by-token streaming.
 
-The codebase is structured as a *framework + reference demo*:
-
-* `src/rows2graph/`: a library exposing typed components (schema mapping,
-  LLM client, target language, validator, orchestrator) connected through
-  small structural Protocols. Both sync and async variants of the LLM
-  client, validator, and translator ship side by side.
-* `demo/cli.py`: a parametrized command-line client that exercises the
-  library API. Use it directly, or copy it as a starting point for embedding
-  the framework into a larger system.
+The library lives under `src/rows2graph/`: it exposes typed components
+(schema mapping, LLM client, target language, validator, orchestrator)
+connected through small structural Protocols. Both sync and async variants
+of the LLM client, validator, and translator ship side by side.
 
 ## Architecture at a glance
 
@@ -149,40 +144,40 @@ backend. Python 3.12+ is required.
 
 ## Quick start
 
-The demo CLI takes two required YAML configs (a schema mapping and an LLM
-model config) plus an optional server config for validation against a live
-database. Under `--validation server` you either pass `--server` (your own
-database) or omit it to auto-provision a throwaway one (see below).
+A translation needs four things: a schema mapping, an LLM client, a target
+language, and a validator. Build them from the shipped YAML configs and hand
+them to `SQLTranslator`:
 
-```bash
-uv run python demo/cli.py \
-    --sql "SELECT name, address FROM supplier WHERE suppkey = 1337" \
-    --mapping config/mappings/tpch.yaml \
-    --model   config/models/ollama.yaml \
-    --target  cypher \
-    --validation syntax
+```python
+from rows2graph import (
+    SchemaMapping, SQLTranslator,
+    load_model_config, make_llm, make_target, make_validator,
+)
+
+mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+llm = make_llm(load_model_config("config/models/ollama.yaml"))
+target = make_target("cypher")
+validator = make_validator("cypher", "syntax")
+
+with SQLTranslator(mapping, llm, target, validator) as translator:
+    result = translator.translate(
+        "SELECT name, address FROM supplier WHERE suppkey = 1337"
+    )
+    print(result.generated_query)
 ```
 
-Expected output (the generated Cypher on stdout, logs on stderr):
+Expected output (the generated Cypher):
 
 ```cypher
 MATCH (s:Supplier {suppkey: 1337})
 RETURN s.name, s.address
 ```
 
-For Claude via the direct Anthropic API, swap the model config:
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."    # one-time, persist in ~/.zshrc
-uv run python demo/cli.py \
-    --sql "..." \
-    --mapping config/mappings/tpch.yaml \
-    --model   config/models/anthropic.yaml \
-    --target  cypher
-```
-
-See `demo/README.md` for the full flag reference and more examples (LDBC SNB,
-AQL/ArangoDB, server-side and zero-config managed validation, stdin input).
+To run against Claude via the direct Anthropic API instead, set
+`ANTHROPIC_API_KEY` and use `config/models/anthropic.yaml` (`provider:
+anthropic`) as the model config. See [Configuration](#configuration) for the
+YAML files, and [As a library](#as-a-library) below for server-side
+validation, the async variant, event callbacks, and token streaming.
 
 ## Configuration
 

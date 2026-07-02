@@ -417,7 +417,7 @@ single `isinstance` check, the same factory-by-tag pattern as the
 original design, but with the tag validated by Pydantic at load time
 rather than carried in a separate field of a larger config blob.
 
-This pattern is what lets the demo CLI accept arbitrary `--model PATH`
+This pattern is what lets a caller load an arbitrary model-config path
 without needing to know in advance whether the path points to an Ollama
 or Anthropic config: it loads the file once, lets Pydantic pick the right
 subclass, and the rest of the program is statically typed against the

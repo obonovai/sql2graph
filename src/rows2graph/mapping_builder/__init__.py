@@ -40,7 +40,7 @@ from rows2graph.mapping_builder.refine import (
     validate_against_schema,
 )
 from rows2graph.mapping_builder.relational import Column, ForeignKey, RelationalSchema, Table
-from rows2graph.mapping_builder.serialize import format_audit_report, mapping_to_yaml
+from rows2graph.mapping_builder.serialize import mapping_to_yaml
 
 
 @dataclass(frozen=True)
@@ -161,7 +161,6 @@ __all__ = [
     "build_mapping_async",
     "diff_mappings",
     "extract_schema_from_ddl",
-    "format_audit_report",
     "is_junction_table",
     "mapping_to_yaml",
     "project_to_mapping",

@@ -81,7 +81,6 @@ from rows2graph.mapping_builder import (
     build_mapping_async,
     diff_mappings,
     extract_schema_from_ddl,
-    format_audit_report,
     mapping_to_yaml,
     project_to_mapping,
 )
@@ -202,7 +201,6 @@ __all__ = [
     "build_mapping_async",
     "diff_mappings",
     "extract_schema_from_ddl",
-    "format_audit_report",
     "load_model_config",
     "load_server_config",
     "make_async_llm",

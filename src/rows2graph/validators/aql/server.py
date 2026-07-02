@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 class ArangoDBConfig(BaseModel):
     """Connection settings for an ArangoDB instance.
 
-    Used only when the demo is invoked with ``--validation server`` and
-    ``--target aql``. The discriminator field ``type="arangodb"`` is what
+    Used only under server validation for the aql target. The
+    discriminator field ``type="arangodb"`` is what
     :data:`rows2graph.validators.ServerConfig` uses to dispatch
     :func:`rows2graph.validators.load_server_config` to this class.
     """

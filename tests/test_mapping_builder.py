@@ -11,7 +11,6 @@ guardrail on the LLM pass.
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -896,75 +895,6 @@ def test_report_as_dict_lists_junctions_and_warnings() -> None:
     data = report.as_dict()
     assert data["edge_tables"] == ["partsupp"]
     assert isinstance(data["warnings"], list)
-
-
-# ---------------------------------------------------------------------------
-# CLI smoke (build-mapping subcommand)
-# ---------------------------------------------------------------------------
-
-
-def _load_cli() -> Any:
-    spec = importlib.util.spec_from_file_location(
-        "demo_cli", Path(__file__).resolve().parent.parent / "demo" / "cli.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-# The build-mapping CLI now always runs the AI naming pass, so --model is required.
-# These smoke tests stay offline by pointing --model at the bundled Ollama config
-# (a pure YAML load, no network) and patching the CLI's make_llm to a fake whose
-# non-YAML reply the guardrail rejects, so the build falls back to the deterministic
-# skeleton - which is exactly the structure these tests assert on.
-_MODEL_CONFIG = _CONFIG.parent / "models" / "ollama.yaml"
-
-
-def _patch_offline_llm(cli: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cli, "make_llm", lambda _cfg: _FakeLLM("(noop)"))
-
-
-def test_cli_build_mapping_writes_loadable_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cli = _load_cli()
-    _patch_offline_llm(cli, monkeypatch)
-    ddl_path = tmp_path / "schema.sql"
-    ddl_path.write_text(TPCH_DDL)
-    out_path = tmp_path / "mapping.yaml"
-    code = cli.main(
-        ["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "--model", str(_MODEL_CONFIG), "-o", str(out_path)]
-    )
-    assert code == 0
-    mapping = SchemaMapping.from_yaml(out_path)
-    assert len(mapping.nodes) == 7
-
-
-def test_cli_build_mapping_rejects_bad_ddl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cli = _load_cli()
-    _patch_offline_llm(cli, monkeypatch)
-    ddl_path = tmp_path / "bad.sql"
-    ddl_path.write_text("CREATE TABLE (((")
-    with pytest.raises(SystemExit) as exc:
-        cli.main(["build-mapping", "--ddl", str(ddl_path), "--model", str(_MODEL_CONFIG)])
-    assert exc.value.code == 2
-
-
-def test_cli_build_mapping_refuses_to_overwrite_without_force(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cli = _load_cli()
-    _patch_offline_llm(cli, monkeypatch)
-    ddl_path = tmp_path / "schema.sql"
-    ddl_path.write_text(TPCH_DDL)
-    out_path = tmp_path / "mapping.yaml"
-    out_path.write_text("existing")
-    argv = ["build-mapping", "--ddl", str(ddl_path), "--dialect", "postgres", "--model", str(_MODEL_CONFIG), "-o", str(out_path)]
-    with pytest.raises(SystemExit) as exc:
-        cli.main(argv)
-    assert exc.value.code == 2
-    assert out_path.read_text() == "existing"  # left untouched
-    # --force overwrites.
-    code = cli.main([*argv, "--force"])
-    assert code == 0
-    assert SchemaMapping.from_yaml(out_path)  # now a real mapping
 
 
 # ---------------------------------------------------------------------------

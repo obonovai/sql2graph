@@ -78,8 +78,8 @@ class AnthropicLLMClient:
     the per-model minimum (1024 tokens for most models, 2048 for Haiku) and
     has a 5-minute TTL; both are fine for our use case.
 
-    Token usage from each response is logged at INFO level so the demo's
-    ``-v`` flag surfaces per-call consumption, useful for tracking spend
+    Token usage from each response is logged at INFO level so verbose
+    callers can surface per-call consumption, useful for tracking spend
     against a budget cap. Cache hit/creation counts are logged alongside.
     """
 

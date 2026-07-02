@@ -106,7 +106,7 @@ def resolve_validation_mode(mode: str, *, server_config: object | None) -> str:
 
     ``"server"`` with no ``server_config`` means *managed*: the library provisions
     a throwaway database itself. Every other case passes ``mode`` through unchanged.
-    Centralised here so the CLI and the web backend share one rule.
+    Centralised here so callers (e.g. the web backend) share one rule.
     """
     if mode == "server" and server_config is None:
         return "managed"
@@ -116,7 +116,7 @@ def resolve_validation_mode(mode: str, *, server_config: object | None) -> str:
 def valid_modes_for_target(target: str) -> tuple[str, ...]:
     """Validation modes available for a target language.
 
-    Centralises the per-target rule so CLIs and UIs don't each hardcode it
+    Centralises the per-target rule so callers don't each hardcode it
     (mirrors :data:`VALID_VALIDATION_MODES` and :func:`resolve_validation_mode`).
     All three targets now offer the same modes; AQL's ``"syntax"`` mode uses a
     hand-ported ArangoDB grammar (see :mod:`rows2graph.validators.aql.syntax`).

@@ -50,8 +50,8 @@ logger = logging.getLogger(__name__)
 class GremlinConfig(BaseModel):
     """Connection settings for a Gremlin Server (TinkerPop-compatible).
 
-    Used only when the demo is invoked with ``--validation server`` and
-    ``--target gremlin``. The discriminator field ``type="gremlin"`` is
+    Used only under server validation for the gremlin target. The
+    discriminator field ``type="gremlin"`` is
     what :data:`rows2graph.validators.ServerConfig` uses to dispatch
     :func:`rows2graph.validators.load_server_config` to this class.
 
