@@ -4,11 +4,13 @@ Measures how well `rows2graph`'s LLM-driven SQL -> graph translator performs, ac
 matrix of **dataset x target language x model**. The reusable run/record/metric logic
 lives in the `eval_harness` package; the notebooks are the analysis surface.
 
-The first deliverable runs **DB-free**: Cypher only, Ollama `qwen3-coder:30b` only, LDBC
-only. It produces Pass@k (via Cypher syntax validation), structural (Exact Match /
-Component F1), and distance (Levenshtein / Jaccard / normalised tree-edit) metrics plus a
-report - with no databases. Execution-accuracy metrics are scaffolded but deferred (they
-need the graphonauts2 databases; see below).
+The DB-free metrics (notebooks 01-04, 06) run with no databases: Pass@k (via offline syntax
+validation), structural (Exact Match / Component F1), and distance (Levenshtein / Jaccard /
+normalised tree-edit), plus a report. The matrix currently covers **LDBC x {Cypher, AQL} x
+4 models** (`llama3.2:latest`, `qwen3-coder:30b`, `gemma4:26b` on Ollama + `claude-opus-4-8`
+on Anthropic). Results are reported per target and never mixed. Execution-accuracy metrics
+(notebook 05) run the generated query on a real graph DB; they are deferred behind
+`EVAL_EXECUTION=1` and need the graphonauts2 databases (see below).
 
 ## Layout
 
@@ -29,10 +31,13 @@ evaluation/
 │   ├── 02_behavioural_metrics.ipynb  ← Pass@1/k, iterations, duration, tokens, cost
 │   ├── 03_structural_metrics.ipynb   ← Exact Match, Component F1
 │   ├── 04_distance_metrics.ipynb     ← Levenshtein, Jaccard, normalised TED
-│   ├── 05_execution_metrics.ipynb    ← DEFERRED: result-set metrics vs Postgres/Neo4j
-│   └── 06_report.ipynb               ← join + stratify + final markdown report
+│   ├── 05_execution_metrics.ipynb    ← DEFERRED: result-set metrics vs Postgres + Neo4j/ArangoDB
+│   └── 06_report.ipynb               ← join + stratify + final markdown report (per-target sections)
+├── validate_gold_queries.py    ← prove gold SQL == gold Cypher on Postgres/Neo4j
+├── validate_gold_aql.py        ← prove gold SQL == gold AQL on Postgres/ArangoDB
+├── build_arango_unified_edges.py ← build the mapping-aligned unified AQL edge collections
 ├── outputs/                  ← gitignored; records_*.json + metrics_*.csv
-└── reports/                  ← gitignored; final.md + figures
+└── reports/                  ← gitignored; final.md + figures (cypher_*.png / aql_*.png)
 ```
 
 ## Install
@@ -46,10 +51,15 @@ library's runtime deps.
 
 ## The run matrix
 
-Everything is driven by `RUN_MATRIX` in `eval_harness/config.py`. The default is one cell:
+Everything is driven by `RUN_MATRIX` in `eval_harness/config.py`. It currently holds 8 cells
+(LDBC x {cypher, aql} x 4 models), e.g.:
 
 ```python
-RUN_MATRIX = [RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama")]
+RUN_MATRIX = [
+    RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama"),
+    RunConfig(dataset="ldbc", target="aql",    model="qwen3-coder:30b", provider="ollama"),
+    # ... the other models, per target ...
+]
 ```
 
 Extending the evaluation is appending rows (and adding gold columns / mappings), not editing
@@ -91,29 +101,53 @@ those records. Notebook `05` is **deferred** and excluded from the pass.
   fields and `token_usage` (reported first-class by the library; no log scraping).
 - `outputs/metrics_{behavioural,structural,distance}.csv`: per-record metrics, keyed by
   `(dataset, target, model, query_id, difficulty)`.
-- `reports/final.md` + `reports/figures/`: headline + stratified tables, Pass@k bars,
-  distance distributions, Component-F1 heatmap, and a manual error-taxonomy template.
+- `reports/final.md` + `reports/figures/`: a dedicated section per target (`SQL -> Cypher`,
+  `SQL -> AQL`) with headline + stratified tables, Pass@k bars, distance distributions,
+  Component-F1 heatmap, and a manual error-taxonomy template. Cypher and AQL are never
+  combined in one table or figure; figures are target-prefixed (`cypher_*` / `aql_*`).
 
 ## Execution metrics (deferred, prepared)
 
 Notebook `05` runs the generated query on a real graph DB and the gold SQL on Postgres
-(the oracle), comparing result multisets. It is gated behind `EVAL_EXECUTION=1` and needs
-the graphonauts2 databases, loaded with LDBC SNB SF=1:
+(the oracle), comparing result multisets. Cypher runs on Neo4j, **AQL on ArangoDB** (db
+`graphonauts`). It is gated behind `EVAL_EXECUTION=1` and needs the graphonauts2 databases,
+loaded with LDBC SNB SF=1:
 
 ```bash
 docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/postgres.compose.yml up -d
 docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/neo4j.compose.yml up -d
-# ArangoDB only when an AQL row is added:
-# docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/arangodb.compose.yml up -d
+docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/arangodb.compose.yml up -d
 ```
 
-Then load LDBC SF=1 into each (see `graphonauts2/notes/commands.md`), export
-`NEO4J_PASSWORD` and `EVAL_EXECUTION=1`, and run `05`.
+Load LDBC SF=1 into each (see `graphonauts2/notes/commands.md`; the ArangoDB loader
+populates db `graphonauts`), then wire the AQL execution collections and validate the gold
+set before trusting any model numbers:
 
-**Datetime storage (former defect D7, resolved):** graphonauts2 now loads
-`creationDate`/`birthday`/`joinDate` into Neo4j as native temporal types (`DateTime`/`Date`),
-so the gold Cypher `datetime('...')` / `date('...')` predicates match directly. Reload Neo4j
-after any loader change before trusting execution results.
+```bash
+# 1. Build the mapping-aligned unified edge collections the gold + generated AQL reference
+#    (KNOWS, HAS_CREATOR, HAS_TAG, ...). Re-run after every ArangoDB (re)load -- mandatory.
+ARANGO_PASSWORD=password uv run python evaluation/build_arango_unified_edges.py
+
+# 2. Prove the gold AQL matches the Postgres oracle (SQL vs AQL multiset compare). Expect
+#    14 genuine matches, 0 MISMATCH/error before running any model.
+POSTGRES_PASSWORD=password ARANGO_PASSWORD=password \
+  uv run python evaluation/validate_gold_aql.py
+
+# 3. Run notebook 05 (both targets -> Neo4j + ArangoDB + Postgres must be up).
+EVAL_EXECUTION=1 NEO4J_PASSWORD=... ARANGO_PASSWORD=password POSTGRES_PASSWORD=password \
+  ARANGO_DATABASE=graphonauts \
+  uv run jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/05_execution_metrics.ipynb
+```
+
+Passwords are asserted lazily per target, so a Cypher-only or AQL-only subset only needs
+that backend up.
+
+**Datetime storage:** graphonauts2 loads `creationDate`/`birthday`/`joinDate` into Neo4j as
+native temporal types (`DateTime`/`Date`) and into ArangoDB as ISO-8601 strings
+(`DATE_ISO8601`-compatible). The comparator canonicalises the columns the Postgres oracle
+reports as dates to epoch-millis on all sides, so gold `datetime(...)` (Cypher) and string
+`>= '2010-06-01'` (AQL) predicates both match. Reload the graph DB after any loader change
+before trusting execution results.
 
 ## Gold dataset notes
 

@@ -7,10 +7,11 @@ language, model) triple plus the knobs needed to drive the translator for it.
 not editing notebooks.
 
 The single rule the rest of the harness leans on is
-:func:`default_validation_mode`: Cypher and Gremlin have offline ANTLR grammar
-validators ("syntax"), AQL has none and must validate against a server
-("server"/"managed"). Routing through this function means appending an AQL row
-never hits the ``make_validator("aql", "syntax")`` ValueError.
+:func:`default_validation_mode`: all three targets have an in-process, offline
+ANTLR grammar validator ("syntax") -- Cypher and Gremlin from the engines' own
+grammars, AQL from a hand-port of ArangoDB's Flex+Bison grammar (best-effort).
+Each therefore defaults to "syntax"; pass an override for "server"/"managed"
+(which validate against a real, or throwaway, server).
 """
 
 from __future__ import annotations
@@ -102,4 +103,10 @@ RUN_MATRIX: list[RunConfig] = [
     RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama"),
     RunConfig(dataset="ldbc", target="cypher", model="gemma4:26b", provider="ollama"),
     RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic"),
+    # AQL rows -- default validation_mode="syntax" (offline grammar; no server needed at
+    # generation time). Execution accuracy runs against the mapping-aligned ArangoDB in 05.
+    RunConfig(dataset="ldbc", target="aql", model="llama3.2:latest", provider="ollama"),
+    RunConfig(dataset="ldbc", target="aql", model="qwen3-coder:30b", provider="ollama"),
+    RunConfig(dataset="ldbc", target="aql", model="gemma4:26b", provider="ollama"),
+    RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic"),
 ]

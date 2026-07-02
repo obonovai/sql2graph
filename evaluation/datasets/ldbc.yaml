@@ -112,7 +112,11 @@ queries:
     LIMIT 20
   expected_aql: |-
     FOR t IN Tag
-      LET usage_count = LENGTH(FOR m IN 1..1 INBOUND t HAS_TAG RETURN 1)
+      LET usage_count = LENGTH(
+        FOR m IN 1..1 INBOUND t HAS_TAG
+          FILTER IS_SAME_COLLECTION('Post', m) OR IS_SAME_COLLECTION('Comment', m)
+          RETURN 1
+      )
       SORT usage_count DESC
       LIMIT 20
       RETURN { id: t.id, name: t.name, usage_count: usage_count }
@@ -201,16 +205,16 @@ queries:
     SELECT c.id AS comment_id, c.content, c.creation_date, p.first_name, p.last_name
     FROM comment c
     JOIN person p ON p.id = c.creator_person_id
-    WHERE c.reply_of_post_id = 1099511627776
+    WHERE c.reply_of_post_id = 412317942891
     ORDER BY c.creation_date DESC;
   expected_cypher: |-
-    MATCH (c:Comment)-[:REPLY_OF]->(:Post {id: 1099511627776}),
+    MATCH (c:Comment)-[:REPLY_OF]->(:Post {id: 412317942891}),
           (c)-[:HAS_CREATOR]->(p:Person)
     RETURN c.id AS comment_id, c.content, c.creationDate, p.firstName, p.lastName
     ORDER BY c.creationDate DESC
   expected_aql: |-
     FOR po IN Post
-      FILTER po.id == 1099511627776
+      FILTER po.id == 412317942891
       FOR c IN 1..1 INBOUND po REPLY_OF
         FILTER IS_SAME_COLLECTION('Comment', c)
         FOR p IN 1..1 OUTBOUND c HAS_CREATOR
@@ -275,30 +279,30 @@ queries:
     SELECT DISTINCT p.id, p.first_name, p.last_name
     FROM person p
     JOIN post po ON po.creator_person_id = p.id
-    WHERE po.forum_id = 549755813888
+    WHERE po.forum_id = 137439023186
     UNION
     SELECT DISTINCT p.id, p.first_name, p.last_name
     FROM person p
     JOIN likes_post l ON l.person_id = p.id
     JOIN post po ON po.id = l.post_id
-    WHERE po.forum_id = 549755813888;
+    WHERE po.forum_id = 137439023186;
   expected_cypher: |-
-    MATCH (f:Forum {id: 549755813888})-[:CONTAINER_OF]->(po:Post)<-[:HAS_CREATOR]-(p:Person)
+    MATCH (f:Forum {id: 137439023186})-[:CONTAINER_OF]->(po:Post)<-[:HAS_CREATOR]-(p:Person)
     RETURN DISTINCT p.id, p.firstName, p.lastName
     UNION
-    MATCH (f:Forum {id: 549755813888})-[:CONTAINER_OF]->(po:Post)<-[:LIKES]-(p:Person)
+    MATCH (f:Forum {id: 137439023186})-[:CONTAINER_OF]->(po:Post)<-[:LIKES]-(p:Person)
     RETURN DISTINCT p.id, p.firstName, p.lastName
   expected_aql: |-
     LET creators = (
       FOR f IN Forum
-        FILTER f.id == 549755813888
+        FILTER f.id == 137439023186
         FOR po IN 1..1 OUTBOUND f CONTAINER_OF
           FOR p IN 1..1 OUTBOUND po HAS_CREATOR
             RETURN DISTINCT { id: p.id, firstName: p.firstName, lastName: p.lastName }
     )
     LET likers = (
       FOR f IN Forum
-        FILTER f.id == 549755813888
+        FILTER f.id == 137439023186
         FOR po IN 1..1 OUTBOUND f CONTAINER_OF
           FOR p IN 1..1 INBOUND po LIKES
             RETURN DISTINCT { id: p.id, firstName: p.firstName, lastName: p.lastName }
