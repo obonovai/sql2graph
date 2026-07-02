@@ -83,6 +83,7 @@ class SQLTranslator:
         parse_error_action: PreflightAction = PreflightAction.WARN,
         unmapped_tables_action: PreflightAction = PreflightAction.REJECT,
         unmapped_columns_action: PreflightAction = PreflightAction.REJECT,
+        dialect: str | None = None,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
@@ -100,6 +101,10 @@ class SQLTranslator:
         self._parse_error_action = parse_error_action
         self._unmapped_tables_action = unmapped_tables_action
         self._unmapped_columns_action = unmapped_columns_action
+        # sqlglot dialect for input analysis only (the single pre-flight parse:
+        # parse_ok, source_tables/column_refs, and feature detection). ``None``
+        # is dialect-neutral; the dialect never enters the LLM prompt.
+        self._dialect = dialect
         # Sampling temperature for ordinary fix turns (``None`` = backend
         # default) and for the one-shot stall-breaking escalation retry. The
         # escalation runs hotter on purpose: a near-greedy retry over a history
@@ -151,7 +156,7 @@ class SQLTranslator:
         # Pre-flight: parse the SQL once and decide whether to warn or reject
         # before doing any expensive work (a reject must run before warmup so it
         # never boots a managed database for a query we won't translate).
-        analysis = analyze_sql(sql_query)
+        analysis = analyze_sql(sql_query, dialect=self._dialect)
         outcome = evaluate_preflight(
             analysis,
             self._schema_mapping,

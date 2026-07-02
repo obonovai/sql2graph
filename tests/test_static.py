@@ -1140,6 +1140,65 @@ class _FakeLLM:
         self.closed = True
 
 
+def _spy_analyze_sql(monkeypatch: pytest.MonkeyPatch, module: Any) -> list[str | None]:
+    """Record the ``dialect`` each ``analyze_sql`` call in *module* receives.
+
+    Delegates to the real implementation and returns the accumulating list, so a
+    test can assert the translator forwarded its constructor ``dialect`` into the
+    single pre-flight parse without depending on any sqlglot-version dialect quirk.
+    """
+    seen: list[str | None] = []
+    real = module.analyze_sql
+
+    def spy(sql_query: str, *, dialect: str | None = None) -> Any:
+        seen.append(dialect)
+        return real(sql_query, dialect=dialect)
+
+    monkeypatch.setattr(module, "analyze_sql", spy)
+    return seen
+
+
+def test_translator_forwards_dialect_to_analyze_sql(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The constructor ``dialect`` reaches the pre-flight ``analyze_sql`` call.
+
+    Forwarding the sqlglot dialect is the whole point of the parameter: it lets a
+    valid vendor-specific query parse (keeping the unmapped-table/column checks
+    live) instead of false-failing under the neutral parser.
+    """
+    import rows2graph.translator as translator_mod
+
+    seen = _spy_analyze_sql(monkeypatch, translator_mod)
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+        dialect="postgres",
+    ) as translator:
+        translator.translate("SELECT * FROM persons")
+
+    assert seen == ["postgres"]
+
+
+def test_translator_dialect_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Omitting ``dialect`` keeps the pre-flight parse dialect-neutral (``None``),
+    i.e. identical to the behaviour before the parameter existed."""
+    import rows2graph.translator as translator_mod
+
+    seen = _spy_analyze_sql(monkeypatch, translator_mod)
+    fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
+    with SQLTranslator(
+        schema_mapping=_schema(),
+        llm=fake,
+        target=CypherTarget(),
+        validator=CypherSyntaxValidator(),
+    ) as translator:
+        translator.translate("SELECT * FROM persons")
+
+    assert seen == [None]
+
+
 def test_translator_returns_result_on_first_try_success() -> None:
     fake = _FakeLLM(["MATCH (p:Person) RETURN p"])
     with SQLTranslator(
@@ -2188,6 +2247,32 @@ def test_async_translator_returns_result_on_first_try_success() -> None:
     assert result.status == "success"
     assert result.iterations_used == 1
     assert result.generated_query == "MATCH (p:Person) RETURN p"
+
+
+def test_async_translator_forwards_dialect_to_analyze_sql(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Async mirror of the sync forwarding test: the constructor ``dialect`` reaches
+    ``async_translator.analyze_sql`` (kept in lockstep with the sync path)."""
+    import asyncio
+
+    import rows2graph.async_translator as async_translator_mod
+    from rows2graph import AsyncSQLTranslator
+    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+
+    seen = _spy_analyze_sql(monkeypatch, async_translator_mod)
+
+    async def run() -> None:
+        fake = _FakeAsyncLLM(["MATCH (p:Person) RETURN p"])
+        async with AsyncSQLTranslator(
+            schema_mapping=_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
+            dialect="mysql",
+        ) as translator:
+            await translator.translate("SELECT * FROM persons")
+
+    asyncio.run(run())
+    assert seen == ["mysql"]
 
 
 def test_async_translator_runs_fix_loop_on_validation_failure() -> None:

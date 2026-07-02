@@ -77,6 +77,7 @@ class AsyncSQLTranslator:
         parse_error_action: PreflightAction = PreflightAction.WARN,
         unmapped_tables_action: PreflightAction = PreflightAction.REJECT,
         unmapped_columns_action: PreflightAction = PreflightAction.REJECT,
+        dialect: str | None = None,
     ) -> None:
         self._schema_mapping = schema_mapping
         self._llm = llm
@@ -90,6 +91,9 @@ class AsyncSQLTranslator:
         self._parse_error_action = parse_error_action
         self._unmapped_tables_action = unmapped_tables_action
         self._unmapped_columns_action = unmapped_columns_action
+        # See SQLTranslator.__init__: sqlglot dialect for input analysis only
+        # (None = dialect-neutral; never enters the LLM prompt).
+        self._dialect = dialect
         # See SQLTranslator.last_messages: same contract, async sibling.
         self.last_messages: list[dict[str, str]] = []
 
@@ -139,7 +143,7 @@ class AsyncSQLTranslator:
         # before any expensive work (see SQLTranslator.translate). A reject runs
         # before warmup so it never boots a managed database for a query we will
         # not translate.
-        analysis = analyze_sql(sql_query)
+        analysis = analyze_sql(sql_query, dialect=self._dialect)
         outcome = evaluate_preflight(
             analysis,
             self._schema_mapping,
