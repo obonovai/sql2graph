@@ -1,3 +1,5 @@
+-- Relational schema for the TPC-H benchmark dataset.
+
 CREATE TABLE region (
     regionkey   INTEGER PRIMARY KEY,
     name        VARCHAR(25),

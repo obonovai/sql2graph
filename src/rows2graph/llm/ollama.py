@@ -27,10 +27,6 @@ from rows2graph.llm.usage import ChatReply, TokenUsage
 
 logger = logging.getLogger(__name__)
 
-# Default Ollama HTTP endpoint (matches the upstream client default; the
-# framework restates it so error messages reference our default, not Ollama's).
-_DEFAULT_HOST = "http://localhost:11434"
-
 
 def _ollama_usage(response: Any) -> TokenUsage:
     """Extract token usage from an Ollama chat response.
@@ -50,6 +46,13 @@ def _ollama_usage(response: Any) -> TokenUsage:
 class OllamaConfig(BaseModel):
     """Configuration for the Ollama backend.
 
+    ``host`` is optional in the YAML: when omitted (or set to ``None``) the
+    upstream SDK falls back to the ``OLLAMA_HOST`` environment variable, and
+    to its own built-in default endpoint when that too is unset. A ``host``
+    set in the YAML takes precedence over the environment variable, so the
+    same config file can target a local or a remote Ollama server without
+    edits.
+
     The discriminator field ``provider="ollama"`` is what
     :data:`rows2graph.llm.ModelConfig` uses to dispatch
     :func:`rows2graph.llm.load_model_config` to this class when parsing a
@@ -65,7 +68,7 @@ class OllamaConfig(BaseModel):
 
     provider: Literal["ollama"] = "ollama"
     model: str = "llama3.2"
-    host: str = _DEFAULT_HOST
+    host: str | None = None
     temperature: float = 0.1
     num_ctx: int = 4096
     # Optional anti-repetition knob. Left unset by default so the framework passes

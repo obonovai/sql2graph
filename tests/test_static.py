@@ -617,6 +617,14 @@ def test_make_llm_ollama_dispatch() -> None:
         mock_client.assert_called_once_with(host="http://x:1")
 
 
+def test_make_llm_ollama_defaults_host_to_none() -> None:
+    """Unset host -> None, so the ollama SDK reads $OLLAMA_HOST (else localhost)."""
+    assert OllamaConfig(model="m").host is None
+    with patch("rows2graph.llm.ollama.Client") as mock_client:
+        make_llm(OllamaConfig(model="m"))
+        mock_client.assert_called_once_with(host=None)
+
+
 def test_ollama_chat_retries_on_request_error_then_succeeds() -> None:
     """Connection-layer failures (RequestError) are retried with backoff."""
     from ollama import RequestError

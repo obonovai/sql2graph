@@ -1,12 +1,4 @@
 # Relational-to-graph mapping for the TPC-H benchmark dataset.
-#
-# 8 relational tables -> 7 node labels + 8 edge types.
-# The `partsupp` join table becomes a SUPPLIED_BY edge with properties.
-#
-# Edge direction always follows the foreign key (the FK-holding child table is the
-# source_node, the referenced parent table is the target_node), and each type is named
-# to read correctly in that direction (e.g. "Order PLACED_BY Customer"). Load it with
-# rows2graph.SchemaMapping.from_yaml.
 
 nodes:
   - label: "Region"
@@ -16,7 +8,6 @@ nodes:
       name: "name"
       comment: "comment"
     primary_key: "regionkey"
-
   - label: "Nation"
     source_table: "nation"
     properties:
@@ -24,7 +15,6 @@ nodes:
       name: "name"
       comment: "comment"
     primary_key: "nationkey"
-
   - label: "Supplier"
     source_table: "supplier"
     properties:
@@ -35,7 +25,6 @@ nodes:
       acctbal: "acctbal"
       comment: "comment"
     primary_key: "suppkey"
-
   - label: "Customer"
     source_table: "customer"
     properties:
@@ -47,7 +36,6 @@ nodes:
       mktsegment: "mktsegment"
       comment: "comment"
     primary_key: "custkey"
-
   - label: "Part"
     source_table: "part"
     properties:
@@ -61,7 +49,6 @@ nodes:
       retailprice: "retailprice"
       comment: "comment"
     primary_key: "partkey"
-
   - label: "Order"
     source_table: "orders"  # the SQL table is "orders" (plural) because ORDER is reserved
     properties:
@@ -74,10 +61,7 @@ nodes:
       shippriority: "shippriority"
       comment: "comment"
     primary_key: "orderkey"
-
   - label: "LineItem"
-    # lineitem has a composite PK (orderkey, linenumber). This mapping lists linenumber
-    # as primary_key because orderkey is materialised on the PART_OF edge to Order.
     source_table: "lineitem"
     properties:
       linenumber: "linenumber"
@@ -94,7 +78,6 @@ nodes:
       shipmode: "shipmode"
       comment: "comment"
     primary_key: "linenumber"
-
 edges:
   - type: "BELONGS_TO"
     source_node: "Nation"
@@ -102,52 +85,43 @@ edges:
     source_table: "nation"
     source_foreign_key: "regionkey"
     target_primary_key: "regionkey"
-
   - type: "LOCATED_IN"
     source_node: "Supplier"
     target_node: "Nation"
     source_table: "supplier"
     source_foreign_key: "nationkey"
     target_primary_key: "nationkey"
-
   - type: "LOCATED_IN"
     source_node: "Customer"
     target_node: "Nation"
     source_table: "customer"
     source_foreign_key: "nationkey"
     target_primary_key: "nationkey"
-
   - type: "PLACED_BY"
     source_node: "Order"
     target_node: "Customer"
     source_table: "orders"
     source_foreign_key: "custkey"
     target_primary_key: "custkey"
-
   - type: "PART_OF"
     source_node: "LineItem"
     target_node: "Order"
     source_table: "lineitem"
     source_foreign_key: "orderkey"
     target_primary_key: "orderkey"
-
   - type: "OF_PART"
     source_node: "LineItem"
     target_node: "Part"
     source_table: "lineitem"
     source_foreign_key: "partkey"
     target_primary_key: "partkey"
-
   - type: "SUPPLIED_BY"
     source_node: "LineItem"
     target_node: "Supplier"
     source_table: "lineitem"
     source_foreign_key: "suppkey"
     target_primary_key: "suppkey"
-
   - type: "SUPPLIED_BY"
-    # Materialised from the partsupp junction table. Edge properties come from the
-    # non-FK columns of partsupp.
     source_node: "Part"
     target_node: "Supplier"
     source_table: "partsupp"

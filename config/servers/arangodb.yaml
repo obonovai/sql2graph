@@ -1,15 +1,4 @@
-# ArangoDB server connection, used only when running the demo with
-# --validation server --target aql.
-#
-# The framework validates each candidate AQL query via
-# `db.aql.validate(query)`, which parses the query without executing it.
-#
-# Conventions enforced by the schema mapping:
-#   - Each node `label` in the mapping is the name of a vertex collection.
-#   - Each edge `type`  in the mapping is the name of an edge collection.
-# Generated AQL uses bare edge-collection traversals
-# (`FOR v IN OUTBOUND <doc> <EdgeCollection>`), so no named graph is
-# referenced and none needs to be configured here.
+# ArangoDB connection for server-side AQL validation.
 
 type: "arangodb"
 url: "http://localhost:8529"

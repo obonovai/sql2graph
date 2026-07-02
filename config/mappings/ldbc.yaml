@@ -1,31 +1,4 @@
-# Relational-to-graph mapping for the LDBC Social Network Benchmark
-# (Interactive v1) dataset.
-#
-# Source of truth for the relational layout (column names + table names):
-#   /Users/ivona.obonova/school/graphonauts2/src/graphonauts/adapters/postgres/_shared/schema.py
-#
-# This is the LDBC SNB Interactive v1 reference impl applied to a clean
-# `snake_case` Postgres schema (no `p_*`/`f_*`/`m_*` prefixes). The SQL the
-# LLM is shown (and the SQL that ships in evaluation/datasets/ldbc.yaml)
-# must use these column names, since they are what's actually loaded in the
-# graphonauts2 Postgres container that drives execution-based evaluation.
-#
-# Property naming on the graph side follows the canonical LDBC SNB graph
-# spec (camelCase: `firstName`, `creationDate`, `locationIP`); the right-hand
-# side is the verbatim Postgres column name (`first_name`, `creation_date`,
-# `location_ip`).
-#
-# Multi-valued attributes (`person_email`, `person_speaks`) are intentionally
-# omitted: they map to list-valued properties in the LDBC graph spec which
-# the current NodeMapping schema cannot express.
-#
-# Subtype tables: `place.type` distinguishes City/Country/Continent;
-# `organisation.type` distinguishes Company/University. Both collapse to a
-# single label here (Place / Organisation) since the relational schema has no
-# separate tables for the subtypes.
-#
-# This file describes ONLY the schema mapping. Load with
-# rows2graph.SchemaMapping.from_yaml.
+# Relational-to-graph mapping for the LDBC Social Network Benchmark (Interactive v1) dataset.
 
 nodes:
   - label: "Person"
@@ -44,7 +17,6 @@ nodes:
       locationIP: "location_ip"
       browserUsed: "browser_used"
     primary_key: "id"
-
   - label: "Forum"
     source_table: "forum"
     properties:
@@ -54,10 +26,7 @@ nodes:
         column: "creation_date"
         type: "datetime"
     primary_key: "id"
-
   - label: "Post"
-    # LDBC subtype of the abstract "Message"; modelled as a standalone label
-    # because the relational schema has no Message table.
     source_table: "post"
     properties:
       id: "id"
@@ -71,11 +40,7 @@ nodes:
       content: "content"
       length: "length"
     primary_key: "id"
-
   - label: "Comment"
-    # Sibling of Post (both extend the abstract LDBC "Message"). Comment.id
-    # and Post.id share the same numeric space; the relational schema keeps
-    # them in separate tables.
     source_table: "comment"
     properties:
       id: "id"
@@ -87,9 +52,7 @@ nodes:
       content: "content"
       length: "length"
     primary_key: "id"
-
   - label: "Place"
-    # `type` distinguishes City / Country / Continent.
     source_table: "place"
     properties:
       id: "id"
@@ -97,9 +60,7 @@ nodes:
       url: "url"
       type: "type"
     primary_key: "id"
-
   - label: "Organisation"
-    # `type` distinguishes Company / University.
     source_table: "organisation"
     properties:
       id: "id"
@@ -107,7 +68,6 @@ nodes:
       name: "name"
       url: "url"
     primary_key: "id"
-
   - label: "Tag"
     source_table: "tag"
     properties:
@@ -115,7 +75,6 @@ nodes:
       name: "name"
       url: "url"
     primary_key: "id"
-
   - label: "TagClass"
     source_table: "tagclass"
     properties:
@@ -123,117 +82,86 @@ nodes:
       name: "name"
       url: "url"
     primary_key: "id"
-
 edges:
-  # ---------------------------------------------------------------------
-  # Direct foreign keys (no junction table)
-  # ---------------------------------------------------------------------
-
   - type: "CONTAINER_OF"
-    # Forum --(CONTAINER_OF)--> Post. FK lives in `post.forum_id`.
     source_node: "Forum"
     target_node: "Post"
     source_table: "post"
     source_foreign_key: "forum_id"
     target_primary_key: "id"
-
   - type: "HAS_CREATOR"
     source_node: "Post"
     target_node: "Person"
     source_table: "post"
     source_foreign_key: "creator_person_id"
     target_primary_key: "id"
-
   - type: "HAS_CREATOR"
     source_node: "Comment"
     target_node: "Person"
     source_table: "comment"
     source_foreign_key: "creator_person_id"
     target_primary_key: "id"
-
   - type: "IS_LOCATED_IN"
     source_node: "Post"
     target_node: "Place"
     source_table: "post"
     source_foreign_key: "place_id"
     target_primary_key: "id"
-
   - type: "IS_LOCATED_IN"
     source_node: "Comment"
     target_node: "Place"
     source_table: "comment"
     source_foreign_key: "place_id"
     target_primary_key: "id"
-
   - type: "IS_LOCATED_IN"
     source_node: "Person"
     target_node: "Place"
     source_table: "person"
     source_foreign_key: "place_id"
     target_primary_key: "id"
-
   - type: "IS_LOCATED_IN"
     source_node: "Organisation"
     target_node: "Place"
     source_table: "organisation"
     source_foreign_key: "place_id"
     target_primary_key: "id"
-
   - type: "REPLY_OF"
-    # Comment --(REPLY_OF)--> Post (top-level reply).
     source_node: "Comment"
     target_node: "Post"
     source_table: "comment"
     source_foreign_key: "reply_of_post_id"
     target_primary_key: "id"
-
   - type: "REPLY_OF"
-    # Comment --(REPLY_OF)--> Comment (nested reply, self-ref).
     source_node: "Comment"
     target_node: "Comment"
     source_table: "comment"
     source_foreign_key: "reply_of_comment_id"
     target_primary_key: "id"
-
   - type: "HAS_MODERATOR"
     source_node: "Forum"
     target_node: "Person"
     source_table: "forum"
     source_foreign_key: "moderator_person_id"
     target_primary_key: "id"
-
   - type: "IS_PART_OF"
-    # Place --(IS_PART_OF)--> Place (self-ref: City -> Country -> Continent).
     source_node: "Place"
     target_node: "Place"
     source_table: "place"
     source_foreign_key: "partof_id"
     target_primary_key: "id"
-
   - type: "IS_SUBCLASS_OF"
-    # TagClass --(IS_SUBCLASS_OF)--> TagClass (self-ref).
     source_node: "TagClass"
     target_node: "TagClass"
     source_table: "tagclass"
     source_foreign_key: "subclassof_id"
     target_primary_key: "id"
-
   - type: "HAS_TYPE"
-    # Tag --(HAS_TYPE)--> TagClass.
     source_node: "Tag"
     target_node: "TagClass"
     source_table: "tag"
     source_foreign_key: "tagclass_id"
     target_primary_key: "id"
-
-  # ---------------------------------------------------------------------
-  # Junction tables (source-side FK is implicit, inferred from schema)
-  # ---------------------------------------------------------------------
-
   - type: "KNOWS"
-    # Person --(KNOWS)--> Person via the `knows` table. LDBC stores both
-    # directions, so the join is naturally undirected from a query author's
-    # perspective.
     source_node: "Person"
     target_node: "Person"
     source_table: "knows"
@@ -243,7 +171,6 @@ edges:
       creationDate:
         column: "creation_date"
         type: "datetime"
-
   - type: "HAS_MEMBER"
     source_node: "Forum"
     target_node: "Person"
@@ -254,39 +181,31 @@ edges:
       joinDate:
         column: "join_date"
         type: "datetime"
-
   - type: "HAS_TAG"
     source_node: "Forum"
     target_node: "Tag"
     source_table: "forum_has_tag"
     source_foreign_key: "tag_id"
     target_primary_key: "id"
-
   - type: "HAS_TAG"
-    # Post --(HAS_TAG)--> Tag via `post_has_tag`.
     source_node: "Post"
     target_node: "Tag"
     source_table: "post_has_tag"
     source_foreign_key: "tag_id"
     target_primary_key: "id"
-
   - type: "HAS_TAG"
-    # Comment --(HAS_TAG)--> Tag via `comment_has_tag`.
     source_node: "Comment"
     target_node: "Tag"
     source_table: "comment_has_tag"
     source_foreign_key: "tag_id"
     target_primary_key: "id"
-
   - type: "HAS_INTEREST"
     source_node: "Person"
     target_node: "Tag"
     source_table: "has_interest"
     source_foreign_key: "tag_id"
     target_primary_key: "id"
-
   - type: "LIKES"
-    # Person --(LIKES)--> Post via `likes_post`.
     source_node: "Person"
     target_node: "Post"
     source_table: "likes_post"
@@ -296,9 +215,7 @@ edges:
       creationDate:
         column: "creation_date"
         type: "datetime"
-
   - type: "LIKES"
-    # Person --(LIKES)--> Comment via `likes_comment`.
     source_node: "Person"
     target_node: "Comment"
     source_table: "likes_comment"
@@ -308,10 +225,7 @@ edges:
       creationDate:
         column: "creation_date"
         type: "datetime"
-
   - type: "STUDY_AT"
-    # Person --(STUDY_AT)--> Organisation via `study_at`. The target is
-    # conceptually a University (Organisation with type='University').
     source_node: "Person"
     target_node: "Organisation"
     source_table: "study_at"
@@ -319,10 +233,7 @@ edges:
     target_primary_key: "id"
     properties:
       classYear: "class_year"
-
   - type: "WORK_AT"
-    # Person --(WORK_AT)--> Organisation via `work_at`. Target is
-    # conceptually a Company (Organisation with type='Company').
     source_node: "Person"
     target_node: "Organisation"
     source_table: "work_at"
