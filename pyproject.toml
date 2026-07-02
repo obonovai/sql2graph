@@ -93,6 +93,13 @@ ignore_missing_imports = true
 module = "rows2graph.validators._grammar.generated.*"
 ignore_errors = true
 
+# eval_harness lives under evaluation/ (an optional extra, not the library src);
+# the eval/ tests add it to sys.path at runtime. It ships no stubs, so treat its
+# import surface as Any rather than fail strict-mode collection of the tests.
+[[tool.mypy.overrides]]
+module = "eval_harness.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 # Integration tests are deselected by default: they call real LLMs and
 # real databases, which costs money and requires services. Opt in with

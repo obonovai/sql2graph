@@ -1,9 +1,26 @@
 # Tests
 
-Two suites live here, kept separate so casual development never accidentally
-hits a paid API or a database.
+The suite is split into three areas, kept separate so casual development never
+accidentally hits a paid API or a database.
 
-## Static tests (`test_static.py`)
+```
+tests/
+  conftest.py              # repo_root / examples_dir / mappings_dir path fixtures
+  unit/                    # static: no network, no real LLM, no database (runs by default)
+    conftest.py            # schema builders + scripted fake-LLM factory fixtures
+    _doubles.py            # in-process LLMClient / AsyncLLMClient doubles (used via fixtures)
+    mapping/  config/  llm/  targets/  prompts/  validators/
+    sql/  preflight/  translator/  mapping_builder/
+  integration/             # real LLMs / databases (deselected by default)
+    conftest.py            # anthropic_config / neo4j_config / docker_available / small_schema
+  eval/                    # offline tests for the evaluation harness (runs by default)
+    conftest.py            # puts evaluation/ on sys.path
+```
+
+The folder tree mirrors `src/rows2graph/`, so a test's home is predictable: a
+change to `src/rows2graph/validators/` is exercised under `tests/unit/validators/`.
+
+## Unit tests (`unit/`)
 
 Run by default:
 
@@ -11,19 +28,40 @@ Run by default:
 uv run pytest
 ```
 
-No network, no real LLMs, no databases: every external dependency is mocked
-or replaced with an in-process double. Fast (~2 s) and free.
+No network, no real LLMs, no databases: every external dependency (LLM, Neo4j
+driver, ArangoDB client) is mocked or swapped for an in-process double. Fast
+(~5 s) and free.
 
-## Integration tests (`test_integration.py`)
+### Fixtures
+
+Shared setup lives in `conftest.py` files, not copy-pasted per module:
+
+- **Paths** (`tests/conftest.py`): `repo_root`, `examples_dir`, `mappings_dir` -
+  computed from the conftest's own location, so tests never do `__file__`
+  arithmetic.
+- **Schemas** (`tests/unit/conftest.py`): `person_forum_schema()` and
+  `forum_no_title_schema()` are *factory* fixtures - call them to build a fresh
+  `SchemaMapping`.
+- **Fake LLMs** (`tests/unit/conftest.py` + `_doubles.py`): `scripted_llm([...])`
+  and `scripted_async_llm([...])` return a queue-backed double for the translator
+  loop; `oneshot_llm(reply)` / `oneshot_async_llm(reply)` (in
+  `tests/unit/mapping_builder/conftest.py`) return a one-shot double for the
+  mapping-builder refinement pass. Tests obtain them via the fixture, never by
+  importing `_doubles` directly.
+- **Spy** (`tests/unit/translator/conftest.py`): `spy_analyze_sql(module)`
+  records the `dialect` forwarded into a translator's pre-flight parse.
+
+## Integration tests (`integration/`)
 
 Deselected by default (the `integration` pytest marker is excluded via
-`pyproject.toml`'s `addopts`). Opt in explicitly:
+`pyproject.toml`'s `addopts`). Each file carries a module-level
+`pytestmark = pytest.mark.integration`. Opt in explicitly:
 
 ```bash
 uv run pytest -m integration
 ```
 
-To run **everything** (both suites):
+To run **everything** (all three areas):
 
 ```bash
 uv run pytest -m 'integration or not integration'
@@ -67,13 +105,13 @@ uv run pytest -m integration
 
 ### Managed-validation tests (Docker only)
 
-The `test_managed_*` tests need **no env vars and no pre-running database**: they
-provision throwaway Neo4j / ArangoDB / Gremlin containers via `testcontainers`
-and tear them down afterwards. They require a running **Docker daemon** and skip
-themselves when one is not reachable. The first run pulls the database images
-(`neo4j:5.26`, `arangodb:3.11`, `tinkerpop/gremlin-server:3.8.1`), so it is slow;
-later runs reuse the cached images. `testcontainers` ships with the library, so
-no extra install is needed.
+`integration/test_managed.py` needs **no env vars and no pre-running database**:
+it provisions throwaway Neo4j / ArangoDB / Gremlin containers via
+`testcontainers` and tears them down afterwards. It requires a running **Docker
+daemon** and skips itself when one is not reachable. The first run pulls the
+database images (`neo4j:5.26`, `arangodb:3.11`, `tinkerpop/gremlin-server:3.8.1`),
+so it is slow; later runs reuse the cached images. `testcontainers` ships with
+the library, so no extra install is needed.
 
 ```bash
 # Any Docker daemon running; no env vars required:
@@ -82,28 +120,20 @@ uv run pytest -m integration -k managed
 
 ### What gets exercised
 
-- `test_real_anthropic_translates_simple_select_to_cypher`: Anthropic
-  round-trip + syntax validator; loop converges and produces valid Cypher.
-- `test_real_anthropic_logs_token_usage`: the `"Anthropic call:"` log
-  line fires with non-zero input/output token counts.
-- `test_real_anthropic_async_translates_simple_select`: the async
-  translator produces an equivalent-shaped result for the same input.
-- `test_real_neo4j_server_validator_rejects_known_bad_query`: Neo4j
-  `EXPLAIN` rejects a malformed query.
-- `test_real_neo4j_server_validator_accepts_well_formed_query`:
-  Neo4j `EXPLAIN` accepts a trivially valid one.
-- `test_real_neo4j_async_server_validator_matches_sync`: async server
-  validator returns the same shape of result as the sync sibling.
-- `test_real_full_loop_anthropic_with_neo4j_server_validation`: full
-  end-to-end against real Anthropic and real Neo4j.
-- `test_managed_cypher_validator_accepts_and_rejects` /
-  `test_managed_aql_validator_accepts_and_rejects` /
-  `test_managed_gremlin_validator_accepts_and_rejects`: managed mode
-  auto-provisions each engine, accepts a valid query and rejects a bad one.
-- `test_managed_validator_via_factory` /
-  `test_managed_async_validator_matches_sync`: `make_validator` /
-  `make_async_validator` drive managed mode end-to-end (sync and async).
+- `test_anthropic.py`: real Anthropic round-trip + syntax validator (loop
+  converges to valid Cypher), token-usage logging, and the async translator.
+- `test_neo4j.py`: Neo4j `EXPLAIN` accepts/rejects, sync vs async server
+  validator parity, and a full end-to-end loop against real Anthropic + Neo4j.
+- `test_managed.py`: managed mode auto-provisions each engine and
+  accepts/rejects; `make_validator` / `make_async_validator` drive managed mode
+  end-to-end; the offline AQL grammar is cross-checked against ArangoDB's parser.
 
 Approximate cost per full integration run: a few cents on Anthropic, no
 cost on Neo4j (local Docker). Each test takes ~5-30 s depending on LLM
 latency and how many fix iterations it triggers.
+
+## Eval tests (`eval/`)
+
+Offline unit tests for the cost/token accounting in `evaluation/eval_harness`.
+The `eval/conftest.py` puts `evaluation/` on `sys.path`, so these run under the
+default `pytest` invocation without hitting any LLM.
