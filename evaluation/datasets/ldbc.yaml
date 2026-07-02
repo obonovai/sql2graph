@@ -10,9 +10,9 @@ schema: ldbc
 #  - KNOWS is DIRECTED `-[:KNOWS]->`, matching the directed `friend_id` SQL joins
 #    and the directed `knows` edge actually loaded in graphonauts2's Postgres+Neo4j.
 #  - Graph property names are camelCase (firstName, creationDate) per the LDBC
-#    graph spec and config/mappings/ldbc.yaml; SQL columns are snake_case.
+#    graph spec and examples/mappings/ldbc.yaml; SQL columns are snake_case.
 #  - Every SQL query references only tables/columns present in
-#    config/mappings/ldbc.yaml (multi-valued person_email/person_speaks excluded).
+#    examples/mappings/ldbc.yaml (multi-valued person_email/person_speaks excluded).
 #  - RETURN column order is aligned with the SQL SELECT order (the execution
 #    comparator in 05 is positional).
 #  - Date predicates use datetime('...') on the Cypher side. graphonauts2 now

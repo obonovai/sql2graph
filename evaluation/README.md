@@ -70,7 +70,7 @@ notebooks. Records and metrics auto-stratify by `(dataset, target, model)`:
 |---|---|
 | another Ollama / Anthropic model | append `RunConfig(model=..., provider=...)`; for Anthropic, export `ANTHROPIC_API_KEY` and add per-model pricing in notebook 02 |
 | AQL or Gremlin target | add `expected_aql` / `expected_gremlin` to the gold YAML and append `RunConfig(target=...)`. All three targets default to deployment-free `syntax` validation (AQL via a hand-ported ArangoDB grammar); pass an override for `server`/`managed` |
-| TPC-H dataset | flesh out `datasets/tpch.yaml`, rely on `config/mappings/tpch.yaml`, append `RunConfig(dataset="tpch")` |
+| TPC-H dataset | flesh out `datasets/tpch.yaml`, rely on `examples/mappings/tpch.yaml`, append `RunConfig(dataset="tpch")` |
 
 ## Running the DB-free first pass
 
@@ -179,7 +179,7 @@ before trusting execution results.
 ## Gold dataset notes
 
 `datasets/ldbc.yaml` is a curated mix of hand-authored translation-difficulty queries and
-graphonauts2's validated set, aligned to `config/mappings/ldbc.yaml`. Conventions:
+graphonauts2's validated set, aligned to `examples/mappings/ldbc.yaml`. Conventions:
 
 - **KNOWS is directed** (`-[:KNOWS]->`), matching the directed `friend_id` SQL joins and the
   directed `knows` edge actually loaded in graphonauts2 (defect D2).

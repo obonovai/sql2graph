@@ -213,7 +213,7 @@ class EdgeMapping(_StrictModel):
 class SchemaMapping(_StrictModel):
     """The full relational-to-graph schema mapping.
 
-    The YAML file at ``config/mappings/<name>.yaml`` deserialises directly
+    The YAML file at ``examples/mappings/<name>.yaml`` deserialises directly
     into this class. There is no top-level ``schema_mapping:`` wrapper. This
     keeps the YAML file purely about the mapping; orthogonal concerns
     (LLM, server, translation loop) live elsewhere.

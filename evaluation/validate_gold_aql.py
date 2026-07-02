@@ -4,7 +4,7 @@ For every query in evaluation/datasets/ldbc.yaml this runs the `sql` on graphona
 Postgres and the `expected_aql` on graphonauts2's ArangoDB, then compares the result sets as
 multisets. It is the AQL analogue of validate_gold_queries.py (which does SQL vs Cypher).
 
-The gold AQL uses the *unified* SCREAMING_SNAKE edge names from config/mappings/ldbc.yaml
+The gold AQL uses the *unified* SCREAMING_SNAKE edge names from examples/mappings/ldbc.yaml
 (KNOWS, HAS_CREATOR, HAS_TAG, ...). Those collections must exist in the ArangoDB -- build
 them first with:
     ARANGO_PASSWORD=password uv run python evaluation/build_arango_unified_edges.py

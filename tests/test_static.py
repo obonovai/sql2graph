@@ -288,7 +288,7 @@ def test_schema_mapping_accessors() -> None:
 def test_shipped_mappings_still_load() -> None:
     # Regression guard: the stricter validators must not reject the bundled
     # example mappings.
-    mappings_dir = Path(__file__).resolve().parent.parent / "config" / "mappings"
+    mappings_dir = Path(__file__).resolve().parent.parent / "examples" / "mappings"
     for name in ("tpch.yaml", "ldbc.yaml"):
         mapping = SchemaMapping.from_yaml(mappings_dir / name)
         assert mapping.nodes

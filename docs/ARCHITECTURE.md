@@ -16,7 +16,7 @@ The framework deliberately optimises for four properties, in this order:
    for validation) are orthogonal. A schema mapping is deployment-invariant;
    an LLM provider is mapping-agnostic; a server is LLM-agnostic. The
    framework reflects this by giving each its own typed configuration
-   class and its own YAML subdirectory (`config/mappings/`,
+   class and its own YAML subdirectory (`examples/mappings/`,
    `config/models/`, `config/servers/`), and by combining them through
    explicit CLI flags rather than a single conflated config blob. An
    earlier revision of the project used one Pydantic super-config

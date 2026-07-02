@@ -12,8 +12,8 @@ correction, up to a configurable number of iterations.
 
 The framework exposes both a synchronous orchestrator (`SQLTranslator`) and an
 asynchronous sibling (`AsyncSQLTranslator`) so callers can pick the model that
-matches their environment: sync for scripts, evaluation notebooks, and the
-CLI; async for UIs and concurrent multi-translation services. Both support an
+matches their environment: sync for scripts and evaluation notebooks; async
+for UIs and concurrent multi-translation services. Both support an
 optional typed event callback that surfaces every loop milestone in real time;
 the async path additionally supports token-by-token streaming.
 
@@ -154,7 +154,7 @@ from rows2graph import (
     load_model_config, make_llm, make_target, make_validator,
 )
 
-mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
 llm = make_llm(load_model_config("config/models/ollama.yaml"))
 target = make_target("cypher")
 validator = make_validator("cypher", "syntax")
@@ -181,20 +181,25 @@ validation, the async variant, event callbacks, and token streaming.
 
 ## Configuration
 
-YAML configs live under `config/`, split by concern:
+Two kinds of files drive a run, kept in separate top-level directories.
+**Inputs** live under `examples/` (the schema mapping, plus the DDL and example
+SQL it derives from): they describe *what* is translated. **Configuration**
+lives under `config/` (the LLM and graph-database settings): it describes *how*
+the translation runs.
 
-| Subdirectory | What it is | When you need it |
+| Directory | What it is | When you need it |
 |---|---|---|
-| `config/mappings/` | Schema mapping (nodes + edges). | Always: one per relational schema. |
+| `examples/mappings/` | Schema mapping (nodes + edges); a translation *input*. | Always: one per relational schema. |
 | `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always: one per backend. |
 | `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only for `--validation server` against *your own* database; omit `--server` to auto-provision a throwaway one (needs Docker). |
 
-These categories are orthogonal: the same mapping can be paired with any
-model, the same model drives any mapping, the same server config validates
-any run against that database. Two mappings, two models, two servers ship in
+These are orthogonal: the same mapping can be paired with any model and
+validated against any server, and the same model drives any mapping. Two
+mappings ship under `examples/`; two models and three servers ship under
 `config/`. Copy and adapt as needed.
 
-See `config/README.md` and `docs/API.md` for the YAML schemas.
+See `examples/README.md`, `config/README.md`, and `docs/API.md` for the YAML
+schemas.
 
 ## As a library
 
@@ -205,7 +210,7 @@ from rows2graph import (
     make_target, make_validator,
 )
 
-mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
 llm = make_llm(load_model_config("config/models/anthropic.yaml"))
 target = make_target("cypher")
 validator = make_validator("cypher", "syntax")
@@ -239,7 +244,7 @@ def on_event(event: TranslationEvent) -> None:
 
 
 async def main() -> None:
-    mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+    mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
     llm = make_async_llm(load_model_config("config/models/anthropic.yaml"))
     target = make_target("cypher")
     validator = make_async_validator("cypher", "syntax")

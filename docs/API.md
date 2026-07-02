@@ -307,7 +307,7 @@ from rows2graph import (
     make_target, make_validator,
 )
 
-mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
 llm = make_llm(load_model_config("config/models/anthropic.yaml"))
 target = make_target("cypher")
 validator = make_validator("cypher", "syntax")
@@ -358,7 +358,7 @@ def on_event(event: TranslationEvent) -> None:
 
 
 async def main() -> None:
-    mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+    mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
     llm = make_async_llm(load_model_config("config/models/anthropic.yaml"))
     target = make_target("cypher")
     validator = make_async_validator("cypher", "syntax")
@@ -384,7 +384,7 @@ asyncio.run(main())
 
 ## YAML schema reference
 
-### `config/mappings/<name>.yaml`: schema mapping
+### `examples/mappings/<name>.yaml`: schema mapping
 
 The file *is* the mapping: there is no `schema_mapping:` outer key.
 

@@ -8,7 +8,7 @@ for that config's single target, skipping queries that lack the target's gold
 column (so a Cypher run is unaffected by a query that only has ``expected_aql``).
 
 The relational->graph :class:`~rows2graph.SchemaMapping` the translator reasons
-over lives separately under ``config/mappings/<name>.yaml`` and is loaded by
+over lives separately under ``examples/mappings/<name>.yaml`` and is loaded by
 :func:`mapping_for`.
 """
 

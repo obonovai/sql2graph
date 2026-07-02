@@ -37,7 +37,7 @@ def _repo_root() -> Path:
 
 REPO_ROOT = _repo_root()
 DATASETS_DIR = REPO_ROOT / "evaluation" / "datasets"
-MAPPINGS_DIR = REPO_ROOT / "config" / "mappings"
+MAPPINGS_DIR = REPO_ROOT / "examples" / "mappings"
 OUTPUTS_DIR = REPO_ROOT / "evaluation" / "outputs"
 REPORTS_DIR = REPO_ROOT / "evaluation" / "reports"
 

@@ -28,7 +28,7 @@ A minimal end-to-end usage::
         make_validator,
     )
 
-    mapping = SchemaMapping.from_yaml("config/mappings/tpch.yaml")
+    mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
     llm = make_llm(load_model_config("config/models/anthropic.yaml"))
     target = make_target("cypher")
     validator = make_validator("cypher", "syntax")

@@ -41,10 +41,10 @@ from rows2graph.prompts import build_system_prompt, format_schema_context
 from rows2graph.sql_features import SqlFeature
 from rows2graph.targets import make_target
 
-_CONFIG = Path(__file__).resolve().parent.parent / "config" / "mappings"
+_MAPPINGS = Path(__file__).resolve().parent.parent / "examples" / "mappings"
 
 # A graphonauts-style TPC-H schema whose column names match the shipped
-# config/mappings/tpch.yaml (bare keys: regionkey, partkey, ...), so the
+# examples/mappings/tpch.yaml (bare keys: regionkey, partkey, ...), so the
 # generated skeleton can be compared against the hand-authored mapping.
 TPCH_DDL = """
 CREATE TABLE region (regionkey INT PRIMARY KEY, name VARCHAR(25), comment VARCHAR(152));
@@ -408,7 +408,7 @@ def test_projection_non_ascii_table_name_yields_non_blank_label() -> None:
 
 def test_generated_tpch_matches_shipped_join_semantics() -> None:
     generated = project_to_mapping(extract_schema_from_ddl(TPCH_DDL, dialect="postgres"))
-    shipped = SchemaMapping.from_yaml(_CONFIG / "tpch.yaml")
+    shipped = SchemaMapping.from_yaml(_MAPPINGS / "tpch.yaml")
     junction_tables = set(generated.report.edge_tables)
 
     gen_nodes = {n.source_table for n in generated.mapping.nodes}
@@ -435,13 +435,13 @@ def test_generated_tpch_junction_edge_matches_shipped() -> None:
 
 
 def test_bundled_tpch_ddl_matches_shipped() -> None:
-    # The bundled example (config/ddl/tpch.sql) is what the CLI and the web modal's
+    # The bundled example (examples/ddl/tpch.sql) is what the CLI and the web modal's
     # "Load example" feed in. It must parse with NO dialect (the modal's "Generic
     # SQL" default) and stay structurally faithful to the hand-authored tpch.yaml,
     # so the example can't silently drift from the mapping it is meant to reproduce.
-    ddl_path = _CONFIG.parent / "ddl" / "tpch.sql"
+    ddl_path = _MAPPINGS.parent / "ddl" / "tpch.sql"
     generated = project_to_mapping(extract_schema_from_ddl(ddl_path.read_text())).mapping  # dialect=None
-    shipped = SchemaMapping.from_yaml(_CONFIG / "tpch.yaml")
+    shipped = SchemaMapping.from_yaml(_MAPPINGS / "tpch.yaml")
 
     assert {n.source_table for n in generated.nodes} == {n.source_table for n in shipped.nodes}
 
@@ -462,7 +462,7 @@ def test_bundled_tpch_ddl_matches_shipped() -> None:
 
 @pytest.mark.parametrize("name", ["tpch.yaml", "ldbc.yaml"])
 def test_shipped_mapping_round_trips(name: str) -> None:
-    mapping = SchemaMapping.from_yaml(_CONFIG / name)
+    mapping = SchemaMapping.from_yaml(_MAPPINGS / name)
     assert SchemaMapping.from_yaml_string(mapping_to_yaml(mapping)) == mapping
 
 
@@ -550,7 +550,7 @@ def test_typed_property_yaml_round_trips_both_forms() -> None:
 
 def test_untyped_mapping_serializes_short_form() -> None:
     # A mapping with no types emits only bare `name: column` values (byte-compat).
-    mapping = SchemaMapping.from_yaml(_CONFIG / "tpch.yaml")
+    mapping = SchemaMapping.from_yaml(_MAPPINGS / "tpch.yaml")
     out = mapping_to_yaml(mapping)
     assert "column:" not in out
     assert all(not n.property_types for n in mapping.nodes)
@@ -611,7 +611,7 @@ def test_prompt_renders_type_and_untyped_is_unchanged() -> None:
 
 
 def test_cypher_temporal_rule_pins_declared_datetime() -> None:
-    ldbc = SchemaMapping.from_yaml(_CONFIG / "ldbc.yaml")
+    ldbc = SchemaMapping.from_yaml(_MAPPINGS / "ldbc.yaml")
     prompt = build_system_prompt(ldbc, make_target("cypher"), frozenset({SqlFeature.TEMPORAL}))
     # The schema block shows the type and the temporal rule pins the q02 fix.
     assert "(datetime)" in prompt
@@ -622,7 +622,7 @@ def test_cypher_temporal_rule_pins_declared_datetime() -> None:
 def test_model_dump_json_serialises_types_as_strings() -> None:
     # The web layer ships mapping.model_dump() as JSON; a SemanticType must survive
     # as a plain string so the frontend reads `property_types` without special-casing.
-    mapping = SchemaMapping.from_yaml(_CONFIG / "ldbc.yaml")
+    mapping = SchemaMapping.from_yaml(_MAPPINGS / "ldbc.yaml")
     reloaded = json.loads(json.dumps(mapping.model_dump()))
     post = next(n for n in reloaded["nodes"] if n["label"] == "Post")
     assert post["property_types"]["creationDate"] == "datetime"

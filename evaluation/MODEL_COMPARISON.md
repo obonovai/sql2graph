@@ -4,7 +4,7 @@ SQL -> Cypher translation on the LDBC SNB benchmark, generated 2026-06-30; execu
 
 ## What was run
 
-Both models translated the same **14 curated LDBC queries** (relational SQL -> Neo4j Cypher) through the rows2graph generate-validate-fix loop, with the schema supplied by `config/mappings/ldbc.yaml`. Identical harness, identical gold set, identical validators. Two layers of scoring:
+Both models translated the same **14 curated LDBC queries** (relational SQL -> Neo4j Cypher) through the rows2graph generate-validate-fix loop, with the schema supplied by `examples/mappings/ldbc.yaml`. Identical harness, identical gold set, identical validators. Two layers of scoring:
 
 - **Static** (no database): Pass@1 via Cypher syntax validation, Exact Match and Component-F1 against the gold Cypher, and token tree-edit / Levenshtein / Jaccard distances.
 - **Execution** (graphonauts2 SF1 databases): the generated Cypher is run on Neo4j and compared, as a result-set multiset, against the gold SQL run on Postgres (the oracle). This is the strongest signal - it answers "did the translation preserve semantics?".
