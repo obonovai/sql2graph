@@ -8,9 +8,14 @@ and the three string distances (token Levenshtein, token Jaccard, normalised
 tree-edit distance over a shallow clause tree).
 
 The functions take a ``target`` string ("cypher" | "aql" | "gremlin"). Cypher and
-AQL are fully implemented; Gremlin is a stub (method-chain syntax is not
-clause-based, so structural/TED metrics for it are future work) that degrades to
-keyword-only canonicalisation and empty components rather than crashing.
+AQL are clause-based and share the clause-head machinery. Gremlin is a method
+chain, so it has its own path: canonicalisation alpha-renames ``as('x')`` step
+labels (the Gremlin analogue of pattern bindings), components come from a
+balanced-paren scan over the token stream (hasLabel/has -> node labels,
+out/in/both -> edge types + directions, filter-step arguments -> where tokens,
+projection/order modulators -> return/order tokens), and the TED tree is the
+real method-chain structure (one node per step, arguments as children, nested
+anonymous traversals as subtrees).
 
 Keeping this in one module means a change to canonicalisation lands in both
 notebooks at once (the old copies in 03/04 had drifted-by-duplication risk).
@@ -77,12 +82,10 @@ _AQL_KEYWORDS = frozenset([
     "ASC", "DESC", "AND", "OR", "NOT", "TRUE", "FALSE", "NULL",
     "INSERT", "UPDATE", "REPLACE", "REMOVE", "UPSERT", "OPTIONS", "LIKE",
 ])
-# Stub: Gremlin is a method-chain DSL, not a keyword/clause language. A minimal
-# step set is upper-cased for crude normalisation; full support is future work.
-_GREMLIN_KEYWORDS = frozenset([
-    "G", "V", "E", "HAS", "OUT", "IN", "BOTH", "OUTE", "INE", "VALUES", "AS",
-    "WHERE", "SELECT", "ORDER", "BY", "LIMIT", "COUNT", "GROUP", "DEDUP", "PROJECT",
-])
+# Gremlin step names are case-sensitive method names (hasLabel != HASLABEL), so
+# no keyword case-folding: the canonical form preserves case and normalisation
+# comes from tokenisation (whitespace/newlines) + as-label alpha-renaming.
+_GREMLIN_KEYWORDS: frozenset[str] = frozenset()
 
 _CYPHER_CLAUSE_HEADS = (
     "MATCH", "OPTIONAL MATCH", "WHERE", "RETURN", "WITH", "ORDER BY", "LIMIT", "SKIP",
@@ -121,6 +124,13 @@ def clause_heads_for(target: str) -> tuple[str, ...]:
 
 _CYPHER_BINDING = re.compile(r"[(\[]([A-Za-z_][A-Za-z0-9_]*)\b")
 _AQL_BINDING = re.compile(r"\b(?:FOR|LET)\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.IGNORECASE)
+# Gremlin's bindings are the step labels declared by .as('x') and referenced by
+# select('x') / P.eq('x') / from('x') / to('x'). The generic alpha_rename then
+# rewrites every \b-delimited occurrence, including inside those string
+# literals. Same caveat as the Cypher path: a binding whose name collides with
+# an unrelated identifier or string (e.g. as('name') vs by('name')) is renamed
+# there too; short conventional labels (a, p1, po) make this a non-issue.
+_GREMLIN_BINDING = re.compile(r"\.as\(\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\1")
 
 
 def _binding_names(text: str, target: str) -> list[str]:
@@ -128,7 +138,7 @@ def _binding_names(text: str, target: str) -> list[str]:
         return [m.group(1) for m in _CYPHER_BINDING.finditer(text)]
     if target == "aql":
         return [m.group(1) for m in _AQL_BINDING.finditer(text)]
-    return []  # gremlin stub: no alpha-rename
+    return [m.group(2) for m in _GREMLIN_BINDING.finditer(text)]
 
 
 def alpha_rename(query: str, bindings: list[str]) -> str:
@@ -256,13 +266,115 @@ def _components_aql(query: str) -> Components:
     return c
 
 
+# --- Gremlin: a method chain has no clause heads, so components come from a
+# linear scan over the token stream. A "call" is IDENT followed by '('; a
+# precomputed matching-paren map gives each call its argument token slice.
+# Robust to unbalanced parens (invalid model output): a missing close matches
+# to end-of-stream instead of raising.
+
+_GREMLIN_EDGE_STEPS = {"out": "OUT", "in": "IN", "both": "BOTH", "outE": "OUT", "inE": "IN", "bothE": "BOTH"}
+_GREMLIN_FILTER_STEPS = frozenset(["has", "hasNot", "hasId", "is", "where", "not", "and", "or", "filter"])
+_GREMLIN_PROJECTION_STEPS = frozenset(
+    ["project", "select", "values", "valueMap", "elementMap", "group", "groupCount"]
+)
+_GREMLIN_AGG_STEPS = frozenset(["count", "sum", "min", "max", "mean", "group", "groupCount", "fold"])
+
+
+def _paren_map(tokens: list[str]) -> dict[int, int]:
+    """Index of each '(' -> index of its matching ')' (missing close -> len(tokens))."""
+    match: dict[int, int] = {}
+    stack: list[int] = []
+    for i, t in enumerate(tokens):
+        if t == "(":
+            stack.append(i)
+        elif t == ")" and stack:
+            match[stack.pop()] = i
+    for i in stack:
+        match[i] = len(tokens)
+    return match
+
+
+def _string_value(token: str) -> str | None:
+    if len(token) >= 2 and token[0] in "'\"" and token[-1] == token[0]:
+        return token[1:-1]
+    return None
+
+
+def _top_level_args(tokens: list[str], start: int, end: int) -> list[list[str]]:
+    """Split tokens[start:end] (a call's argument slice) at depth-0 commas."""
+    args: list[list[str]] = []
+    current: list[str] = []
+    depth = 0
+    for t in tokens[start:end]:
+        if t == "(":
+            depth += 1
+        elif t == ")":
+            depth -= 1
+        if t == "," and depth == 0:
+            args.append(current)
+            current = []
+            continue
+        current.append(t)
+    if current:
+        args.append(current)
+    return args
+
+
+def _components_gremlin(query: str) -> Components:
+    text = strip_comments(query)
+    text = alpha_rename(text, _binding_names(text, "gremlin"))
+    tokens = tokenize(text)
+    match = _paren_map(tokens)
+    c = Components()
+    # Anchor for by() modulator attribution; tracked at chain depth 0 only so a
+    # nested select/order inside an argument cannot misattribute later by()s.
+    anchor: str | None = None
+    depth = 0
+    for i, tok in enumerate(tokens):
+        if tok == "(":
+            depth += 1
+            continue
+        if tok == ")":
+            depth -= 1
+            continue
+        if not _IDENT.fullmatch(tok) or i + 1 >= len(tokens) or tokens[i + 1] != "(":
+            continue
+        close = match.get(i + 1, len(tokens))
+        arg_tokens = tokens[i + 2 : close]
+        if tok == "hasLabel":
+            c.node_labels.update(v for t in arg_tokens if (v := _string_value(t)) is not None)
+        elif tok == "has":
+            args = _top_level_args(tokens, i + 2, close)
+            if len(args) >= 3 and len(args[0]) == 1 and (label := _string_value(args[0][0])) is not None:
+                c.node_labels.add(label)
+        elif tok in _GREMLIN_EDGE_STEPS:
+            c.edge_types.update(v for t in arg_tokens if (v := _string_value(t)) is not None)
+            c.directions.append(_GREMLIN_EDGE_STEPS[tok])
+        if tok in _GREMLIN_FILTER_STEPS:
+            c.where_tokens.update(arg_tokens)
+        if tok in _GREMLIN_AGG_STEPS:
+            c.aggregations.add(tok.lower())
+        if depth == 0:
+            if tok in _GREMLIN_PROJECTION_STEPS:
+                anchor = "return"
+                c.return_tokens.update(arg_tokens)
+            elif tok == "order":
+                anchor = "order"
+            elif tok == "by":
+                (c.order_tokens if anchor == "order" else c.return_tokens).update(arg_tokens)
+            elif tok == "limit" and arg_tokens and c.limit_value is None:
+                c.limit_value = arg_tokens[0]
+    c.edge_types -= c.node_labels
+    return c
+
+
 def components_of(query: str, target: str) -> Components:
     if target == "cypher":
         return _components_cypher(query)
     if target == "aql":
         return _components_aql(query)
     if target == "gremlin":
-        return Components()  # stub: structural components for Gremlin are future work
+        return _components_gremlin(query)
     raise ValueError(f"Unknown target language: {target!r}")
 
 
@@ -368,7 +480,41 @@ def _match_clause_head(tokens: list[str], i: int, heads: tuple[str, ...]) -> tup
     return None
 
 
+def _gremlin_chain_tree(query: str) -> ClauseNode:
+    """Method-chain tree: one node per step call (label = step name), children =
+    that call's arguments, where nested calls (anonymous ``__.`` traversals,
+    ``P.gt(...)`` predicates) recurse into subtrees and plain literals become
+    leaves. Chaining dots and argument commas are structural separators, not
+    nodes. TED over this tree measures step-level structure."""
+    tokens = canonicalize(query, "gremlin").split(" ")
+    match = _paren_map(tokens)
+
+    def parse_seq(i: int, end: int) -> list[ClauseNode]:
+        nodes: list[ClauseNode] = []
+        while i < end:
+            t = tokens[i]
+            if t in {".", ","}:
+                i += 1
+                continue
+            if _IDENT.fullmatch(t) and i + 1 < end and tokens[i + 1] == "(":
+                close = min(match.get(i + 1, end), end)
+                node = ClauseNode(label=t)
+                node.children = parse_seq(i + 2, close)
+                nodes.append(node)
+                i = close + 1
+                continue
+            nodes.append(ClauseNode(label=t))
+            i += 1
+        return nodes
+
+    root = ClauseNode(label="QUERY")
+    root.children = parse_seq(0, len(tokens))
+    return root
+
+
 def parse_to_clause_tree(query: str, target: str) -> ClauseNode:
+    if target == "gremlin":
+        return _gremlin_chain_tree(query)
     tokens = canonicalize(query, target).split(" ")
     heads = clause_heads_for(target)
     root = ClauseNode(label="QUERY")

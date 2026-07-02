@@ -33,6 +33,10 @@ queries:
     FOR p IN Person
       FILTER p.id == 933
       RETURN { id: p.id, firstName: p.firstName, lastName: p.lastName, birthday: p.birthday, creationDate: p.creationDate }
+  expected_gremlin: |-
+    g.V().has('Person', 'id', 933)
+      .project('id', 'firstName', 'lastName', 'birthday', 'creationDate')
+      .by('id').by('firstName').by('lastName').by('birthday').by('creationDate')
   difficulty: easy
   sql_features: []
   description: Point lookup by primary key (Person profile, cf. LDBC IS-1).
@@ -49,6 +53,11 @@ queries:
     FOR p IN Post
       FILTER p.creationDate >= '2010-06-01' AND p.creationDate < '2010-07-01'
       RETURN { id: p.id, creationDate: p.creationDate, content: p.content }
+  expected_gremlin: |-
+    g.V().hasLabel('Post')
+      .has('creationDate', P.gte('2010-06-01')).has('creationDate', P.lt('2010-07-01'))
+      .project('id', 'creationDate', 'content')
+      .by('id').by('creationDate').by(__.coalesce(__.values('content'), __.constant('')))
   difficulty: easy
   sql_features: []
   description: Range query on a timestamp column.
@@ -64,6 +73,10 @@ queries:
     FOR p IN Person
       FILTER p.firstName == 'Mahinda'
       RETURN { id: p.id, firstName: p.firstName, lastName: p.lastName }
+  expected_gremlin: |-
+    g.V().has('Person', 'firstName', 'Mahinda')
+      .project('id', 'firstName', 'lastName')
+      .by('id').by('firstName').by('lastName')
   difficulty: easy
   sql_features: []
   description: Lookup persons by first name.
@@ -86,6 +99,12 @@ queries:
       SORT member_count DESC
       LIMIT 10
       RETURN { id: f.id, title: f.title, member_count: member_count }
+  expected_gremlin: |-
+    g.V().hasLabel('Forum').where(__.out('HAS_MEMBER'))
+      .project('id', 'title', 'member_count')
+      .by('id').by('title').by(__.out('HAS_MEMBER').count())
+      .order().by(__.select('member_count'), desc)
+      .limit(10)
   difficulty: hard
   sql_features:
   - aggregation
@@ -120,6 +139,12 @@ queries:
       SORT usage_count DESC
       LIMIT 20
       RETURN { id: t.id, name: t.name, usage_count: usage_count }
+  expected_gremlin: |-
+    g.V().hasLabel('Tag')
+      .project('id', 'name', 'usage_count')
+      .by('id').by('name').by(__.in('HAS_TAG').hasLabel('Post', 'Comment').count())
+      .order().by(__.select('usage_count'), desc)
+      .limit(20)
   difficulty: hard
   sql_features:
   - aggregation
@@ -143,6 +168,10 @@ queries:
       FILTER p1.id == 933
       FOR p2, k IN 1..1 OUTBOUND p1 KNOWS
         RETURN { id: p2.id, firstName: p2.firstName, lastName: p2.lastName, friendship_date: k.creationDate }
+  expected_gremlin: |-
+    g.V().has('Person', 'id', 933).outE('KNOWS')
+      .project('id', 'firstName', 'lastName', 'friendship_date')
+      .by(__.inV().values('id')).by(__.inV().values('firstName')).by(__.inV().values('lastName')).by('creationDate')
   difficulty: medium
   sql_features:
   - join
@@ -165,6 +194,17 @@ queries:
       FOR p IN 1..1 OUTBOUND po HAS_CREATOR
         FOR t IN 1..1 OUTBOUND po HAS_TAG
           RETURN { id: po.id, content: po.content, firstName: p.firstName, lastName: p.lastName, name: t.name }
+  expected_gremlin: |-
+    g.V().hasLabel('Post')
+      .has('creationDate', P.gte('2010-06-01')).has('creationDate', P.lt('2010-06-02'))
+      .as('po').out('HAS_CREATOR').as('p')
+      .select('po').out('HAS_TAG').as('t')
+      .project('id', 'content', 'firstName', 'lastName', 'name')
+      .by(__.select('po').values('id'))
+      .by(__.select('po').coalesce(__.values('content'), __.constant('')))
+      .by(__.select('p').values('firstName'))
+      .by(__.select('p').values('lastName'))
+      .by(__.select('t').values('name'))
   difficulty: medium
   sql_features:
   - join
@@ -195,6 +235,17 @@ queries:
             FOR t3 IN 1..1 OUTBOUND p3 HAS_INTEREST
               FILTER t3.id == t.id
               RETURN DISTINCT { id: p3.id, firstName: p3.firstName, lastName: p3.lastName, shared_tag: t.name }
+  expected_gremlin: |-
+    g.V().has('Person', 'id', 933).as('p1')
+      .out('KNOWS').out('KNOWS').as('p3').where(P.neq('p1'))
+      .select('p1').out('HAS_INTEREST').as('t')
+      .where(__.in('HAS_INTEREST').where(P.eq('p3')))
+      .project('id', 'firstName', 'lastName', 'shared_tag')
+      .by(__.select('p3').values('id'))
+      .by(__.select('p3').values('firstName'))
+      .by(__.select('p3').values('lastName'))
+      .by(__.select('t').values('name'))
+      .dedup()
   difficulty: hard
   sql_features:
   - distinct
@@ -220,6 +271,15 @@ queries:
         FOR p IN 1..1 OUTBOUND c HAS_CREATOR
           SORT c.creationDate DESC
           RETURN { comment_id: c.id, content: c.content, creationDate: c.creationDate, firstName: p.firstName, lastName: p.lastName }
+  expected_gremlin: |-
+    g.V().has('Post', 'id', 412317942891).in('REPLY_OF').hasLabel('Comment').as('c')
+      .out('HAS_CREATOR')
+      .project('comment_id', 'content', 'creationDate', 'firstName', 'lastName')
+      .by(__.select('c').values('id'))
+      .by(__.select('c').values('content'))
+      .by(__.select('c').values('creationDate'))
+      .by('firstName').by('lastName')
+      .order().by(__.select('creationDate'), desc)
   difficulty: medium
   sql_features:
   - join
@@ -242,6 +302,11 @@ queries:
       LET member_count = LENGTH(FOR p IN 1..1 OUTBOUND f HAS_MEMBER RETURN 1)
       SORT member_count DESC
       RETURN { id: f.id, title: f.title, member_count: member_count }
+  expected_gremlin: |-
+    g.V().hasLabel('Forum')
+      .project('id', 'title', 'member_count')
+      .by('id').by('title').by(__.out('HAS_MEMBER').count())
+      .order().by(__.select('member_count'), desc)
   difficulty: hard
   sql_features:
   - aggregation
@@ -268,6 +333,12 @@ queries:
       FILTER friend_count > 5
       SORT friend_count DESC
       RETURN { id: p.id, firstName: p.firstName, lastName: p.lastName, friend_count: friend_count }
+  expected_gremlin: |-
+    g.V().hasLabel('Person')
+      .project('id', 'firstName', 'lastName', 'friend_count')
+      .by('id').by('firstName').by('lastName').by(__.out('KNOWS').count())
+      .where(__.select('friend_count').is(P.gt(5)))
+      .order().by(__.select('friend_count'), desc)
   difficulty: hard
   sql_features:
   - aggregation
@@ -309,6 +380,12 @@ queries:
     )
     FOR x IN UNION_DISTINCT(creators, likers)
       RETURN x
+  expected_gremlin: |-
+    g.V().has('Forum', 'id', 137439023186).out('CONTAINER_OF')
+      .union(__.out('HAS_CREATOR'), __.in('LIKES'))
+      .dedup()
+      .project('id', 'firstName', 'lastName')
+      .by('id').by('firstName').by('lastName')
   difficulty: hard
   sql_features:
   - distinct
@@ -331,6 +408,10 @@ queries:
       LET friend_count = LENGTH(FOR f IN 1..1 OUTBOUND p KNOWS RETURN 1)
       FILTER friend_count == 0
       RETURN { id: p.id, firstName: p.firstName, lastName: p.lastName }
+  expected_gremlin: |-
+    g.V().hasLabel('Person').not(__.out('KNOWS'))
+      .project('id', 'firstName', 'lastName')
+      .by('id').by('firstName').by('lastName')
   difficulty: hard
   sql_features:
   - subquery
@@ -351,6 +432,12 @@ queries:
         FOR country IN 1..1 OUTBOUND city IS_PART_OF
           COLLECT name = country.name WITH COUNT INTO person_count
           RETURN { country_name: name, person_count: person_count }
+  expected_gremlin: |-
+    g.V().hasLabel('Person').out('IS_LOCATED_IN').out('IS_PART_OF')
+      .groupCount().by('name')
+      .unfold()
+      .project('country_name', 'person_count')
+      .by(Column.keys).by(Column.values)
   difficulty: medium
   sql_features:
   - aggregation

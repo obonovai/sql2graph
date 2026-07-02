@@ -35,6 +35,7 @@ evaluation/
 │   └── 06_report.ipynb               ← join + stratify + final markdown report (per-target sections)
 ├── validate_gold_queries.py    ← prove gold SQL == gold Cypher on Postgres/Neo4j
 ├── validate_gold_aql.py        ← prove gold SQL == gold AQL on Postgres/ArangoDB
+├── validate_gold_gremlin.py    ← prove gold SQL == gold Gremlin on Postgres/Gremlin Server
 ├── build_arango_unified_edges.py ← build the mapping-aligned unified AQL edge collections
 ├── outputs/                  ← gitignored; records_*.json + metrics_*.csv
 └── reports/                  ← gitignored; final.md + figures (cypher_*.png / aql_*.png)
@@ -141,6 +142,32 @@ EVAL_EXECUTION=1 NEO4J_PASSWORD=... ARANGO_PASSWORD=password POSTGRES_PASSWORD=p
 
 Passwords are asserted lazily per target, so a Cypher-only or AQL-only subset only needs
 that backend up.
+
+**Gremlin** runs on graphonauts2's Gremlin Server (in-memory TinkerGraph,
+`ws://localhost:8182/gremlin`). TinkerGraph holds the whole graph on the JVM heap, so bring
+it up with Neo4j and ArangoDB STOPPED, and reload after any container restart (see
+`graphonauts2/docs/gremlin/LOADING_BRIEF.md`):
+
+```bash
+docker stop neo4j-graphonaut arangodb-graphonaut
+docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/gremlin.compose.yml up -d
+(cd /Users/ivona.obonova/school/graphonauts2 && uv run graphonauts load gremlin && uv run graphonauts verify gremlin)
+
+# Prove the gold Gremlin matches the Postgres oracle (SQL vs Gremlin multiset compare).
+# Expect 14 genuine matches, 0 MISMATCH/error before running any model.
+POSTGRES_PASSWORD=password uv run python evaluation/validate_gold_gremlin.py
+```
+
+Notebook `05` executes per target and MERGES into `outputs/metrics_execution.csv`
+(rows for targets not run this pass are preserved). Select targets with
+`EVAL_EXECUTION_TARGETS` (default `cypher,aql,gremlin`). Because the Postgres
+reference rows are cached per query in `outputs/execution_rows_cache.json`, a
+Gremlin-only pass touches nothing but the Gremlin server:
+
+```bash
+EVAL_EXECUTION=1 EVAL_EXECUTION_TARGETS=gremlin EVAL_QUERY_TIMEOUT=180 \
+  uv run jupyter nbconvert --to notebook --execute --inplace evaluation/notebooks/05_execution_metrics.ipynb
+```
 
 **Datetime storage:** graphonauts2 loads `creationDate`/`birthday`/`joinDate` into Neo4j as
 native temporal types (`DateTime`/`Date`) and into ArangoDB as ISO-8601 strings

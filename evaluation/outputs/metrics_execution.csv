@@ -1,117 +1,185 @@
 dataset,target,model,query_id,difficulty,validation_passed,reference_runtime_s,reference_error,translated_runtime_s,execution_error,execution_accuracy,result_precision,result_recall,result_f1,result_jaccard_dist,reference_rows,translated_rows
-ldbc,aql,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.012988175032660365,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,0.12189532699994743,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.007571932976134121,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,claude-opus-4-8,ldbc_q01,easy,True,0.0395320910029113,,0.0129881750326603,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,claude-opus-4-8,ldbc_q02,easy,True,0.0506165329716168,,0.1218953269999474,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,claude-opus-4-8,ldbc_q03,easy,True,0.0182205580058507,,0.0075719329761341,,1.0,1.0,1.0,1.0,0.0,4,4
 ldbc,aql,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,16.782051319954917,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,aql,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,122.63132297602715,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.008756836003158242,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.011863779043778777,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,aql,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,27.36485937499674,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,aql,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,56.3091760960524,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,122.63132297602716,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8,ldbc_q06,medium,True,0.0235188209917396,,0.0087568360031582,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,claude-opus-4-8,ldbc_q07,medium,True,0.0273475990397855,,0.0118637790437787,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,aql,claude-opus-4-8,ldbc_q08,hard,True,0.0778402609867043,,27.36485937499674,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,aql,claude-opus-4-8,ldbc_q09,medium,True,0.0244639529846608,,56.3091760960524,,1.0,1.0,1.0,1.0,0.0,20,20
 ldbc,aql,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,18.690030304016545,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,1.8363599950098433,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.14434659603284672,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.11073478503385559,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.1646085570100695,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,aql,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.010259489004965872,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,0.1086439720238559,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.006238572008442134,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,aql,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,0.9034654729766771,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,aql,claude-opus-4-8,ldbc_q11,hard,True,0.1051084960345178,,1.836359995009844,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.1443465960328467,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,claude-opus-4-8,ldbc_q13,hard,True,0.0444965650094673,,0.1107347850338555,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,claude-opus-4-8,ldbc_q14,medium,True,0.0276043429621495,,0.1646085570100695,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,aql,gemma4:26b,ldbc_q01,easy,True,0.0395320910029113,,0.0102594890049658,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,gemma4:26b,ldbc_q02,easy,True,0.0506165329716168,,0.1086439720238559,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,gemma4:26b,ldbc_q03,easy,True,0.0182205580058507,,0.0062385720084421,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,0.9034654729766772,,1.0,1.0,1.0,1.0,0.0,10,10
 ldbc,aql,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,48.567876148968935,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.006055857986211777,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.009700779046397656,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,aql,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,33.26408412703313,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,aql,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,54.016374483995605,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,gemma4:26b,ldbc_q06,medium,True,0.0235188209917396,,0.0060558579862117,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,gemma4:26b,ldbc_q07,medium,True,0.0273475990397855,,0.0097007790463976,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,aql,gemma4:26b,ldbc_q08,hard,True,0.0778402609867043,,33.26408412703313,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,aql,gemma4:26b,ldbc_q09,medium,True,0.0244639529846608,,54.016374483995605,,1.0,1.0,1.0,1.0,0.0,20,20
 ldbc,aql,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,1.420595656032674,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.13412864203564823,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.15099223604192957,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.10683805996086448,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.1729495659819804,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,aql,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.0033707370166666806,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,1,0
-ldbc,aql,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.0032050900044851005,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,12932,0
-ldbc,aql,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.003080266003962606,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,4,0
-ldbc,aql,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,0.003327208978589624,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,10,0
-ldbc,aql,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,0.003258415963500738,AQLQueryExecuteError: [HTTP 400][ERR 1512] use of unknown variable 'usage_count' in object literal near '}' at position 13:46,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.0030859510297887027,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5,0
-ldbc,aql,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.0029914970509707928,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,58,0
-ldbc,aql,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,0.002733479021117091,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,2805,0
-ldbc,aql,llama3.2:latest,ldbc_q09,medium,False,0.024463952984660864,,,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,0.003431345976423472,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,90492,0
-ldbc,aql,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.0029662700253538787,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,aql,gemma4:26b,ldbc_q11,hard,True,0.1051084960345178,,0.1341286420356482,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.1509922360419295,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,gemma4:26b,ldbc_q13,hard,True,0.0444965650094673,,0.1068380599608644,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,gemma4:26b,ldbc_q14,medium,True,0.0276043429621495,,0.1729495659819804,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,aql,llama3.2:latest,ldbc_q01,easy,True,0.0395320910029113,,0.0033707370166666,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,1,0
+ldbc,aql,llama3.2:latest,ldbc_q02,easy,True,0.0506165329716168,,0.0032050900044851,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,12932,0
+ldbc,aql,llama3.2:latest,ldbc_q03,easy,True,0.0182205580058507,,0.0030802660039626,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,aql,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,0.0033272089785896,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,10,0
+ldbc,aql,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,0.0032584159635007,AQLQueryExecuteError: [HTTP 400][ERR 1512] use of unknown variable 'usage_count' in object literal near '}' at position 13:46,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,llama3.2:latest,ldbc_q06,medium,True,0.0235188209917396,,0.0030859510297887,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5,0
+ldbc,aql,llama3.2:latest,ldbc_q07,medium,True,0.0273475990397855,,0.0029914970509707,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,aql,llama3.2:latest,ldbc_q08,hard,True,0.0778402609867043,,0.002733479021117,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,aql,llama3.2:latest,ldbc_q09,medium,False,0.0244639529846608,,,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,0.0034313459764234,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,90492,0
+ldbc,aql,llama3.2:latest,ldbc_q11,hard,True,0.1051084960345178,,0.0029662700253538,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5407,0
 ldbc,aql,llama3.2:latest,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,aql,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.002731379005126655,AQLQueryExecuteError: [HTTP 400][ERR 1540] usage of unknown function 'KNOWS()',0.0,0.0,0.0,0.0,1.0,1642,0
-ldbc,aql,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.0028660219977609813,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelC,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,aql,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.005583796999417245,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,0.0927152510266751,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.006920740008354187,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,llama3.2:latest,ldbc_q13,hard,True,0.0444965650094673,,0.0027313790051266,AQLQueryExecuteError: [HTTP 400][ERR 1540] usage of unknown function 'KNOWS()',0.0,0.0,0.0,0.0,1.0,1642,0
+ldbc,aql,llama3.2:latest,ldbc_q14,medium,True,0.0276043429621495,,0.0028660219977609,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelC,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,aql,qwen3-coder:30b,ldbc_q01,easy,True,0.0395320910029113,,0.0055837969994172,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,qwen3-coder:30b,ldbc_q02,easy,True,0.0506165329716168,,0.0927152510266751,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,qwen3-coder:30b,ldbc_q03,easy,True,0.0182205580058507,,0.0069207400083541,,1.0,1.0,1.0,1.0,0.0,4,4
 ldbc,aql,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,19.624941288027912,,0.0,0.0,0.0,0.0,1.0,10,10
-ldbc,aql,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,0.09730546601349488,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.007860897982027382,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.0116549989907071,,0.0,0.0,0.0,0.0,1.0,58,58
-ldbc,aql,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,61.681371382961515,,0.0,0.0,0.0,0.0,1.0,2805,21084
-ldbc,aql,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,6.782791752950288,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,0.0973054660134948,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,qwen3-coder:30b,ldbc_q06,medium,True,0.0235188209917396,,0.0078608979820273,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,qwen3-coder:30b,ldbc_q07,medium,True,0.0273475990397855,,0.0116549989907071,,0.0,0.0,0.0,0.0,1.0,58,58
+ldbc,aql,qwen3-coder:30b,ldbc_q08,hard,True,0.0778402609867043,,61.68137138296152,,0.0,0.0,0.0,0.0,1.0,2805,21084
+ldbc,aql,qwen3-coder:30b,ldbc_q09,medium,True,0.0244639529846608,,6.782791752950288,,0.0,0.0,0.0,0.0,1.0,20,0
 ldbc,aql,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,17.138837300008163,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,1.9249536310089752,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,qwen3-coder:30b,ldbc_q11,hard,True,0.1051084960345178,,1.9249536310089752,,1.0,1.0,1.0,1.0,0.0,5407,5407
 ldbc,aql,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,105.05214425496524,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.12675885198405012,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.1439897550153546,,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,cypher,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.06701599503867328,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,1.6638695960282348,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.010690463008359075,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,qwen3-coder:30b,ldbc_q13,hard,True,0.0444965650094673,,0.1267588519840501,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,qwen3-coder:30b,ldbc_q14,medium,True,0.0276043429621495,,0.1439897550153546,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,cypher,claude-opus-4-8,ldbc_q01,easy,True,0.0395320910029113,,0.0670159950386732,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,claude-opus-4-8,ldbc_q02,easy,True,0.0506165329716168,,1.6638695960282348,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,claude-opus-4-8,ldbc_q03,easy,True,0.0182205580058507,,0.010690463008359,,1.0,1.0,1.0,1.0,0.0,4,4
 ldbc,cypher,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,3.008623934001662,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,2.6957070950302295,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.004901485983282328,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,cypher,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.007941434974782169,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,0.17525981296785176,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,0.007619956042617559,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,2.695707095030229,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8,ldbc_q06,medium,True,0.0235188209917396,,0.0049014859832823,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,cypher,claude-opus-4-8,ldbc_q07,medium,True,0.0273475990397855,,0.0079414349747821,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,claude-opus-4-8,ldbc_q08,hard,True,0.0778402609867043,,0.1752598129678517,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,claude-opus-4-8,ldbc_q09,medium,True,0.0244639529846608,,0.0076199560426175,,1.0,1.0,1.0,1.0,0.0,20,20
 ldbc,cypher,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,5.3354453399661,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,cypher,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,0.331841564970091,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.05378734698751941,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,cypher,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.09947274602018297,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.0412994860089384,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,cypher,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.16006222396390513,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,1.7111177449696697,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.02083122101612389,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,cypher,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,2.3189470969955437,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,claude-opus-4-8,ldbc_q11,hard,True,0.1051084960345178,,0.331841564970091,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.0537873469875194,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,cypher,claude-opus-4-8,ldbc_q13,hard,True,0.0444965650094673,,0.0994727460201829,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,claude-opus-4-8,ldbc_q14,medium,True,0.0276043429621495,,0.0412994860089384,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,cypher,gemma4:26b,ldbc_q01,easy,True,0.0395320910029113,,0.1600622239639051,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,gemma4:26b,ldbc_q02,easy,True,0.0506165329716168,,1.7111177449696695,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,gemma4:26b,ldbc_q03,easy,True,0.0182205580058507,,0.0208312210161238,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,2.318947096995544,,1.0,1.0,1.0,1.0,0.0,10,10
 ldbc,cypher,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,1.879621899977792,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.005981958995107561,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,cypher,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.007448109972756356,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,0.17206497199367732,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,0.007310448039788753,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,gemma4:26b,ldbc_q06,medium,True,0.0235188209917396,,0.0059819589951075,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,cypher,gemma4:26b,ldbc_q07,medium,True,0.0273475990397855,,0.0074481099727563,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,gemma4:26b,ldbc_q08,hard,True,0.0778402609867043,,0.1720649719936773,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,gemma4:26b,ldbc_q09,medium,True,0.0244639529846608,,0.0073104480397887,,1.0,1.0,1.0,1.0,0.0,20,20
 ldbc,cypher,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,5.374713889032137,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,cypher,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.3688540339935571,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.05822421103948727,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,cypher,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.11377764295320958,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.03581922798184678,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,cypher,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.004697336989920586,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.010697471967432648,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Variable `p` not defined (line 4, column 8 (offset: 161))
+ldbc,cypher,gemma4:26b,ldbc_q11,hard,True,0.1051084960345178,,0.3688540339935571,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.0582242110394872,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,cypher,gemma4:26b,ldbc_q13,hard,True,0.0444965650094673,,0.1137776429532095,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,gemma4:26b,ldbc_q14,medium,True,0.0276043429621495,,0.0358192279818467,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,cypher,llama3.2:latest,ldbc_q01,easy,True,0.0395320910029113,,0.0046973369899205,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,llama3.2:latest,ldbc_q02,easy,True,0.0506165329716168,,0.0106974719674326,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Variable `p` not defined (line 4, column 8 (offset: 161))
 ""RETURN p.id, creation_date, p.content""
         ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,12932,0
-ldbc,cypher,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.003576980030629784,,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,cypher,llama3.2:latest,ldbc_q03,easy,True,0.0182205580058507,,0.0035769800306297,,0.0,0.0,0.0,0.0,1.0,4,0
 ldbc,cypher,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,2.370754541014321,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,26.992636921990197,,0.0,0.0,0.0,0.0,1.0,20,20
-ldbc,cypher,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.0057093200157396495,,0.0,0.0,0.0,0.0,1.0,5,1
-ldbc,cypher,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.006669521040748805,,0.0,0.0,0.0,0.0,1.0,58,0
-ldbc,cypher,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,0.01196307799546048,,0.0,0.0,0.0,0.0,1.0,2805,0
-ldbc,cypher,llama3.2:latest,ldbc_q09,medium,True,0.024463952984660864,,0.005809369962662458,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,5.041924807999749,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
-ldbc,cypher,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.07139266602462158,,0.0,0.0,0.0,0.0,1.0,5407,0
-ldbc,cypher,llama3.2:latest,ldbc_q12,hard,True,0.1029304499970749,,0.017146624042652547,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: PatternExpressions are not allowed to introduce new variables: 'l'. (line 6, column 20 (offset: 267))
+ldbc,cypher,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,26.9926369219902,,0.0,0.0,0.0,0.0,1.0,20,20
+ldbc,cypher,llama3.2:latest,ldbc_q06,medium,True,0.0235188209917396,,0.0057093200157396,,0.0,0.0,0.0,0.0,1.0,5,1
+ldbc,cypher,llama3.2:latest,ldbc_q07,medium,True,0.0273475990397855,,0.0066695210407488,,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,cypher,llama3.2:latest,ldbc_q08,hard,True,0.0778402609867043,,0.0119630779954604,,0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,cypher,llama3.2:latest,ldbc_q09,medium,True,0.0244639529846608,,0.0058093699626624,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,5.041924807999749,,0.0,0.1218008221721257,0.1218008221721257,0.1218008221721257,0.9351502100469516,90492,90492
+ldbc,cypher,llama3.2:latest,ldbc_q11,hard,True,0.1051084960345178,,0.0713926660246215,,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,cypher,llama3.2:latest,ldbc_q12,hard,True,0.1029304499970749,,0.0171466240426525,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: PatternExpressions are not allowed to introduce new variables: 'l'. (line 6, column 20 (offset: 267))
 ""WHERE NOT EXISTS ((l:LikesPost {person_id: p.id})-[:LIKES]->(po))""
                     ^} {gql_status: 42001} {gql_status_description: error: syntax error or access rule violation - invalid syntax}",0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,cypher,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.08404293400235474,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.006774494017008692,,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.003606244979891926,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,1.613025455037132,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.010769876011181623,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,llama3.2:latest,ldbc_q13,hard,True,0.0444965650094673,,0.0840429340023547,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,llama3.2:latest,ldbc_q14,medium,True,0.0276043429621495,,0.0067744940170086,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q01,easy,True,0.0395320910029113,,0.0036062449798919,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,qwen3-coder:30b,ldbc_q02,easy,True,0.0506165329716168,,1.613025455037132,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,qwen3-coder:30b,ldbc_q03,easy,True,0.0182205580058507,,0.0107698760111816,,1.0,1.0,1.0,1.0,0.0,4,4
 ldbc,cypher,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,0.8162087720120326,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,180.33644008199917,"ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration} {message: The transaction has been terminated. Retry your operation in a new transaction, and you should see a successful result. The transaction has not completed within the timeout specified at its start by the client. You may want to retry with a longer timeout. } {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.005339226045180112,,0.0,0.0,0.0,0.0,1.0,5,5
-ldbc,cypher,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.008374514989554882,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,0.16349027398973703,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,0.12856104702223092,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,4.454084686003625,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
-ldbc,cypher,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,0.3200463999528438,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,0.07044251298066229,,0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.08505892398534343,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.006581272988114506,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,180.3364400819992,"ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration} {message: The transaction has been terminated. Retry your operation in a new transaction, and you should see a successful result. The transaction has not completed within the timeout specified at its start by the client. You may want to retry with a longer timeout. } {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q06,medium,True,0.0235188209917396,,0.0053392260451801,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,cypher,qwen3-coder:30b,ldbc_q07,medium,True,0.0273475990397855,,0.0083745149895548,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,qwen3-coder:30b,ldbc_q08,hard,True,0.0778402609867043,,0.163490273989737,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,qwen3-coder:30b,ldbc_q09,medium,True,0.0244639529846608,,0.1285610470222309,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,4.454084686003625,,0.0,0.1218008221721257,0.1218008221721257,0.1218008221721257,0.9351502100469516,90492,90492
+ldbc,cypher,qwen3-coder:30b,ldbc_q11,hard,True,0.1051084960345178,,0.3200463999528438,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,0.0704425129806622,,0.0,0.0,0.0,0.0,1.0,917,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q13,hard,True,0.0444965650094673,,0.0850589239853434,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,qwen3-coder:30b,ldbc_q14,medium,True,0.0276043429621495,,0.0065812729881145,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,gremlin,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,14.560772263968829,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,6.172019078047015,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,1.1386596009833738,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,3.6612009999807924,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,gremlin,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,4.2153234939905815,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
+ldbc,gremlin,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.7864105119952001,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,gremlin,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,1.2978940720204264,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,gremlin,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,6.374034886015579,,0.0,0.0,0.0,0.0,1.0,2805,2423
+ldbc,gremlin,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,10.901972538034897,,0.0,0.0,0.0,0.0,1.0,20,20
+ldbc,gremlin,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,4.154779086005874,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,gremlin,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,0.9707561120158061,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,gremlin,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.7759176089894027,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,gremlin,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.7282324110274203,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.7525458009913564,,0.0,0.0,0.0,0.0,1.0,111,1
+ldbc,gremlin,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.7143448480055667,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,1.6805173020111397,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.7084007190424018,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,1.6656659639556892,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,gremlin,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,1.7581837460165843,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
+ldbc,gremlin,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.745412154996302,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,gremlin,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,1.873322270985227,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,gremlin,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,2.3534735739813186,,0.0,0.07952934505245252,1.0,0.1473407747866054,0.9204706549475474,2805,35270
+ldbc,gremlin,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,6.369631937006488,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,gremlin,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,3.059375299955718,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,gremlin,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,1.1048310449696146,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,gremlin,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.8368584619602188,,0.0,1.0,0.9989094874591058,0.9994544462629569,0.0010905125408942062,917,916
+ldbc,gremlin,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.8155309009598568,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.7867155430139974,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,gremlin,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.0230015889974311,,0.0,0.0,0.0,0.0,1.0,1,0
+ldbc,gremlin,llama3.2:latest,ldbc_q02,easy,False,0.050616532971616834,,,,0.0,0.0,0.0,0.0,1.0,12932,0
+ldbc,gremlin,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.8120133899501525,,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,gremlin,llama3.2:latest,ldbc_q04,hard,False,0.2299396800226532,,,,0.0,0.0,0.0,0.0,1.0,10,0
+ldbc,gremlin,llama3.2:latest,ldbc_q05,hard,False,0.3396434560418129,,,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,llama3.2:latest,ldbc_q06,medium,False,0.02351882099173963,,,,0.0,0.0,0.0,0.0,1.0,5,0
+ldbc,gremlin,llama3.2:latest,ldbc_q07,medium,False,0.027347599039785564,,,,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,gremlin,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,180.2035535920295,"GremlinServerError: 598: Evaluation exceeded the configured 'evaluationTimeout' threshold of 180000 ms or evaluation was otherwise cancelled directly for request [g.V().has('id', 933)
+    .out('KNOWS').in('KNOWS')
+    .out('KNOWS').in('KNOWS')
+    .out('STUDY_AT').in('STUDY_AT')
+    .out('HAS_INTEREST').in('HAS_INTEREST')
+    .out('HAS_INTEREST').in('HAS_INTEREST')
+    .out('HAS_INTEREST').in('HAS_INTEREST')
+    .project('id', 'firstName', 'lastName', 'sharedTag')
+        .by('id')
+        .by('firstName')
+        .by('lastName')
+        .by('name')
+    .dedup()]",0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,gremlin,llama3.2:latest,ldbc_q09,medium,False,0.024463952984660864,,,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,llama3.2:latest,ldbc_q10,hard,False,0.4510297270026058,,,,0.0,0.0,0.0,0.0,1.0,90492,0
+ldbc,gremlin,llama3.2:latest,ldbc_q11,hard,False,0.10510849603451788,,,,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,gremlin,llama3.2:latest,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0.0,0.0,1.0,917,0
+ldbc,gremlin,llama3.2:latest,ldbc_q13,hard,False,0.044496565009467304,,,,0.0,0.0,0.0,0.0,1.0,1642,0
+ldbc,gremlin,llama3.2:latest,ldbc_q14,medium,False,0.02760434296214953,,,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.7636409800034016,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,1.3760369990486652,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.7039020690135658,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,5.534905280044768,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [v[393222]=20] a Node class instead",0.0,0.0,0.0,0.0,1.0,10,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,0.7900604450260289,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.7281783419894055,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,gremlin,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,1.170247884991113,,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q08,hard,False,0.07784026098670438,,,,0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,0.9409284190041944,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,0.7357132009929046,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [5] a Long class instead",0.0,0.0,0.0,0.0,1.0,90492,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q11,hard,False,0.10510849603451788,,,,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0.0,0.0,1.0,917,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.778888414031826,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.7363922949880362,,0.0,0.0,0.0,0.0,1.0,111,1

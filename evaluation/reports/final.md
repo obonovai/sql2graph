@@ -1,14 +1,14 @@
 # rows2graph evaluation report
 
-Generated: 2026-07-02T08:04:40
+Generated: 2026-07-02T16:05:16
 
 Models under evaluation: **claude-opus-4-8, gemma4:26b, llama3.2:latest, qwen3-coder:30b**
 
-Targets: **SQL -> Cypher, SQL -> AQL**
+Targets: **SQL -> Cypher, SQL -> AQL, SQL -> Gremlin**
 
-Total translations: **112** (110 validated)
+Total translations: **168** (152 validated)
 
-Total tokens: **500,878** input / **78,824** output, approx **$0.83** USD
+Total tokens: **815,607** input / **135,310** output, approx **$1.21** USD
 
 
 Results are reported per target below; Cypher and AQL are never combined in one table or figure.
@@ -198,6 +198,113 @@ Categories: schema_error, hallucination, direction_error, predicate_error, proje
 |      22 | qwen3-coder:30b | ldbc_q14   | medium       | True                |                   0.88 |             0.31 |            |         |
 
 
+## SQL -> Gremlin
+
+Translations: **56** (42 validated)
+
+
+### Headline (per model)
+
+| model           |   validation_pass_rate |   pass@1 |   component_f1 |   normalized_ted |   execution_accuracy |   result_f1 |
+|-----------------|------------------------|----------|----------------|------------------|----------------------|-------------|
+| claude-opus-4-8 |                  1.000 |    1.000 |          0.919 |            0.324 |                0.571 |       0.598 |
+| gemma4:26b      |                  1.000 |    0.929 |          0.924 |            0.223 |                0.714 |       0.822 |
+| llama3.2:latest |                  0.214 |    0.214 |          0.667 |            0.739 |                0.000 |       0.000 |
+| qwen3-coder:30b |                  0.786 |    0.714 |          0.845 |            0.582 |                0.214 |       0.237 |
+
+
+### Stratified by difficulty
+
+| difficulty   |   validation_passed |   pass_at_1 |   component_f1_overall |   normalized_ted |   execution_accuracy |   result_f1 |
+|--------------|---------------------|-------------|------------------------|------------------|----------------------|-------------|
+| easy         |               0.917 |       0.917 |                  0.923 |            0.313 |                0.500 |       0.579 |
+| medium       |               0.750 |       0.750 |                  0.794 |            0.582 |                0.312 |       0.312 |
+| hard         |               0.679 |       0.607 |                  0.828 |            0.467 |                0.357 |       0.402 |
+
+
+### Component F1 breakdown (per model)
+
+| model           |   f1_node_labels |   f1_edge_types |   f1_directions |   f1_where |   f1_return |   f1_order |   f1_limit |   f1_aggregations |
+|-----------------|------------------|-----------------|-----------------|------------|-------------|------------|------------|-------------------|
+| claude-opus-4-8 |            0.964 |           1.000 |           0.905 |      0.853 |       0.752 |      0.947 |      1.000 |             0.929 |
+| gemma4:26b      |            0.976 |           1.000 |           0.917 |      0.836 |       0.851 |      0.882 |      1.000 |             0.929 |
+| llama3.2:latest |            0.155 |           0.793 |           0.714 |      0.476 |       0.646 |      0.788 |      1.000 |             0.762 |
+| qwen3-coder:30b |            0.905 |           0.926 |           0.797 |      0.767 |       0.650 |      0.859 |      1.000 |             0.857 |
+
+
+### Cost & latency (per model)
+
+| model           |   mean_duration_s |   total_cost_usd |   mean_iterations |
+|-----------------|-------------------|------------------|-------------------|
+| claude-opus-4-8 |             2.780 |            0.377 |             1.000 |
+| gemma4:26b      |            39.254 |            0.000 |             1.071 |
+| llama3.2:latest |            30.037 |            0.000 |             2.571 |
+| qwen3-coder:30b |             8.829 |            0.000 |             1.429 |
+
+
+### Figures
+
+![SQL -> Gremlin: Per-model headline metrics](figures/gremlin_model_headline.png)
+
+![SQL -> Gremlin: Pass / fail by query x model](figures/gremlin_query_model_pass.png)
+
+![SQL -> Gremlin: Component F1 by query x model](figures/gremlin_query_model_f1.png)
+
+![SQL -> Gremlin: Execution accuracy by query x model](figures/gremlin_query_model_exec.png)
+
+![SQL -> Gremlin: Component F1 per model](figures/gremlin_component_f1.png)
+
+![SQL -> Gremlin: Edit distance by model](figures/gremlin_distance_by_model.png)
+
+![SQL -> Gremlin: Cost & latency per model](figures/gremlin_cost_latency.png)
+
+![SQL -> Gremlin: Pass rate by difficulty](figures/gremlin_passrate_by_difficulty.png)
+
+
+### Error taxonomy (fill in manually)
+
+Categories: schema_error, hallucination, direction_error, predicate_error, projection_error, aggregation_error, join_to_path_error, other.
+
+
+|   index | model           | query_id   | difficulty   | validation_passed   |   component_f1_overall |   normalized_ted | category   | notes   |
+|---------|-----------------|------------|--------------|---------------------|------------------------|------------------|------------|---------|
+|       0 | llama3.2:latest | ldbc_q01   | easy         | True                |                   0.80 |             0.39 |            |         |
+|       1 | claude-opus-4-8 | ldbc_q02   | easy         | True                |                   0.93 |             0.25 |            |         |
+|       2 | gemma4:26b      | ldbc_q02   | easy         | True                |                   0.94 |             0.22 |            |         |
+|       3 | llama3.2:latest | ldbc_q02   | easy         | False               |                   0.82 |             0.97 |            |         |
+|       4 | qwen3-coder:30b | ldbc_q02   | easy         | True                |                   0.94 |             0.22 |            |         |
+|       5 | llama3.2:latest | ldbc_q03   | easy         | True                |                   0.84 |             0.47 |            |         |
+|       6 | llama3.2:latest | ldbc_q04   | hard         | False               |                   0.67 |             0.80 |            |         |
+|       7 | qwen3-coder:30b | ldbc_q04   | hard         | True                |                   0.75 |             0.70 |            |         |
+|       8 | claude-opus-4-8 | ldbc_q05   | hard         | True                |                   0.92 |             0.10 |            |         |
+|       9 | gemma4:26b      | ldbc_q05   | hard         | True                |                   0.80 |             0.38 |            |         |
+|      10 | llama3.2:latest | ldbc_q05   | hard         | False               |                   0.58 |             0.84 |            |         |
+|      11 | qwen3-coder:30b | ldbc_q05   | hard         | True                |                   0.71 |             0.80 |            |         |
+|      12 | claude-opus-4-8 | ldbc_q06   | medium       | True                |                   0.94 |             0.61 |            |         |
+|      13 | llama3.2:latest | ldbc_q06   | medium       | False               |                   0.73 |             0.87 |            |         |
+|      14 | qwen3-coder:30b | ldbc_q06   | medium       | True                |                   0.94 |             0.61 |            |         |
+|      15 | llama3.2:latest | ldbc_q07   | medium       | False               |                   0.54 |             0.90 |            |         |
+|      16 | qwen3-coder:30b | ldbc_q07   | medium       | True                |                   0.94 |             0.54 |            |         |
+|      17 | claude-opus-4-8 | ldbc_q08   | hard         | True                |                   0.95 |             0.41 |            |         |
+|      18 | gemma4:26b      | ldbc_q08   | hard         | True                |                   0.98 |             0.13 |            |         |
+|      19 | llama3.2:latest | ldbc_q08   | hard         | True                |                   0.64 |             0.62 |            |         |
+|      20 | qwen3-coder:30b | ldbc_q08   | hard         | False               |                   0.84 |             0.94 |            |         |
+|      21 | claude-opus-4-8 | ldbc_q09   | medium       | True                |                   0.79 |             0.94 |            |         |
+|      22 | llama3.2:latest | ldbc_q09   | medium       | False               |                   0.61 |             0.69 |            |         |
+|      23 | qwen3-coder:30b | ldbc_q09   | medium       | True                |                   0.74 |             0.73 |            |         |
+|      24 | llama3.2:latest | ldbc_q10   | hard         | False               |                   0.73 |             0.59 |            |         |
+|      25 | qwen3-coder:30b | ldbc_q10   | hard         | True                |                   0.91 |             0.62 |            |         |
+|      26 | llama3.2:latest | ldbc_q11   | hard         | False               |                   0.51 |             0.93 |            |         |
+|      27 | qwen3-coder:30b | ldbc_q11   | hard         | False               |                   0.73 |             0.80 |            |         |
+|      28 | gemma4:26b      | ldbc_q12   | hard         | True                |                   0.92 |             0.21 |            |         |
+|      29 | llama3.2:latest | ldbc_q12   | hard         | False               |                   0.60 |             0.79 |            |         |
+|      30 | qwen3-coder:30b | ldbc_q12   | hard         | False               |                   0.72 |             0.80 |            |         |
+|      31 | llama3.2:latest | ldbc_q13   | hard         | False               |                   0.81 |             0.68 |            |         |
+|      32 | claude-opus-4-8 | ldbc_q14   | medium       | True                |                   0.79 |             0.45 |            |         |
+|      33 | llama3.2:latest | ldbc_q14   | medium       | False               |                   0.45 |             0.78 |            |         |
+|      34 | qwen3-coder:30b | ldbc_q14   | medium       | True                |                   0.72 |             0.70 |            |         |
+
+
 ## Execution-metric caveats
 
 Oracle = gold SQL on Postgres vs generated query on the graph DB (multiset compare).
@@ -216,4 +323,4 @@ Oracle = gold SQL on Postgres vs generated query on the graph DB (multiset compa
 
 ## Out of scope (this pass)
 
-- TPC-H (needs a Postgres oracle), Gremlin, and additional models (matrix extension points).
+- TPC-H (needs a Postgres oracle) and additional models (matrix extension points).
