@@ -40,6 +40,9 @@ EVAL_DIR = REPO_ROOT / "eval"
 GOLD_DIR = EVAL_DIR / "gold"
 MAPPINGS_DIR = REPO_ROOT / "examples" / "mappings"
 OUTPUTS_DIR = EVAL_DIR / "outputs"
+RECORDS_DIR = OUTPUTS_DIR / "records"
+METRICS_DIR = OUTPUTS_DIR / "metrics"
+CACHE_DIR = OUTPUTS_DIR / "cache"
 REPORTS_DIR = EVAL_DIR / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 FINAL_REPORT_MD = REPORTS_DIR / "final.md"
@@ -48,11 +51,11 @@ FINAL_REPORT_MD = REPORTS_DIR / "final.md"
 # records_filename below), 02-05 write one metrics CSV each, 06 joins them.
 # Single-sourced here so producer and consumer can never drift.
 RECORDS_GLOB = "records_*.json"
-METRICS_BEHAVIOURAL_CSV = OUTPUTS_DIR / "metrics_behavioural.csv"
-METRICS_STRUCTURAL_CSV = OUTPUTS_DIR / "metrics_structural.csv"
-METRICS_DISTANCE_CSV = OUTPUTS_DIR / "metrics_distance.csv"
-METRICS_EXECUTION_CSV = OUTPUTS_DIR / "metrics_execution.csv"
-EXECUTION_CACHE_PATH = OUTPUTS_DIR / "execution_rows_cache.json"
+METRICS_BEHAVIOURAL_CSV = METRICS_DIR / "metrics_behavioural.csv"
+METRICS_STRUCTURAL_CSV = METRICS_DIR / "metrics_structural.csv"
+METRICS_DISTANCE_CSV = METRICS_DIR / "metrics_distance.csv"
+METRICS_EXECUTION_CSV = METRICS_DIR / "metrics_execution.csv"
+EXECUTION_CACHE_PATH = CACHE_DIR / "execution_rows_cache.json"
 
 # Target -> deployment-free default validation mode. All three targets have an
 # in-process grammar-based syntax validator (AQL via a hand-port of ArangoDB's
@@ -87,7 +90,7 @@ class RunConfig:
     # Ollama-specific knobs (ignored for provider="anthropic").
     num_ctx: int = 16384
     host: str = "http://localhost:11434"
-    outputs_dir: Path = field(default=OUTPUTS_DIR)
+    records_dir: Path = field(default=RECORDS_DIR)
     # Restrict the run to these query ids (smoke test); None = the whole dataset.
     subset: tuple[str, ...] | None = None
     resume: bool = True

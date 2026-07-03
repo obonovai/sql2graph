@@ -10,7 +10,7 @@ from __future__ import annotations
 from harness.pricing import billed_input_tokens, rate_for, usd_cost
 
 # Recorded totals for the ldbc/cypher/claude-opus-4-8 run
-# (eval/outputs/records_ldbc_cypher_claude-opus-4-8.json, 14 records).
+# (eval/outputs/records/records_ldbc_cypher_claude-opus-4-8.json, 14 records).
 OPUS_INPUT = 1734
 OPUS_OUTPUT = 1315
 OPUS_CACHE_READ = 13781

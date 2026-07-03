@@ -108,7 +108,7 @@ def make_translator_for(rc: RunConfig, mapping) -> Iterator[SQLTranslator]:
 
 
 def _records_path(rc: RunConfig) -> Path:
-    return rc.outputs_dir / records_filename(rc)
+    return rc.records_dir / records_filename(rc)
 
 
 def _write_records(path: Path, records: list[dict]) -> None:
@@ -122,7 +122,7 @@ def run_translation(rc: RunConfig) -> list[dict]:
     already on disk are skipped (the filename already pins dataset/target/model,
     so query_id is a sufficient key within the file).
     """
-    rc.outputs_dir.mkdir(parents=True, exist_ok=True)
+    rc.records_dir.mkdir(parents=True, exist_ok=True)
     path = _records_path(rc)
 
     existing: list[dict] = []

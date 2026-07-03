@@ -17,6 +17,7 @@ Import pattern from a notebook (after the repo-root walk)::
 from __future__ import annotations
 
 from .config import (
+    CACHE_DIR,
     DEFAULT_VALIDATION_MODE,
     EVAL_DIR,
     EXECUTION_CACHE_PATH,
@@ -25,10 +26,12 @@ from .config import (
     GOLD_DIR,
     MAPPINGS_DIR,
     METRICS_BEHAVIOURAL_CSV,
+    METRICS_DIR,
     METRICS_DISTANCE_CSV,
     METRICS_EXECUTION_CSV,
     METRICS_STRUCTURAL_CSV,
     OUTPUTS_DIR,
+    RECORDS_DIR,
     RECORDS_GLOB,
     REPO_ROOT,
     REPORTS_DIR,
@@ -72,6 +75,9 @@ __all__ = [
     "GOLD_DIR",
     "MAPPINGS_DIR",
     "OUTPUTS_DIR",
+    "RECORDS_DIR",
+    "METRICS_DIR",
+    "CACHE_DIR",
     "REPORTS_DIR",
     "FIGURES_DIR",
     "FINAL_REPORT_MD",

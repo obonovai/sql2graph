@@ -1,11 +1,6 @@
 schema: ldbc
 # Curated LDBC SNB gold set for SQL -> graph translation evaluation.
 #
-# Sources: the hand-authored translation-difficulty queries (q01-q13) plus
-# graphonauts2's validated Q-A3 country traversal (q14). The redundant former q09
-# (LIKES distinct/order, covered by q08+q12) was dropped during curation, and the
-# queries from q10 up were renumbered down by one so ids are contiguous q01-q14.
-#
 # Conventions baked in (see eval/README.md):
 #  - KNOWS is DIRECTED `-[:KNOWS]->`, matching the directed `friend_id` SQL joins
 #    and the directed `knows` edge actually loaded in graphonauts2's Postgres+Neo4j.
