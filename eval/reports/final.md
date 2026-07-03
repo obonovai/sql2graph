@@ -1,6 +1,6 @@
 # rows2graph evaluation report
 
-Generated: 2026-07-02T16:05:16
+Generated: 2026-07-03T05:48:57
 
 Models under evaluation: **claude-opus-4-8, gemma4:26b, llama3.2:latest, qwen3-coder:30b**
 
@@ -316,11 +316,6 @@ Oracle = gold SQL on Postgres vs generated query on the graph DB (multiset compa
 
 - AQL empty text: ArangoDB returns absent optional text (e.g. image-post content) as "" where Postgres has NULL; the AQL path reconciles the two.
 
-- Unified edges: AQL execution needs the mapping-aligned SCREAMING_SNAKE edge collections built by evaluation/build_arango_unified_edges.py; without them AQL traversals error and score 0.
+- Unified edges: AQL execution needs the mapping-aligned SCREAMING_SNAKE edge collections built by eval/scripts/build_arango_unified_edges.py; without them AQL traversals error and score 0.
 
 - Vacuous matches: when both stores return 0 rows, execution_accuracy is 1.0 even if the generated query has a latent bug.
-
-
-## Out of scope (this pass)
-
-- TPC-H (needs a Postgres oracle) and additional models (matrix extension points).
