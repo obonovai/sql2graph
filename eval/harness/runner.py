@@ -30,6 +30,7 @@ from rows2graph import (
 
 from .config import RunConfig, default_validation_mode, records_filename
 from .datasets import build_work_items, mapping_for
+from .pricing import billed_input_tokens
 
 
 @dataclass
@@ -181,7 +182,9 @@ def run_translation(rc: RunConfig) -> list[dict]:
             marker = "ok" if record.validation_passed else "x "
             # Billed input = uncached input + both Anthropic cache buckets, so
             # the log matches the reports (and platform.claude.com "tokens in").
-            billed_in = record.input_tokens + record.cache_read_tokens + record.cache_creation_tokens
+            billed_in = billed_input_tokens(
+                record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens
+            )
             print(
                 f"{marker} iters={record.iterations_used} "
                 f"tokens=({billed_in:>6},{record.output_tokens:>4}) "
@@ -190,29 +193,3 @@ def run_translation(rc: RunConfig) -> list[dict]:
 
     print(f"Done: {len(records)} record(s) in {path}")
     return records
-
-
-def load_records(
-    outputs_dir: Path,
-    dataset: str | None = None,
-    target: str | None = None,
-    model: str | None = None,
-) -> list[dict]:
-    """Concatenate every ``records_*.json`` under ``outputs_dir``, optionally filtered."""
-    records: list[dict] = []
-    for path in sorted(outputs_dir.glob("records_*.json")):
-        records.extend(json.loads(path.read_text()))
-    if dataset is not None:
-        records = [r for r in records if r.get("dataset") == dataset]
-    if target is not None:
-        records = [r for r in records if r.get("target") == target]
-    if model is not None:
-        records = [r for r in records if r.get("model") == model]
-    return records
-
-
-def records_frame(outputs_dir: Path, **filt):
-    """Load records (optionally filtered) into a pandas DataFrame."""
-    import pandas as pd
-
-    return pd.DataFrame(load_records(outputs_dir, **filt))

@@ -1,6 +1,6 @@
 """Derive mapping-aligned edge collections in graphonauts2's ArangoDB.
 
-The gold AQL in evaluation/datasets/ldbc.yaml (and examples/mappings/ldbc.yaml, which the
+The gold AQL in eval/gold/ldbc.yaml (and examples/mappings/ldbc.yaml, which the
 translator reasons over) uses *unified* SCREAMING_SNAKE edge names -- KNOWS, HAS_CREATOR,
 HAS_TAG, IS_LOCATED_IN, LIKES, REPLY_OF, ... graphonauts2's loader instead created
 *snake_case, source-split* edge collections (knows, post_has_creator, comment_has_creator,
@@ -18,7 +18,7 @@ Idempotent: each unified collection is created-if-missing then truncated before 
 so re-running does not duplicate rows.
 
 Run:
-    ARANGO_PASSWORD=password uv run python evaluation/build_arango_unified_edges.py
+    ARANGO_PASSWORD=password uv run python eval/scripts/build_arango_unified_edges.py
 """
 
 from __future__ import annotations

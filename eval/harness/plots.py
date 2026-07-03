@@ -26,6 +26,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .config import FIGURES_DIR
+
 # Difficulty axis order (the gold sets use exactly these three buckets).
 DIFF_ORDER = ["easy", "medium", "hard"]
 
@@ -372,3 +374,122 @@ def passrate_by_difficulty(df: pd.DataFrame, value: str = "pass_at_1", path: Pat
     ax.grid(axis="y", alpha=0.3)
     ax.legend(title="model", bbox_to_anchor=(1.01, 1.0), loc="upper left", fontsize=8)
     return _save(ax.figure, path)
+
+
+# --------------------------------------------------------------------------- #
+# Per-target rendering (the notebooks' shared figure loop)
+# --------------------------------------------------------------------------- #
+# Each builder renders one named figure for one target slice. All builders share
+# the signature (sub, path, models, queries, label); unused parameters are
+# underscore-prefixed. The registry key is the figure's filename suffix: the
+# file written is ``{prefix}_{suffix}.png`` and the names are the contract with
+# the final report (06 embeds a subset of them).
+
+
+def _fig_model_headline(sub, path, _models, _queries, _label):
+    return headline_bars(sub, path)
+
+
+def _fig_query_model_pass(sub, path, models, queries, label):
+    return query_model_heatmap(sub, "validation_passed", path, discrete=True, models=models, queries=queries,
+                               title=f"{label}: validation pass by query x model", cbar_label="pass")
+
+
+def _fig_behavioural_pass_bars(sub, path, _models, _queries, label):
+    return per_model_bars(sub, ["validation_passed", "pass_at_1"], path,
+                          title=f"{label}: pass rate and Pass@1 per model", ylabel="rate",
+                          labels={"validation_passed": "pass rate", "pass_at_1": "pass@1"})
+
+
+def _fig_cost_latency(sub, path, _models, _queries, _label):
+    return cost_latency(sub, path)
+
+
+def _fig_passrate_by_difficulty(sub, path, _models, _queries, _label):
+    return passrate_by_difficulty(sub, "pass_at_1", path)
+
+
+def _fig_component_f1(sub, path, _models, _queries, _label):
+    return component_f1_by_model(sub, path=path)
+
+
+def _fig_query_model_f1(sub, path, models, queries, label):
+    return query_model_heatmap(sub, "component_f1_overall", path, models=models, queries=queries,
+                               title=f"{label}: component F1 by query x model", cbar_label="F1")
+
+
+def _fig_structural_bars(sub, path, _models, _queries, label):
+    return per_model_bars(sub, ["exact_match", "component_f1_overall"], path,
+                          title=f"{label}: exact match and component F1 per model", ylabel="score",
+                          labels={"exact_match": "exact match", "component_f1_overall": "component F1"})
+
+
+def _fig_distance_by_model(sub, path, _models, _queries, _label):
+    return distance_boxplots(sub, path)
+
+
+def _fig_query_model_ted(sub, path, models, queries, label):
+    return query_model_heatmap(sub, "normalized_ted", path, cmap_name="viridis_r", models=models, queries=queries,
+                               title=f"{label}: normalized TED by query x model (lower = better)", cbar_label="TED")
+
+
+def _fig_query_model_exec(sub, path, models, queries, label):
+    return query_model_heatmap(sub, "execution_accuracy", path, discrete=True, models=models, queries=queries,
+                               title=f"{label}: execution accuracy by query x model", cbar_label="exec acc")
+
+
+def _fig_execution_bars(sub, path, _models, _queries, label):
+    return per_model_bars(sub, ["execution_accuracy", "result_f1"], path,
+                          title=f"{label}: execution accuracy and result F1 per model", ylabel="score",
+                          labels={"execution_accuracy": "exec accuracy", "result_f1": "result F1"})
+
+
+FIGURES = {
+    "model_headline": _fig_model_headline,
+    "query_model_pass": _fig_query_model_pass,
+    "behavioural_pass_bars": _fig_behavioural_pass_bars,
+    "cost_latency": _fig_cost_latency,
+    "passrate_by_difficulty": _fig_passrate_by_difficulty,
+    "component_f1": _fig_component_f1,
+    "query_model_f1": _fig_query_model_f1,
+    "structural_bars": _fig_structural_bars,
+    "distance_by_model": _fig_distance_by_model,
+    "query_model_ted": _fig_query_model_ted,
+    "query_model_exec": _fig_query_model_exec,
+    "execution_bars": _fig_execution_bars,
+}
+
+# Which figures each notebook renders per target. A figure whose metric column
+# is absent (e.g. execution_accuracy before notebook 05 has run) degrades to an
+# unsaved placeholder, so a static set is safe everywhere.
+FIGURE_SETS = {
+    "behavioural": ["query_model_pass", "behavioural_pass_bars", "cost_latency", "passrate_by_difficulty"],
+    "structural": ["component_f1", "query_model_f1", "structural_bars"],
+    "distance": ["distance_by_model", "query_model_ted"],
+    "execution": ["query_model_exec", "execution_bars"],
+    "report": ["model_headline", "query_model_pass", "query_model_f1", "query_model_exec",
+               "component_f1", "distance_by_model", "cost_latency", "passrate_by_difficulty"],
+}
+
+
+def render_target(sub: pd.DataFrame, prefix: str, label: str, figures: list[str], fig_dir: Path | None = None):
+    """Render one target's figure set: ``{prefix}_{suffix}.png`` for each suffix.
+
+    ``sub`` must already be a single-target slice (targets are never mixed in one
+    figure); ``prefix`` keeps the filenames target-scoped. Figures whose metric
+    columns are absent are skipped by their builders (nothing written; a note is
+    printed instead of the image).
+    """
+    if sub.empty:
+        print(f"No {label} records to plot.")
+        return
+    fig_dir = Path(fig_dir) if fig_dir is not None else FIGURES_DIR
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    models = model_axis(sub)
+    queries = query_axis(sub)
+    print(f"{label}: {len(models)} model(s), {len(queries)} query id(s)")
+    for suffix in figures:
+        path = fig_dir / f"{prefix}_{suffix}.png"
+        fig = FIGURES[suffix](sub, path, models, queries, label)
+        show(path)
+        plt.close(fig)

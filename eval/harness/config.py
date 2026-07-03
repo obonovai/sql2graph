@@ -41,6 +41,18 @@ GOLD_DIR = EVAL_DIR / "gold"
 MAPPINGS_DIR = REPO_ROOT / "examples" / "mappings"
 OUTPUTS_DIR = EVAL_DIR / "outputs"
 REPORTS_DIR = EVAL_DIR / "reports"
+FIGURES_DIR = REPORTS_DIR / "figures"
+FINAL_REPORT_MD = REPORTS_DIR / "final.md"
+
+# The filename contract between the notebooks: 01 writes records (see
+# records_filename below), 02-05 write one metrics CSV each, 06 joins them.
+# Single-sourced here so producer and consumer can never drift.
+RECORDS_GLOB = "records_*.json"
+METRICS_BEHAVIOURAL_CSV = OUTPUTS_DIR / "metrics_behavioural.csv"
+METRICS_STRUCTURAL_CSV = OUTPUTS_DIR / "metrics_structural.csv"
+METRICS_DISTANCE_CSV = OUTPUTS_DIR / "metrics_distance.csv"
+METRICS_EXECUTION_CSV = OUTPUTS_DIR / "metrics_execution.csv"
+EXECUTION_CACHE_PATH = OUTPUTS_DIR / "execution_rows_cache.json"
 
 # Target -> deployment-free default validation mode. All three targets have an
 # in-process grammar-based syntax validator (AQL via a hand-port of ArangoDB's
@@ -93,12 +105,10 @@ def records_filename(rc: RunConfig) -> str:
     return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.model)}.json"
 
 
-# The evaluation matrix. The first deliverable is a single cell; extend by
-# appending rows. Examples (uncomment / adapt once the prerequisites exist):
+# The evaluation matrix: LDBC x {cypher, aql, gremlin} x 4 models. Extend by
+# appending rows, e.g. a server-validated cell:
 #   RunConfig(dataset="ldbc", target="aql", model="qwen3-coder:30b",
 #             validation_mode="server", server_config=ArangoDBConfig(...)),
-#   RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic"),
-#   RunConfig(dataset="tpch", target="cypher", model="qwen3-coder:30b"),
 RUN_MATRIX: list[RunConfig] = [
     RunConfig(dataset="ldbc", target="cypher", model="llama3.2:latest", provider="ollama"),
     RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama"),
