@@ -31,7 +31,9 @@
     "model": "claude-opus-4-8",
     "provider": "anthropic",
     "difficulty": "easy",
-    "sql_features": [],
+    "sql_features": [
+      "temporal"
+    ],
     "sql": "SELECT id, creation_date, content\nFROM post\nWHERE creation_date >= '2010-06-01' AND creation_date < '2010-07-01';",
     "expected_query": "g.V().hasLabel('Post')\n  .has('creationDate', P.gte('2010-06-01')).has('creationDate', P.lt('2010-07-01'))\n  .project('id', 'creationDate', 'content')\n  .by('id').by('creationDate').by(__.coalesce(__.values('content'), __.constant('')))",
     "generated_query": "g.V().hasLabel('Post').has('creationDate', P.gte('2010-06-01')).has('creationDate', P.lt('2010-07-01')).project('id', 'creation_date', 'content').by('id').by('creationDate').by('content')",
@@ -169,7 +171,8 @@
     "provider": "anthropic",
     "difficulty": "medium",
     "sql_features": [
-      "join"
+      "join",
+      "temporal"
     ],
     "sql": "SELECT po.id, po.content, p.first_name, p.last_name, t.name\nFROM post po\nJOIN person p ON p.id = po.creator_person_id\nJOIN post_has_tag pht ON pht.post_id = po.id\nJOIN tag t ON t.id = pht.tag_id\nWHERE po.creation_date >= '2010-06-01' AND po.creation_date < '2010-06-02';",
     "expected_query": "g.V().hasLabel('Post')\n  .has('creationDate', P.gte('2010-06-01')).has('creationDate', P.lt('2010-06-02'))\n  .as('po').out('HAS_CREATOR').as('p')\n  .select('po').out('HAS_TAG').as('t')\n  .project('id', 'content', 'firstName', 'lastName', 'name')\n  .by(__.select('po').values('id'))\n  .by(__.select('po').coalesce(__.values('content'), __.constant('')))\n  .by(__.select('p').values('firstName'))\n  .by(__.select('p').values('lastName'))\n  .by(__.select('t').values('name'))",
@@ -384,6 +387,36 @@
     "cache_read_tokens": 0,
     "cache_creation_tokens": 4900,
     "total_tokens": 5053,
+    "error": null
+  },
+  {
+    "dataset": "ldbc",
+    "query_id": "ldbc_q15",
+    "target": "gremlin",
+    "model": "claude-opus-4-8",
+    "provider": "anthropic",
+    "difficulty": "hard",
+    "sql_features": [
+      "cte",
+      "join",
+      "order_limit",
+      "union"
+    ],
+    "sql": "WITH RECURSIVE place_hierarchy AS (\n  SELECT id, name, type, partof_id, 0 AS depth\n  FROM place\n  WHERE id = 111\n  UNION ALL\n  SELECT p.id, p.name, p.type, p.partof_id, ph.depth + 1\n  FROM place p\n  JOIN place_hierarchy ph ON p.id = ph.partof_id\n)\nSELECT id, name, type, depth\nFROM place_hierarchy\nORDER BY depth;",
+    "expected_query": "g.V().has('Place', 'id', 111)\n  .emit()\n  .repeat(__.out('IS_PART_OF'))\n  .times(10)\n  .project('id', 'name', 'type', 'depth')\n  .by('id').by('name').by('type')\n  .by(__.path().count(local).math('_ - 1'))",
+    "generated_query": "g.V().has('Place', 'id', 111).repeat(__.out('IS_PART_OF')).emit().tree()",
+    "validation_passed": true,
+    "validation_errors": [],
+    "iterations_used": 1,
+    "status": "success",
+    "duration_seconds": 2.070553336990997,
+    "unmapped_tables": [],
+    "unmapped_columns": [],
+    "input_tokens": 192,
+    "output_tokens": 42,
+    "cache_read_tokens": 0,
+    "cache_creation_tokens": 5164,
+    "total_tokens": 5398,
     "error": null
   }
 ]

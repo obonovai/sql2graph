@@ -54,7 +54,8 @@ queries:
       .project('id', 'creationDate', 'content')
       .by('id').by('creationDate').by(__.coalesce(__.values('content'), __.constant('')))
   difficulty: easy
-  sql_features: []
+  sql_features:
+  - temporal
   description: Range query on a timestamp column.
 - id: ldbc_q03
   sql: |-
@@ -203,6 +204,7 @@ queries:
   difficulty: medium
   sql_features:
   - join
+  - temporal
   description: Posts with their creator and tags (3-way join).
 - id: ldbc_q08
   sql: |-
@@ -353,7 +355,7 @@ queries:
     JOIN post po ON po.id = l.post_id
     WHERE po.forum_id = 137439023186;
   expected_cypher: |-
-    MATCH (f:Forum {id: 137439023186})-[:CONTAINER_OF]->(po:Post)<-[:HAS_CREATOR]-(p:Person)
+    MATCH (f:Forum {id: 137439023186})-[:CONTAINER_OF]->(po:Post)-[:HAS_CREATOR]->(p:Person)
     RETURN DISTINCT p.id, p.firstName, p.lastName
     UNION
     MATCH (f:Forum {id: 137439023186})-[:CONTAINER_OF]->(po:Post)<-[:LIKES]-(p:Person)
@@ -438,3 +440,40 @@ queries:
   - aggregation
   - join
   description: Persons per country via place -> partof -> country 2-hop traversal (cf. graphonauts Q-A3).
+- id: ldbc_q15
+  sql: |-
+    WITH RECURSIVE place_hierarchy AS (
+      SELECT id, name, type, partof_id, 0 AS depth
+      FROM place
+      WHERE id = 111
+      UNION ALL
+      SELECT p.id, p.name, p.type, p.partof_id, ph.depth + 1
+      FROM place p
+      JOIN place_hierarchy ph ON p.id = ph.partof_id
+    )
+    SELECT id, name, type, depth
+    FROM place_hierarchy
+    ORDER BY depth;
+  expected_cypher: |-
+    MATCH path = (start:Place {id: 111})-[:IS_PART_OF*0..]->(a:Place)
+    RETURN a.id AS id, a.name AS name, a.type AS type, length(path) AS depth
+    ORDER BY depth
+  expected_aql: |-
+    FOR a, e, p IN 0..10 OUTBOUND 'Place/111' IS_PART_OF
+      SORT LENGTH(p.edges)
+      RETURN { id: a.id, name: a.name, type: a.type, depth: LENGTH(p.edges) }
+  expected_gremlin: |-
+    g.V().has('Place', 'id', 111)
+      .emit()
+      .repeat(__.out('IS_PART_OF'))
+      .times(10)
+      .project('id', 'name', 'type', 'depth')
+      .by('id').by('name').by('type')
+      .by(__.path().count(local).math('_ - 1'))
+  difficulty: hard
+  sql_features:
+  - cte
+  - join
+  - order_limit
+  - union
+  description: Transitive ancestor walk up the Place hierarchy (city -> country -> continent) via a recursive CTE / variable-length traversal.
