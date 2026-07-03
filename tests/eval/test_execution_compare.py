@@ -1,7 +1,7 @@
 """Offline tests for the execution comparator (harness.execution).
 
 The comparator was extracted from notebook 05, where it had been proven against
-live graphonauts2 backends (gold sets validated 14/14 per target). These tests
+live graphonauts backends (gold sets validated 14/14 per target). These tests
 lock the extracted semantics without needing any database: date reconciliation
 across driver representations, the '' -> NULL gate, float int-collapse, and the
 multiset precision/recall/F1 math.

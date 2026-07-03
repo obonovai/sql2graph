@@ -23,12 +23,6 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     # Confirmed against platform.claude.com for the recorded opus-4-8 run.
     "claude-opus-4-8": (5.0, 25.0),
     "claude-opus-4-7": (5.0, 25.0),
-    # Placeholders: VERIFY against current pricing before trusting non-Opus
-    # cost numbers. Only opus-4-8 is in RUN_MATRIX today, so nothing currently
-    # reported depends on these rows.
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-    "claude-fable-5": (10.0, 50.0),
 }
 
 # Fallback (input, output) rate when the exact model is not in MODEL_PRICING.

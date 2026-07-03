@@ -124,7 +124,7 @@ RUN_MATRIX: list[RunConfig] = [
     RunConfig(dataset="ldbc", target="aql", model="gemma4:26b", provider="ollama"),
     RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic"),
     # Gremlin rows -- default validation_mode="syntax" (offline TinkerPop grammar).
-    # Execution accuracy runs against graphonauts2's in-memory TinkerGraph in 05
+    # Execution accuracy runs against graphonauts's in-memory TinkerGraph in 05
     # (bring it up with Neo4j/ArangoDB stopped; reload after container restarts).
     RunConfig(dataset="ldbc", target="gremlin", model="llama3.2:latest", provider="ollama"),
     RunConfig(dataset="ldbc", target="gremlin", model="qwen3-coder:30b", provider="ollama"),

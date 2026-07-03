@@ -445,7 +445,7 @@ Discriminator: `provider`.
 ```yaml
 provider: "ollama"
 model: "llama3.2"                    # must be pulled on the Ollama server
-host: "http://localhost:11434"
+# host: ...                          # optional; SDK reads OLLAMA_HOST if omitted
 temperature: 0.1
 num_ctx: 8192                        # context window size in tokens
 max_retries: 3                       # exponential backoff on connection errors
@@ -457,7 +457,7 @@ max_retries: 3                       # exponential backoff on connection errors
 ```yaml
 provider: "anthropic"
 # api_key: "${ANTHROPIC_API_KEY}"     # optional; SDK reads env var if omitted
-model: "claude-opus-4-7"
+model: "claude-opus-4-8"
 temperature: 0.1
 max_output_tokens: 4096
 max_retries: 3                       # forwarded to the Anthropic SDK's

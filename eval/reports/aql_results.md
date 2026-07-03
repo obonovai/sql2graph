@@ -4,7 +4,7 @@ Run of 2026-07-03. 14 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder
 gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
 temperature 0, max 3 generate-validate-fix iterations with offline syntax validation against
 a hand-ported ArangoDB grammar (Flex+Bison, 3.11 branch, best-effort). Execution accuracy
-measured against the Postgres oracle on graphonauts2's ArangoDB (database `graphonauts`, LDBC
+measured against the Postgres oracle on graphonauts's ArangoDB (database `graphonauts`, LDBC
 SNB SF1, camelCase attributes, ISO-8601 string dates, unified SCREAMING_SNAKE edge collections
 built by `scripts/build_arango_unified_edges.py`). Optional text (image-post content) comes
 back as `""` where Postgres has NULL and is reconciled by the comparator; each query runs under

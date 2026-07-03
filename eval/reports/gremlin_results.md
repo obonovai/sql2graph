@@ -4,7 +4,7 @@ Run of 2026-07-02. 14 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder
 gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
 temperature 0, max 3 generate-validate-fix iterations with offline ANTLR (TinkerPop
 grammar) validation. Execution accuracy measured against the Postgres oracle on
-graphonauts2's in-memory TinkerGraph (Gremlin Server 3.8.1, LDBC SNB SF1, unified
+graphonauts's in-memory TinkerGraph (Gremlin Server 3.8.1, LDBC SNB SF1, unified
 SCREAMING_SNAKE edge labels, ISO-8601 string dates). The gold Gremlin set itself was
 validated first: all 14 gold queries return exactly the same rows as their gold SQL
 (`scripts/validate_gold.py --target gremlin`, 14/14).

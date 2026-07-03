@@ -3,14 +3,14 @@ schema: ldbc
 #
 # Conventions baked in (see eval/README.md):
 #  - KNOWS is DIRECTED `-[:KNOWS]->`, matching the directed `friend_id` SQL joins
-#    and the directed `knows` edge actually loaded in graphonauts2's Postgres+Neo4j.
+#    and the directed `knows` edge actually loaded in graphonauts's Postgres+Neo4j.
 #  - Graph property names are camelCase (firstName, creationDate) per the LDBC
 #    graph spec and examples/mappings/ldbc.yaml; SQL columns are snake_case.
 #  - Every SQL query references only tables/columns present in
 #    examples/mappings/ldbc.yaml (multi-valued person_email/person_speaks excluded).
 #  - RETURN column order is aligned with the SQL SELECT order (the execution
 #    comparator in 05 is positional).
-#  - Date predicates use datetime('...') on the Cypher side. graphonauts2 now
+#  - Date predicates use datetime('...') on the Cypher side. graphonauts now
 #    loads creationDate/birthday/joinDate into Neo4j as native temporal types
 #    (DateTime/Date), so these datetime('...')/date('...') predicates match
 #    directly - no epoch-millis rewrite needed (former defect D7, resolved by
@@ -437,4 +437,4 @@ queries:
   sql_features:
   - aggregation
   - join
-  description: Persons per country via place -> partof -> country 2-hop traversal (cf. graphonauts2 Q-A3).
+  description: Persons per country via place -> partof -> country 2-hop traversal (cf. graphonauts Q-A3).

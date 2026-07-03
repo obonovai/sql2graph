@@ -34,9 +34,9 @@ from time import perf_counter
 from neo4j.time import Date as Neo4jDate
 from neo4j.time import DateTime as Neo4jDateTime
 
-# --- connection config (graphonauts2 backends; see eval/README.md) ---
+# --- connection config (graphonauts backends; see eval/README.md) ---
 # Postgres is the source oracle, not a config/servers/ target, so its DSN keeps its own
-# env-with-default lookups; the defaults match graphonauts2's postgres compose.
+# env-with-default lookups; the defaults match graphonauts's postgres compose.
 PG_DSN = (
     f"host={os.environ.get('POSTGRES_HOST', 'localhost')} "
     f"port={os.environ.get('POSTGRES_PORT', '5433')} "
@@ -236,7 +236,7 @@ def _arango():
         url = os.environ.get("ARANGO_URL", cfg.url)
         user = os.environ.get("ARANGO_USER", cfg.username)
         password = os.environ.get("ARANGO_PASSWORD", cfg.password)
-        # graphonauts2 loads LDBC into ArangoDB database 'graphonauts'. The config's database
+        # graphonauts loads LDBC into ArangoDB database 'graphonauts'. The config's database
         # ('ldbc') is the library's server-validation example DB -- a deliberately separate
         # target -- so the eval path keeps 'graphonauts' (env override still honoured; both
         # ARANGO_DATABASE and the old ARANGO_DB spelling are accepted).

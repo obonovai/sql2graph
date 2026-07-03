@@ -56,7 +56,7 @@ class AnthropicConfig(BaseModel):
 
     provider: Literal["anthropic"] = "anthropic"
     api_key: str | None = None
-    model: str = "claude-opus-4-7"
+    model: str = "claude-opus-4-8"
     temperature: float = 0.1
     max_output_tokens: int = 4096
     max_retries: int = Field(default=3, ge=0)

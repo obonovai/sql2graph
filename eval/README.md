@@ -10,7 +10,7 @@ normalised tree-edit), plus a report. The matrix currently covers **LDBC x {Cyph
 Gremlin} x 4 models** (12 cells: `llama3.2:latest`, `qwen3-coder:30b`, `gemma4:26b` on
 Ollama + `claude-opus-4-8` on Anthropic). Results are reported per target and never mixed.
 Execution-accuracy metrics (notebook 05) run the generated query on a real graph DB and
-need the graphonauts2 databases (see below); `EVAL_EXECUTION_TARGETS` selects which
+need the graphonauts databases (see below); `EVAL_EXECUTION_TARGETS` selects which
 targets execute per pass.
 
 ## Layout
@@ -135,15 +135,16 @@ Notebook `05` runs the generated query on a real graph DB and the gold SQL on Po
 (the oracle), comparing result multisets. Cypher runs on Neo4j, **AQL on ArangoDB** (db
 `graphonauts`). The comparator and executors live in `harness/execution.py`, shared with
 `scripts/validate_gold.py` (offline tests: `tests/eval/test_execution_compare.py`). It
-needs the graphonauts2 databases, loaded with LDBC SNB SF=1:
+needs the graphonauts databases, loaded with LDBC SNB SF=1. Set `GRAPHONAUTS_DIR` to your
+local graphonauts checkout (e.g. `export GRAPHONAUTS_DIR=~/path/to/graphonauts`):
 
 ```bash
-docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/postgres.compose.yml up -d
-docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/neo4j.compose.yml up -d
-docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/arangodb.compose.yml up -d
+docker compose -f $GRAPHONAUTS_DIR/docker/postgres.compose.yml up -d
+docker compose -f $GRAPHONAUTS_DIR/docker/neo4j.compose.yml up -d
+docker compose -f $GRAPHONAUTS_DIR/docker/arangodb.compose.yml up -d
 ```
 
-Load LDBC SF=1 into each (see `graphonauts2/notes/commands.md`; the ArangoDB loader
+Load LDBC SF=1 into each (see the graphonauts repo's `notes/commands.md`; the ArangoDB loader
 populates db `graphonauts`), then wire the AQL execution collections and validate the gold
 set before trusting any model numbers:
 
@@ -167,15 +168,15 @@ AQL-only subset only needs that backend up; the gold Cypher proof is the same co
 `--target cypher`. The per-query ceiling is `EVAL_QUERY_TIMEOUT` (default 60 s; the recorded
 run used 180 s so correct-but-slow translations are not scored as failures).
 
-**Gremlin** runs on graphonauts2's Gremlin Server (in-memory TinkerGraph,
+**Gremlin** runs on the graphonauts Gremlin Server (in-memory TinkerGraph,
 `ws://localhost:8182/gremlin`). TinkerGraph holds the whole graph on the JVM heap, so bring
 it up with Neo4j and ArangoDB STOPPED, and reload after any container restart (see
-`graphonauts2/docs/gremlin/LOADING_BRIEF.md`):
+the graphonauts repo's `docs/gremlin/LOADING_BRIEF.md`):
 
 ```bash
 docker stop neo4j-graphonaut arangodb-graphonaut
-docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/gremlin.compose.yml up -d
-(cd /Users/ivona.obonova/school/graphonauts2 && uv run graphonauts load gremlin && uv run graphonauts verify gremlin)
+docker compose -f $GRAPHONAUTS_DIR/docker/gremlin.compose.yml up -d
+(cd $GRAPHONAUTS_DIR && uv run graphonauts load gremlin && uv run graphonauts verify gremlin)
 
 # Prove the gold Gremlin matches the Postgres oracle (SQL vs Gremlin multiset compare).
 # Expect 14 genuine matches, 0 MISMATCH/error before running any model.
@@ -193,7 +194,7 @@ EVAL_EXECUTION_TARGETS=gremlin EVAL_QUERY_TIMEOUT=180 \
   uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/05_execution_metrics.ipynb
 ```
 
-**Datetime storage:** graphonauts2 loads `creationDate`/`birthday`/`joinDate` into Neo4j as
+**Datetime storage:** graphonauts loads `creationDate`/`birthday`/`joinDate` into Neo4j as
 native temporal types (`DateTime`/`Date`) and into ArangoDB as ISO-8601 strings
 (`DATE_ISO8601`-compatible). The comparator canonicalises the columns the Postgres oracle
 reports as dates to epoch-millis on all sides, so gold `datetime(...)` (Cypher) and string
@@ -203,12 +204,12 @@ before trusting execution results.
 ## Gold set notes
 
 `gold/ldbc.yaml` is a curated mix of hand-authored translation-difficulty queries and
-graphonauts2's validated set, aligned to `examples/mappings/ldbc.yaml`. Each of the 14
+the graphonauts project's validated set, aligned to `examples/mappings/ldbc.yaml`. Each of the 14
 queries carries `sql` plus gold `expected_cypher` / `expected_aql` / `expected_gremlin`,
 a difficulty bucket, and `sql_features` tags. Conventions:
 
 - **KNOWS is directed** (`-[:KNOWS]->`), matching the directed `friend_id` SQL joins and the
-  directed `knows` edge actually loaded in graphonauts2 (defect D2).
+  directed `knows` edge actually loaded in graphonauts (defect D2).
 - Graph properties are camelCase, SQL columns snake_case; multi-valued `person_email` /
   `person_speaks` are excluded (the mapping does not express list properties, defect D4).
 - RETURN column order is aligned to the SQL SELECT order (the execution comparator in 05 is

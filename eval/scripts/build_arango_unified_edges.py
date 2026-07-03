@@ -1,8 +1,8 @@
-"""Derive mapping-aligned edge collections in graphonauts2's ArangoDB.
+"""Derive mapping-aligned edge collections in graphonauts's ArangoDB.
 
 The gold AQL in eval/gold/ldbc.yaml (and examples/mappings/ldbc.yaml, which the
 translator reasons over) uses *unified* SCREAMING_SNAKE edge names -- KNOWS, HAS_CREATOR,
-HAS_TAG, IS_LOCATED_IN, LIKES, REPLY_OF, ... graphonauts2's loader instead created
+HAS_TAG, IS_LOCATED_IN, LIKES, REPLY_OF, ... graphonauts's loader instead created
 *snake_case, source-split* edge collections (knows, post_has_creator, comment_has_creator,
 post_has_tag/comment_has_tag/forum_has_tag, ...). ArangoDB collection names are
 case-sensitive, so the gold (and any LLM candidate) traversals hit "collection or view not
@@ -12,7 +12,7 @@ This script additively builds the 15 unified edge collections the mapping declar
 copying every edge from its source collection(s), keeping ``_from``/``_to`` and edge
 properties but dropping ``_id``/``_key``/``_rev`` so merged keys can't collide. Vertex
 collections (Person, Post, ...) already match the mapping, so they are left untouched, as
-are graphonauts2's original split collections and named graph (this is purely additive).
+are graphonauts's original split collections and named graph (this is purely additive).
 
 Idempotent: each unified collection is created-if-missing then truncated before refilling,
 so re-running does not duplicate rows.
@@ -37,7 +37,7 @@ ARANGO_DB = os.environ.get("ARANGO_DB", "graphonauts")
 # python-arango default 60s HTTP read timeout, so raise it generously.
 ARANGO_TIMEOUT = int(os.environ.get("ARANGO_REQUEST_TIMEOUT", "600"))
 
-# Unified mapping edge type -> graphonauts2 source edge collection(s). The five
+# Unified mapping edge type -> graphonauts source edge collection(s). The five
 # multi-source entries are the merges that the split snake_case schema cannot express as
 # one collection. Directions (_from/_to) already match the mapping's source_node ->
 # target_node for every source, so gold OUTBOUND/INBOUND traversals work unchanged.

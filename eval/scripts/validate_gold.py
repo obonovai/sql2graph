@@ -1,6 +1,6 @@
 """Validate the gold set: does each gold graph query return the same data as its gold SQL?
 
-For every query in eval/gold/<dataset>.yaml this runs the `sql` on graphonauts2's
+For every query in eval/gold/<dataset>.yaml this runs the `sql` on graphonauts's
 Postgres (the oracle) and the target's expected_<target> gold query on its graph DB
 (cypher -> Neo4j, aql -> ArangoDB, gremlin -> Gremlin Server), then compares the
 result sets as date-reconciling multisets via harness.execution - the same comparator
@@ -19,7 +19,7 @@ Per-target prerequisites:
                uv run python eval/scripts/build_arango_unified_edges.py
   gremlin  Gremlin Server up and LOADED (in-memory TinkerGraph; reload after any
            container restart, with Neo4j/ArangoDB stopped - the Docker VM is
-           memory-tight). From graphonauts2:
+           memory-tight). From graphonauts:
                uv run graphonauts load gremlin && uv run graphonauts verify gremlin
 
 Run:
