@@ -9,8 +9,9 @@ validation), structural (Exact Match / Component F1), and distance (Levenshtein 
 normalised tree-edit), plus a report. The matrix currently covers **LDBC x {Cypher, AQL,
 Gremlin} x 4 models** (12 cells: `llama3.2:latest`, `qwen3-coder:30b`, `gemma4:26b` on
 Ollama + `claude-opus-4-8` on Anthropic). Results are reported per target and never mixed.
-Execution-accuracy metrics (notebook 05) run the generated query on a real graph DB; they
-are deferred behind `EVAL_EXECUTION=1` and need the graphonauts2 databases (see below).
+Execution-accuracy metrics (notebook 05) run the generated query on a real graph DB and
+need the graphonauts2 databases (see below); `EVAL_EXECUTION_TARGETS` selects which
+targets execute per pass.
 
 ## Layout
 
@@ -35,7 +36,7 @@ eval/
 │   ├── 02_behavioural_metrics.ipynb  ← Pass@1/k, iterations, duration, tokens, cost
 │   ├── 03_structural_metrics.ipynb   ← Exact Match, Component F1
 │   ├── 04_distance_metrics.ipynb     ← Levenshtein, Jaccard, normalised TED
-│   ├── 05_execution_metrics.ipynb    ← DEFERRED: result-set metrics vs Postgres + graph DBs
+│   ├── 05_execution_metrics.ipynb    ← result-set metrics vs Postgres + graph DBs
 │   └── 06_report.ipynb               ← join + stratify + final markdown report (per-target sections)
 ├── outputs/                  
 │   ├── records/  ← records_<dataset>_<target>_<model>.json, one per matrix cell
@@ -91,12 +92,12 @@ notebooks. Records and metrics auto-stratify by `(dataset, target, model)`:
 ## Running the DB-free first pass
 
 ```bash
-# Ollama up with the model pulled (the library talks to :11434)
+# Ollama up with the model pulled (set OLLAMA_HOST for a non-default endpoint)
 ollama serve
 ollama pull qwen3-coder:30b
 ```
 
-Smoke-test one query first by uncommenting the `subset=("ldbc_q01",)` line in
+Smoke-test one query first by setting `SUBSET = ("ldbc_q01",)` in
 `01_translation_run.ipynb`, then run the full pass:
 
 ```bash
@@ -110,7 +111,7 @@ or interactively: `uv run jupyter lab eval/notebooks/`.
 
 `01` is the only notebook that calls the LLM; it writes `records_*.json` incrementally and
 resumes (query ids already on disk are skipped). `02`-`04` and `06` are DB-free and consume
-those records. Notebook `05` is **deferred** and excluded from the pass.
+those records. Notebook `05` needs the databases below and is excluded from this DB-free pass.
 
 ## Outputs
 
@@ -128,14 +129,13 @@ those records. Notebook `05` is **deferred** and excluded from the pass.
   failure taxonomy) live in `reports/` too, next to the generated report and the evidence
   files they cite.
 
-## Execution metrics (deferred, prepared)
+## Execution metrics
 
 Notebook `05` runs the generated query on a real graph DB and the gold SQL on Postgres
 (the oracle), comparing result multisets. Cypher runs on Neo4j, **AQL on ArangoDB** (db
 `graphonauts`). The comparator and executors live in `harness/execution.py`, shared with
-`scripts/validate_gold.py` (offline tests: `tests/eval/test_execution_compare.py`). It is
-gated behind `EVAL_EXECUTION=1` and needs the graphonauts2 databases, loaded with LDBC
-SNB SF=1:
+`scripts/validate_gold.py` (offline tests: `tests/eval/test_execution_compare.py`). It
+needs the graphonauts2 databases, loaded with LDBC SNB SF=1:
 
 ```bash
 docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/postgres.compose.yml up -d
@@ -150,23 +150,22 @@ set before trusting any model numbers:
 ```bash
 # 1. Build the mapping-aligned unified edge collections the gold + generated AQL reference
 #    (KNOWS, HAS_CREATOR, HAS_TAG, ...). Re-run after every ArangoDB (re)load -- mandatory.
-ARANGO_PASSWORD=password uv run python eval/scripts/build_arango_unified_edges.py
+uv run python eval/scripts/build_arango_unified_edges.py
 
 # 2. Prove the gold AQL matches the Postgres oracle (SQL vs AQL multiset compare). Expect
 #    14 genuine matches, 0 MISMATCH/error before running any model.
-POSTGRES_PASSWORD=password ARANGO_PASSWORD=password \
-  uv run python eval/scripts/validate_gold.py --target aql
+uv run python eval/scripts/validate_gold.py --target aql
 
 # 3. Run notebook 05 (both targets -> Neo4j + ArangoDB + Postgres must be up).
-EVAL_EXECUTION=1 NEO4J_PASSWORD=... ARANGO_PASSWORD=password POSTGRES_PASSWORD=password \
-  ARANGO_DATABASE=graphonauts \
-  uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/05_execution_metrics.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/05_execution_metrics.ipynb
 ```
 
-Passwords are asserted lazily per target, so a Cypher-only or AQL-only subset only needs
-that backend up. The gold Cypher proof is the same command with `--target cypher` (needs
-`NEO4J_PASSWORD`). The per-query ceiling is `EVAL_QUERY_TIMEOUT` (default 60 s; the
-recorded run used 180 s so correct-but-slow translations are not scored as failures).
+Credentials default from `config/servers/*.yaml` (`neo4j.yaml`, `arangodb.yaml`), so no
+passwords need exporting for a standard local run; set `NEO4J_PASSWORD` / `ARANGO_PASSWORD` /
+`POSTGRES_*` only to override. Each backend connects lazily on first use, so a Cypher-only or
+AQL-only subset only needs that backend up; the gold Cypher proof is the same command with
+`--target cypher`. The per-query ceiling is `EVAL_QUERY_TIMEOUT` (default 60 s; the recorded
+run used 180 s so correct-but-slow translations are not scored as failures).
 
 **Gremlin** runs on graphonauts2's Gremlin Server (in-memory TinkerGraph,
 `ws://localhost:8182/gremlin`). TinkerGraph holds the whole graph on the JVM heap, so bring
@@ -180,7 +179,7 @@ docker compose -f /Users/ivona.obonova/school/graphonauts2/docker/gremlin.compos
 
 # Prove the gold Gremlin matches the Postgres oracle (SQL vs Gremlin multiset compare).
 # Expect 14 genuine matches, 0 MISMATCH/error before running any model.
-POSTGRES_PASSWORD=password uv run python eval/scripts/validate_gold.py --target gremlin
+uv run python eval/scripts/validate_gold.py --target gremlin
 ```
 
 Notebook `05` executes per target and MERGES into `outputs/metrics/metrics_execution.csv`
@@ -190,7 +189,7 @@ reference rows are cached per query in `outputs/cache/execution_rows_cache.json`
 Gremlin-only pass touches nothing but the Gremlin server:
 
 ```bash
-EVAL_EXECUTION=1 EVAL_EXECUTION_TARGETS=gremlin EVAL_QUERY_TIMEOUT=180 \
+EVAL_EXECUTION_TARGETS=gremlin EVAL_QUERY_TIMEOUT=180 \
   uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/05_execution_metrics.ipynb
 ```
 

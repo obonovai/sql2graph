@@ -35,6 +35,8 @@ from neo4j.time import Date as Neo4jDate
 from neo4j.time import DateTime as Neo4jDateTime
 
 # --- connection config (graphonauts2 backends; see eval/README.md) ---
+# Postgres is the source oracle, not a config/servers/ target, so its DSN keeps its own
+# env-with-default lookups; the defaults match graphonauts2's postgres compose.
 PG_DSN = (
     f"host={os.environ.get('POSTGRES_HOST', 'localhost')} "
     f"port={os.environ.get('POSTGRES_PORT', '5433')} "
@@ -42,24 +44,28 @@ PG_DSN = (
     f"password={os.environ.get('POSTGRES_PASSWORD', 'password')} "
     f"dbname={os.environ.get('POSTGRES_DB', 'graphonaut')}"
 )
-NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
-NEO4J_DB = os.environ.get("NEO4J_DATABASE", "neo4j")
 
-# graphonauts2 loads LDBC into ArangoDB database 'graphonauts' (NOT 'ldbc', which is only
-# the name used by the library's server-validation example in config/servers/arangodb.yaml).
-# Both env spellings are accepted (the notebooks documented ARANGO_DATABASE, the old
-# validator scripts ARANGO_DB).
-ARANGO_URL = os.environ.get("ARANGO_URL", "http://localhost:8529")
-ARANGO_USER = os.environ.get("ARANGO_USER", "root")
-ARANGO_DB = os.environ.get("ARANGO_DATABASE") or os.environ.get("ARANGO_DB", "graphonauts")
+# The graph-DB connection settings (Neo4j/ArangoDB/Gremlin) are sourced from the library's
+# server configs under config/servers/*.yaml, so a local eval run needs no exported passwords.
+# Env vars still override per field (env value wins; otherwise the config value is used) via
+# the _server_cfg() helper below. Loaded lazily -- rows2graph.load_server_config pulls in the
+# DB drivers through the validators package, and this module is import-light by design (see the
+# module docstring), so nothing loads until a runner is first used.
+_CONFIG_SERVERS_DIR = Path(__file__).resolve().parents[2] / "config" / "servers"
+_server_cfg_cache: dict = {}
 
-# graphonauts2's Gremlin Server (in-memory TinkerGraph); unauthenticated, no password.
-GREMLIN_URL = os.environ.get("GREMLIN_URL", "ws://localhost:8182/gremlin")
-GREMLIN_TRAVERSAL_SOURCE = os.environ.get("GREMLIN_TRAVERSAL_SOURCE", "g")
+
+def _server_cfg(name: str):
+    """Load and cache the config/servers/<name>.yaml server config (lazily)."""
+    if name not in _server_cfg_cache:
+        from rows2graph import load_server_config
+
+        _server_cfg_cache[name] = load_server_config(_CONFIG_SERVERS_DIR / f"{name}.yaml")
+    return _server_cfg_cache[name]
+
 
 # Per-query timeout ceiling, seconds (server-side where the backend supports it).
-TIMEOUT_S = int(os.environ.get("EVAL_QUERY_TIMEOUT", "60"))
+TIMEOUT_S = int(os.environ.get("EVAL_QUERY_TIMEOUT", "180"))
 
 POSTGRES_DATASETS = {"ldbc"}  # datasets with a loaded Postgres oracle
 TARGET_DB = {"cypher": "neo4j", "aql": "arangodb", "gremlin": "gremlin"}  # graph DB per target
@@ -192,9 +198,16 @@ def _neo4j():
     if _neo4j_driver is None:
         from neo4j import GraphDatabase
 
-        assert os.environ.get("NEO4J_PASSWORD"), "Export NEO4J_PASSWORD (needed to run cypher)."
-        _neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, os.environ["NEO4J_PASSWORD"]))
+        cfg = _server_cfg("neo4j")
+        uri = os.environ.get("NEO4J_URI", cfg.uri)
+        user = os.environ.get("NEO4J_USER", cfg.username)
+        password = os.environ.get("NEO4J_PASSWORD", cfg.password)
+        _neo4j_driver = GraphDatabase.driver(uri, auth=(user, password))
     return _neo4j_driver
+
+
+def _neo4j_database() -> str:
+    return os.environ.get("NEO4J_DATABASE", _server_cfg("neo4j").database)
 
 
 def run_cypher(query: str):
@@ -202,7 +215,7 @@ def run_cypher(query: str):
 
     t0 = perf_counter()
     try:
-        with _neo4j().session(database=NEO4J_DB) as session:
+        with _neo4j().session(database=_neo4j_database()) as session:
             result = session.run(Query(query, timeout=TIMEOUT_S))
             rows = [r.data() for r in result]
     except Exception as exc:
@@ -219,11 +232,19 @@ def _arango():
     if _arango_db is None:
         from arango import ArangoClient
 
-        assert os.environ.get("ARANGO_PASSWORD"), "Export ARANGO_PASSWORD (needed to run aql)."
+        cfg = _server_cfg("arangodb")
+        url = os.environ.get("ARANGO_URL", cfg.url)
+        user = os.environ.get("ARANGO_USER", cfg.username)
+        password = os.environ.get("ARANGO_PASSWORD", cfg.password)
+        # graphonauts2 loads LDBC into ArangoDB database 'graphonauts'. The config's database
+        # ('ldbc') is the library's server-validation example DB -- a deliberately separate
+        # target -- so the eval path keeps 'graphonauts' (env override still honoured; both
+        # ARANGO_DATABASE and the old ARANGO_DB spelling are accepted).
+        database = os.environ.get("ARANGO_DATABASE") or os.environ.get("ARANGO_DB", "graphonauts")
         # HTTP read timeout kept above the server-side max_runtime so a slow query surfaces
         # as a clean AQL timeout, not an HTTP ReadTimeout.
-        _arango_client = ArangoClient(hosts=ARANGO_URL, request_timeout=TIMEOUT_S + 30)
-        _arango_db = _arango_client.db(ARANGO_DB, username=ARANGO_USER, password=os.environ["ARANGO_PASSWORD"])
+        _arango_client = ArangoClient(hosts=url, request_timeout=TIMEOUT_S + 30)
+        _arango_db = _arango_client.db(database, username=user, password=password)
     return _arango_db
 
 
@@ -256,12 +277,16 @@ def run_gremlin(query: str):
     #    abandoned daemon thread cannot block interpreter shutdown.
     t0 = perf_counter()
     outcome = _queue.Queue()
+    # Resolve config on this (main) thread; the worker thread only touches the driver.
+    gcfg = _server_cfg("gremlin")
+    url = os.environ.get("GREMLIN_URL", gcfg.url)
+    traversal_source = os.environ.get("GREMLIN_TRAVERSAL_SOURCE", gcfg.traversal_source)
 
     def _work():
         try:
             from gremlin_python.driver.client import Client
 
-            client = Client(GREMLIN_URL, GREMLIN_TRAVERSAL_SOURCE)  # unauthenticated
+            client = Client(url, traversal_source)  # unauthenticated (TinkerGraph)
             result_set = client.submit(query, request_options={"evaluationTimeout": TIMEOUT_S * 1000})
             rows = [_shape_gremlin_row(r) for r in result_set.all().result(timeout=TIMEOUT_S + 30)]
             client.close()

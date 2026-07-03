@@ -18,9 +18,10 @@ validated first: all 14 gold queries return exactly the same rows as their gold 
 | qwen3-coder:30b | 0.79     | 0.71   | 0.85         | 0.21          | 0.24      |
 | llama3.2:latest | 0.21     | 0.21   | 0.67         | 0.00          | 0.00      |
 
-For contrast, on the same 14 queries the Cypher and AQL targets reached execution
-accuracy 1.00 for both opus and gemma (qwen 0.71, llama 0.29). Gremlin cut the two
-strongest models roughly in half and crushed the weaker two. That gap is the headline
+For contrast, on the same 14 queries the Cypher target reached execution accuracy 1.00
+for both opus and gemma (qwen 0.57, llama 0.21), and AQL reached 0.93 for both (qwen 0.50,
+llama 0.00). Gremlin cut the two strongest models to 0.57 and 0.71 and crushed the weaker
+two. That gap is the headline
 finding: the *same* models, the *same* SQL, the *same* schema mapping - only the target
 language changed.
 
@@ -67,7 +68,10 @@ a downstream application consuming the translation would do. Opus repeatedly pro
   a single row (1 row vs the oracle's 111). The aggregation itself was correct.
 
 Cypher and AQL make this failure mode nearly impossible: `RETURN a.x, a.y` and
-`RETURN {x: a.x}` map one-to-one onto a SELECT list. Gremlin has at least four
+`RETURN {x: a.x}` map one-to-one onto a SELECT list. (AQL has exactly one instance of it:
+the top-level `RETURN UNION_DISTINCT(a, b)` in q12, which returns a single array row instead
+of unfolded rows and which every model, opus and gemma included, got wrong; see
+`aql_results.md`.) Gremlin has at least four
 result-shaping idioms (`project`, `select`, `valueMap`, `group`), each with different
 row semantics, and only one of them matches a SQL result set without extra steps.
 

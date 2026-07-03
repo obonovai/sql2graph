@@ -1,6 +1,6 @@
 # rows2graph evaluation report
 
-Generated: 2026-07-03T08:54:35
+Generated: 2026-07-03T14:08:44
 
 Models under evaluation: **claude-opus-4-8, gemma4:26b, llama3.2:latest, qwen3-coder:30b**
 

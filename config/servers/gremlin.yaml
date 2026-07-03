@@ -3,5 +3,3 @@
 type: "gremlin"
 url: "ws://localhost:8182/gremlin"
 traversal_source: "g"
-# username: "..."
-# password: "${GREMLIN_PASSWORD}"

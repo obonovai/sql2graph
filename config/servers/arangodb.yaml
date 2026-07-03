@@ -3,5 +3,7 @@
 type: "arangodb"
 url: "http://localhost:8529"
 username: "root"
-password: "${ARANGO_PASSWORD}"
+password: "password"
+# `ldbc` is the library's server-validation example DB. The eval harness reuses this file's
+# url/username/password but targets its own database `graphonauts` (see eval/harness/execution.py).
 database: "ldbc"

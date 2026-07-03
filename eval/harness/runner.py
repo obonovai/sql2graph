@@ -68,10 +68,10 @@ class AttemptRecord:
 def make_llm_for(rc: RunConfig):
     """Build an LLM client for ``rc`` (constructs the config in-code, no YAML)."""
     if rc.provider == "ollama":
+        # host omitted -> the ollama SDK resolves $OLLAMA_HOST (its default when unset).
         return make_llm(
             OllamaConfig(
                 model=rc.model,
-                host=rc.host,
                 num_ctx=rc.num_ctx,
                 temperature=rc.temperature,
             )

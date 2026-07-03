@@ -87,9 +87,9 @@ class RunConfig:
     validation_mode: ValidationMode | None = None
     max_iterations: int = 3
     temperature: float = 0.0
-    # Ollama-specific knobs (ignored for provider="anthropic").
+    # Ollama-specific knob (ignored for provider="anthropic"). The Ollama endpoint
+    # is not configured here: the SDK resolves $OLLAMA_HOST (its default when unset).
     num_ctx: int = 16384
-    host: str = "http://localhost:11434"
     records_dir: Path = field(default=RECORDS_DIR)
     # Restrict the run to these query ids (smoke test); None = the whole dataset.
     subset: tuple[str, ...] | None = None

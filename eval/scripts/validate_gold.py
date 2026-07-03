@@ -9,28 +9,28 @@ notebook 05 uses, so the gold proof and the model scoring can never drift.
 This checks the gold set itself - it is independent of any model. Expect every
 non-vacuous pair to genuinely match (exit code 1 on any MISMATCH or error).
 
+Credentials come from config/servers/*.yaml (via harness.execution); a local run needs no
+exported passwords, though NEO4J_PASSWORD / ARANGO_PASSWORD / POSTGRES_* still override per field.
+
 Per-target prerequisites:
-  cypher   Neo4j up with LDBC SF1 loaded; export NEO4J_PASSWORD.
+  cypher   Neo4j up with LDBC SF1 loaded.
   aql      ArangoDB up (db `graphonauts`) with the unified SCREAMING_SNAKE edge
            collections from examples/mappings/<dataset>.yaml built first:
-               ARANGO_PASSWORD=password uv run python eval/scripts/build_arango_unified_edges.py
-           Export ARANGO_PASSWORD.
+               uv run python eval/scripts/build_arango_unified_edges.py
   gremlin  Gremlin Server up and LOADED (in-memory TinkerGraph; reload after any
            container restart, with Neo4j/ArangoDB stopped - the Docker VM is
            memory-tight). From graphonauts2:
                uv run graphonauts load gremlin && uv run graphonauts verify gremlin
 
 Run:
-    set -a; source .env; set +a
-    NEO4J_PASSWORD=... POSTGRES_PASSWORD=... uv run python eval/scripts/validate_gold.py --target cypher
-    ARANGO_PASSWORD=... POSTGRES_PASSWORD=... uv run python eval/scripts/validate_gold.py --target aql
-    POSTGRES_PASSWORD=... uv run python eval/scripts/validate_gold.py --target gremlin
+    uv run python eval/scripts/validate_gold.py --target cypher
+    uv run python eval/scripts/validate_gold.py --target aql
+    uv run python eval/scripts/validate_gold.py --target gremlin
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -47,9 +47,6 @@ from harness.execution import (
     run_postgres,
 )
 
-# Checked upfront for a clean error; the lazy driver singletons re-assert on first use.
-REQUIRED_ENV = {"cypher": ("NEO4J_PASSWORD",), "aql": ("ARANGO_PASSWORD",), "gremlin": ()}
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Prove the gold SQL and gold graph queries agree.")
@@ -58,10 +55,8 @@ def main() -> None:
     args = parser.parse_args()
     target = args.target
 
-    missing = [v for v in REQUIRED_ENV[target] if not os.environ.get(v)]
-    if missing:
-        sys.exit(f"Export {', '.join(missing)} (and source .env) before running --target {target}.")
-
+    # Credentials default from config/servers/*.yaml (env still overrides); a genuine
+    # connection failure surfaces per-query as an execution error below, not up front.
     rows_col = f"{target}_rows"
     rows = []
     try:
