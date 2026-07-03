@@ -7,7 +7,7 @@ grammar) validation. Execution accuracy measured against the Postgres oracle on
 graphonauts2's in-memory TinkerGraph (Gremlin Server 3.8.1, LDBC SNB SF1, unified
 SCREAMING_SNAKE edge labels, ISO-8601 string dates). The gold Gremlin set itself was
 validated first: all 14 gold queries return exactly the same rows as their gold SQL
-(`validate_gold_gremlin.py`, 14/14).
+(`scripts/validate_gold.py --target gremlin`, 14/14).
 
 ## Headline
 
@@ -177,7 +177,7 @@ temperature 0) and its record is an explicit `generation_hang` failure.
   signal, not the exact model ranking.
 - Two provenance notes on q08: qwen's record is a synthetic failure (deterministic
   infinite generation, aborted; capture in
-  `outputs/fail_ldbc_gremlin_qwen3-coder_30b.txt`), and gemma's record was produced by
+  `ldbc_gremlin_qwen3-coder_30b_q08.txt` next to this file), and gemma's record was produced by
   the same model/prompt via the Ollama UI after the harness call repeatedly appeared
   stuck (long-thinking, non-streaming call), then validated with the ANTLR checker
   before being recorded. Neither affects the aggregate picture (both attempts failed
