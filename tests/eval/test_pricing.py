@@ -1,16 +1,16 @@
 """Unit tests for the evaluation harness cost/token accounting.
 
-``eval_harness`` lives under ``evaluation/`` (added to ``sys.path`` by the
-notebooks); mirror that here so this runs under the default ``testpaths=["tests"]``
-pytest config without hitting any LLM.
+``harness`` lives under ``eval/`` (added to ``sys.path`` by the notebooks);
+the conftest mirrors that here so this runs under the default
+``testpaths=["tests"]`` pytest config without hitting any LLM.
 """
 
 from __future__ import annotations
 
-from eval_harness.pricing import billed_input_tokens, rate_for, usd_cost
+from harness.pricing import billed_input_tokens, rate_for, usd_cost
 
 # Recorded totals for the ldbc/cypher/claude-opus-4-8 run
-# (evaluation/outputs/records_ldbc_cypher_claude-opus-4-8.json, 14 records).
+# (eval/outputs/records_ldbc_cypher_claude-opus-4-8.json, 14 records).
 OPUS_INPUT = 1734
 OPUS_OUTPUT = 1315
 OPUS_CACHE_READ = 13781

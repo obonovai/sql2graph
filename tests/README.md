@@ -14,7 +14,7 @@ tests/
   integration/             # real LLMs / databases (deselected by default)
     conftest.py            # anthropic_config / neo4j_config / docker_available / small_schema
   eval/                    # offline tests for the evaluation harness (runs by default)
-    conftest.py            # puts evaluation/ on sys.path
+    conftest.py            # puts eval/ on sys.path
 ```
 
 The folder tree mirrors `src/rows2graph/`, so a test's home is predictable: a
@@ -134,6 +134,6 @@ latency and how many fix iterations it triggers.
 
 ## Eval tests (`eval/`)
 
-Offline unit tests for the cost/token accounting in `evaluation/eval_harness`.
-The `eval/conftest.py` puts `evaluation/` on `sys.path`, so these run under the
+Offline unit tests for the cost/token accounting in `eval/harness`.
+The `eval/conftest.py` puts `eval/` on `sys.path`, so these run under the
 default `pytest` invocation without hitting any LLM.

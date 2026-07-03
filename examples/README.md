@@ -79,5 +79,5 @@ with SQLTranslator(mapping, llm, target, validator) as translator:
 `sql/<dataset>/*.sql` are a small, illustrative selection of source queries
 spanning easy/medium/hard difficulty: plain `SELECT` statements ready to
 translate. The exhaustive set, paired with gold Cypher/AQL/Gremlin translations,
-lives in [`../evaluation/datasets/`](../evaluation/datasets) (`{tpch,ldbc}.yaml`)
+lives in [`../eval/gold/`](../eval/gold) (`ldbc.yaml`)
 and drives the evaluation harness.

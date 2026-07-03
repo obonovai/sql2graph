@@ -1,9 +1,9 @@
 """Gold-dataset loading and work-item construction.
 
-A gold dataset (``evaluation/datasets/<name>.yaml``) is a list of queries, each
+A gold dataset (``eval/gold/<name>.yaml``) is a list of queries, each
 carrying the source SQL plus one expected query per target language
 (``expected_cypher``, ``expected_aql``, ...). :func:`build_work_items` flattens a
-:class:`~eval_harness.config.RunConfig` into one :class:`WorkItem` per gold query
+:class:`~harness.config.RunConfig` into one :class:`WorkItem` per gold query
 for that config's single target, skipping queries that lack the target's gold
 column (so a Cypher run is unaffected by a query that only has ``expected_aql``).
 
@@ -22,7 +22,7 @@ import yaml
 
 from rows2graph import SchemaMapping
 
-from eval_harness.config import DATASETS_DIR, MAPPINGS_DIR, RunConfig, Target
+from .config import GOLD_DIR, MAPPINGS_DIR, RunConfig, Target
 
 _TARGETS: tuple[Target, ...] = ("cypher", "aql", "gremlin")
 
@@ -55,8 +55,8 @@ def expected_key(target: str) -> str:
 
 
 def load_dataset(dataset: str) -> list[GoldQuery]:
-    """Load ``evaluation/datasets/<dataset>.yaml`` into :class:`GoldQuery` objects."""
-    path = DATASETS_DIR / f"{dataset}.yaml"
+    """Load ``eval/gold/<dataset>.yaml`` into :class:`GoldQuery` objects."""
+    path = GOLD_DIR / f"{dataset}.yaml"
     data = yaml.safe_load(path.read_text())
     queries: list[GoldQuery] = []
     for q in data["queries"]:

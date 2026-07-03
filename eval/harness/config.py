@@ -31,15 +31,16 @@ def _repo_root() -> Path:
     for parent in here.parents:
         if (parent / "pyproject.toml").exists():
             return parent
-    # Fallback: eval_harness/ -> evaluation/ -> repo root
+    # Fallback: harness/ -> eval/ -> repo root
     return here.parents[2]
 
 
 REPO_ROOT = _repo_root()
-DATASETS_DIR = REPO_ROOT / "evaluation" / "datasets"
+EVAL_DIR = REPO_ROOT / "eval"
+GOLD_DIR = EVAL_DIR / "gold"
 MAPPINGS_DIR = REPO_ROOT / "examples" / "mappings"
-OUTPUTS_DIR = REPO_ROOT / "evaluation" / "outputs"
-REPORTS_DIR = REPO_ROOT / "evaluation" / "reports"
+OUTPUTS_DIR = EVAL_DIR / "outputs"
+REPORTS_DIR = EVAL_DIR / "reports"
 
 # Target -> deployment-free default validation mode. All three targets have an
 # in-process grammar-based syntax validator (AQL via a hand-port of ArangoDB's

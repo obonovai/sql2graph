@@ -29,13 +29,12 @@ import os
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "evaluation"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "eval"))
 
 from gremlin_python.driver.client import Client
-
-from eval_harness import load_dataset
-from validate_gold_aql import TIMEOUT_S, _date_columns, compare_rowsets, run_postgres
+from harness import load_dataset
+from validate_gold import TIMEOUT_S, _date_columns, compare_rowsets, run_postgres
 
 GREMLIN_URL = os.environ.get("GREMLIN_URL", "ws://localhost:8182/gremlin")
 GREMLIN_TRAVERSAL_SOURCE = os.environ.get("GREMLIN_TRAVERSAL_SOURCE", "g")

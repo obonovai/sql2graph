@@ -6,7 +6,7 @@ schema: ldbc
 # (LIKES distinct/order, covered by q08+q12) was dropped during curation, and the
 # queries from q10 up were renumbered down by one so ids are contiguous q01-q14.
 #
-# Conventions baked in (see evaluation/README.md):
+# Conventions baked in (see eval/README.md):
 #  - KNOWS is DIRECTED `-[:KNOWS]->`, matching the directed `friend_id` SQL joins
 #    and the directed `knows` edge actually loaded in graphonauts2's Postgres+Neo4j.
 #  - Graph property names are camelCase (firstName, creationDate) per the LDBC

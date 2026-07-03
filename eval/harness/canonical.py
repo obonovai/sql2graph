@@ -463,7 +463,7 @@ def jaccard(translated: str, expected: str, target: str) -> float:
 @dataclass
 class ClauseNode:
     label: str
-    children: list["ClauseNode"] = field(default_factory=list)
+    children: list[ClauseNode] = field(default_factory=list)
 
     def size(self) -> int:
         return 1 + sum(c.size() for c in self.children)

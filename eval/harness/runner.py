@@ -1,7 +1,7 @@
 """Translation run: drive the translator over a RunConfig and record results.
 
 This is the only part of the harness that calls the LLM. :func:`run_translation`
-builds the work list for one :class:`~eval_harness.config.RunConfig`, runs each
+builds the work list for one :class:`~harness.config.RunConfig`, runs each
 SQL query through :class:`~rows2graph.SQLTranslator`, and writes one
 :class:`AttemptRecord` per query to ``records_<dataset>_<target>_<model>.json``,
 incrementally so a crash mid-run preserves prior work. Token counts come straight
@@ -13,10 +13,10 @@ record so the metric notebooks can glob all record files and slice the matrix.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterator
 
 from rows2graph import (
     AnthropicConfig,
@@ -28,8 +28,8 @@ from rows2graph import (
     make_validator,
 )
 
-from eval_harness.config import RunConfig, default_validation_mode, records_filename
-from eval_harness.datasets import build_work_items, mapping_for
+from .config import RunConfig, default_validation_mode, records_filename
+from .datasets import build_work_items, mapping_for
 
 
 @dataclass

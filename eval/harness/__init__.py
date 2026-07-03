@@ -1,24 +1,24 @@
 """Reusable evaluation harness for rows2graph SQL -> graph translation.
 
-The notebooks under ``evaluation/notebooks/`` import from here. The run/record/IO
-logic lives in :mod:`eval_harness.runner`, the matrix/config in
-:mod:`eval_harness.config`, gold-dataset loading in :mod:`eval_harness.datasets`,
-and the string canonicalisation / structural-component / distance primitives
-(shared by notebooks 03 and 04) in :mod:`eval_harness.canonical`.
+The notebooks under ``eval/notebooks/`` import from here. The run logic lives in
+:mod:`harness.runner`, the matrix/config in :mod:`harness.config`, gold-dataset
+loading in :mod:`harness.datasets`, and the string canonicalisation /
+structural-component / distance primitives (shared by notebooks 03 and 04) in
+:mod:`harness.canonical`, :mod:`harness.components`, and :mod:`harness.distances`.
 
 Import pattern from a notebook (after the repo-root walk)::
 
     import sys
-    sys.path.insert(0, str(REPO_ROOT / "evaluation"))
-    from eval_harness import RUN_MATRIX, run_translation, load_records
-    from eval_harness.canonical import canonicalize, exact_match, component_f1
+    sys.path.insert(0, str(REPO_ROOT / "eval"))
+    from harness import RUN_MATRIX, run_translation, load_records
+    from harness.canonical import canonicalize, exact_match
 """
 
 from __future__ import annotations
 
-from eval_harness.config import (
-    DATASETS_DIR,
+from .config import (
     DEFAULT_VALIDATION_MODE,
+    GOLD_DIR,
     MAPPINGS_DIR,
     OUTPUTS_DIR,
     REPO_ROOT,
@@ -32,7 +32,7 @@ from eval_harness.config import (
     model_slug,
     records_filename,
 )
-from eval_harness.datasets import (
+from .datasets import (
     GoldQuery,
     WorkItem,
     build_work_items,
@@ -40,12 +40,12 @@ from eval_harness.datasets import (
     load_dataset,
     mapping_for,
 )
-from eval_harness.pricing import (
+from .pricing import (
     billed_input_tokens,
     rate_for,
     usd_cost,
 )
-from eval_harness.runner import (
+from .runner import (
     AttemptRecord,
     load_records,
     make_llm_for,
@@ -57,7 +57,7 @@ from eval_harness.runner import (
 __all__ = [
     # config
     "REPO_ROOT",
-    "DATASETS_DIR",
+    "GOLD_DIR",
     "MAPPINGS_DIR",
     "OUTPUTS_DIR",
     "REPORTS_DIR",

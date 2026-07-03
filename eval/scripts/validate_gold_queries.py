@@ -20,14 +20,14 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "evaluation"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "eval"))
 
 import psycopg
+from harness import load_dataset
 from neo4j import GraphDatabase, Query
-from neo4j.time import Date as Neo4jDate, DateTime as Neo4jDateTime
-
-from eval_harness import load_dataset
+from neo4j.time import Date as Neo4jDate
+from neo4j.time import DateTime as Neo4jDateTime
 
 # --- connection config (mirrors notebook 05) ---
 PG_DSN = (
@@ -49,10 +49,10 @@ def _to_epoch_ms(v):
         v = v.to_native()  # Neo4j temporal -> stdlib date/datetime, handled below
     if isinstance(v, _dt.datetime):
         if v.tzinfo is None:
-            v = v.replace(tzinfo=_dt.timezone.utc)
+            v = v.replace(tzinfo=_dt.UTC)
         return int(v.timestamp() * 1000)
     if isinstance(v, _dt.date):
-        return int(_dt.datetime(v.year, v.month, v.day, tzinfo=_dt.timezone.utc).timestamp() * 1000)
+        return int(_dt.datetime(v.year, v.month, v.day, tzinfo=_dt.UTC).timestamp() * 1000)
     return v
 
 
