@@ -1,26 +1,26 @@
 # SQL -> Gremlin evaluation: results and analysis
 
-Run of 2026-07-02. 14 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
+Run of 2026-07-03. 15 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
 gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
 temperature 0, max 3 generate-validate-fix iterations with offline ANTLR (TinkerPop
 grammar) validation. Execution accuracy measured against the Postgres oracle on
 graphonauts's in-memory TinkerGraph (Gremlin Server 3.8.1, LDBC SNB SF1, unified
 SCREAMING_SNAKE edge labels, ISO-8601 string dates). The gold Gremlin set itself was
-validated first: all 14 gold queries return exactly the same rows as their gold SQL
-(`scripts/validate_gold.py --target gremlin`, 14/14).
+validated first: all 15 gold queries return exactly the same rows as their gold SQL
+(`scripts/validate_gold.py --target gremlin`, 15/15).
 
 ## Headline
 
 | model           | validity | pass@1 | component F1 | exec accuracy | result F1 |
 |-----------------|----------|--------|--------------|---------------|-----------|
-| gemma4:26b      | 1.00     | 0.93   | 0.92         | **0.71**      | 0.82      |
-| claude-opus-4-8 | 1.00     | 1.00   | 0.92         | 0.57          | 0.60      |
-| qwen3-coder:30b | 0.79     | 0.71   | 0.85         | 0.21          | 0.24      |
-| llama3.2:latest | 0.21     | 0.21   | 0.67         | 0.00          | 0.00      |
+| gemma4:26b      | 1.00     | 0.93   | 0.91         | **0.67**      | 0.77      |
+| claude-opus-4-8 | 1.00     | 1.00   | 0.91         | 0.53          | 0.56      |
+| qwen3-coder:30b | 0.73     | 0.67   | 0.83         | 0.20          | 0.22      |
+| llama3.2:latest | 0.20     | 0.20   | 0.65         | 0.00          | 0.00      |
 
-For contrast, on the same 14 queries the Cypher target reached execution accuracy 1.00
-for both opus and gemma (qwen 0.57, llama 0.21), and AQL reached 0.93 for both (qwen 0.50,
-llama 0.00). Gremlin cut the two strongest models to 0.57 and 0.71 and crushed the weaker
+For contrast, on the same 15 queries the Cypher target reached execution accuracy 1.00
+for both opus and gemma (qwen 0.53, llama 0.20), and AQL reached 0.93 for both (qwen 0.47,
+llama 0.00). Gremlin cut the two strongest models to 0.53 and 0.67 and crushed the weaker
 two. That gap is the headline
 finding: the *same* models, the *same* SQL, the *same* schema mapping - only the target
 language changed.
@@ -43,6 +43,7 @@ language changed.
 | q12 UNION               | 1 | 0 | 0 | 0 | gemma off by exactly 1 row |
 | q13 NOT EXISTS          | 1 | 1 | 1 | 0 | |
 | q14 group by country    | 0 | 1 | 0 | 0 | |
+| q15 recursive ancestors | 0 | 0 | 0 | 0 | nobody passes; opus `tree()` KeyError, qwen 2nd generation_hang |
 
 ## Anatomy of the failures (verified against the live graph)
 
@@ -120,15 +121,37 @@ the primary metric.
 
 ### 5. Small local models cannot produce the dialect at all (llama, qwen)
 
-llama3.2 (3B) passed syntax on 3 of 14 and executed 0: its outputs mixed Cypher
+llama3.2 (3B) passed syntax on 3 of 15 and executed 0: its outputs mixed Cypher
 (`MATCH`-isms), Markdown backticks, invented step names (`PO_CREATION_DATE`) and Groovy
-closures. qwen3-coder:30b is more interesting: 11 of 14 valid, but its failures show a
+closures. qwen3-coder:30b is more interesting: 11 of 15 valid, but its failures show a
 systematic pull toward the *Gremlin console dialect* - closures (`filter{ ... }`),
 lambda parameters, `g.with(...)` - which the pure TinkerPop grammar (and any
 server-side execution) rejects. Most of the Gremlin text on the internet is console
 tutorials, so the training prior actively fights the strict grammar. On q08 qwen fell
 into a deterministic degenerate loop (`.select('final1')...as('final2')...` forever at
 temperature 0) and its record is an explicit `generation_hang` failure.
+
+### 6. q15: the recursive hierarchy walk breaks all four, four different ways
+
+q15 climbs the Place hierarchy transitively (`repeat(out('IS_PART_OF'))`), and it is the run's
+fourth all-fail query - no model produces a passing traversal, each for a different reason:
+
+- **opus: a `tree()` result shape.** `...repeat(__.out('IS_PART_OF')).emit().tree()` is a valid
+  traversal, but `tree()` returns a nested tree instead of rows and the result reader cannot
+  decode the tree data type at all (`KeyError: <DataType.tree: 43>`); 0 rows. It is the class-1
+  result-shape failure, one idiom further out.
+- **gemma: the closest miss.** `repeat(out('IS_PART_OF')).emit().order().by(loops(), asc)` into a
+  clean `project()` - but `emit()` after `repeat()` never emits the depth-0 start vertex, so it
+  returns the 2 ancestors where the oracle wants 3 rows (start included).
+- **llama: back to the console dialect.** It reverts to `g.with('start', 'place', id: 111)...`
+  with a hallucinated `IS_SUBCLASS_OF`, which the pure TinkerPop grammar rejects; never validates.
+- **qwen: a second generation hang.** Exactly like q08, at temperature 0 it unrolls
+  `.union(__.optional(...).by(1), ...by(2), ...)` indefinitely over a hallucinated
+  `IS_SUBCLASS_OF` and had to be aborted (capture in
+  `ldbc_gremlin_qwen3-coder_30b_q15.txt` next to this file); recorded as `generation_hang`.
+
+Once again the strong models fail on *shape* (opus's tree, gemma's missing start row) while the
+small models fail on *dialect* - the same split as the rest of the target.
 
 ## Why these results, in my opinion
 
@@ -143,10 +166,10 @@ temperature 0) and its record is an explicit `generation_hang` failure.
 
 2. **The result-shape space is too large, and only execution reveals the mistake.** All
    opus failures except q05 returned the right *entities* in the wrong *shape*. The
-   ANTLR validator (and even our structural component-F1, which scored opus at 0.92)
+   ANTLR validator (and even our structural component-F1, which scored opus at 0.91)
    cannot see this; only the positional multiset comparison against the oracle does.
    This is a strong argument for execution-based evaluation generally: on Gremlin the
-   validity-to-correctness gap was 43 points for opus (1.00 vs 0.57), versus zero
+   validity-to-correctness gap was 47 points for opus (1.00 vs 0.53), versus zero
    points on Cypher.
 
 3. **Training-data scarcity plus dialect contamination.** Gremlin is a rare language in
@@ -163,20 +186,20 @@ temperature 0) and its record is an explicit `generation_hang` failure.
    apparently not enough; the models need the *implication* (filter when traversing a
    shared label) stated as a rule.
 
-5. **On gemma beating opus (0.71 vs 0.57):** with n = 14 this is a 2-query difference,
+5. **On gemma beating opus (0.67 vs 0.53):** with n = 15 this is a 2-query difference,
    so it should not be over-read. That said, the pattern is consistent: gemma used
    `project()` with distinct keys everywhere (perfect shape discipline) while opus
    drifted into `select()`-based shapes on exactly the queries it lost, and gemma's
    long reasoning phase (thousands of thinking tokens per query, at 10 to 40 times
    opus's latency and roughly 60 seconds per query) appears to buy real shape checking.
-   Opus optimizes for terse first-shot answers (all 14 in one iteration, about 3 s and
+   Opus optimizes for terse first-shot answers (all 15 in one iteration, about 3 s and
    80 output tokens each); on a language where the last three steps of the chain decide
    correctness, that economy is a liability. A fix-loop that validated *shapes* (not
    just syntax) would likely close most of opus's gap.
 
 ## Caveats
 
-- 14 queries, one run, temperature 0: differences under ~2 queries between models are
+- 15 queries, one run, temperature 0: differences under ~2 queries between models are
   noise. The cross-language comparison (1.00 -> ~0.6 for the same models) is the robust
   signal, not the exact model ranking.
 - Two provenance notes on q08: qwen's record is a synthetic failure (deterministic
@@ -188,5 +211,5 @@ temperature 0) and its record is an explicit `generation_hang` failure.
   execution anyway - qwen by construction, gemma's with 35,270 vs 2,805 rows).
 - The structural metrics (component F1, TED) now use a real Gremlin canonicaliser
   (method-chain tree, as-label alpha-renaming), but they measure *surface* similarity:
-  opus's 0.92 component F1 against 0.57 execution accuracy quantifies exactly how
+  opus's 0.91 component F1 against 0.53 execution accuracy quantifies exactly how
   misleading surface similarity is for this language.

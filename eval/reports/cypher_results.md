@@ -1,13 +1,13 @@
 # SQL -> Cypher evaluation: results and analysis
 
-Run of 2026-07-03. 14 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
+Run of 2026-07-03. 15 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
 gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
 temperature 0, max 3 generate-validate-fix iterations with offline ANTLR (Neo4j Cypher
 grammar) validation. Execution accuracy measured against the Postgres oracle on
 graphonauts's Neo4j (LDBC SNB SF1, camelCase properties, unified SCREAMING_SNAKE
 relationship types, native temporal dates so `datetime('...')` predicates match directly).
-The gold Cypher set itself was validated first: all 14 gold queries return exactly the same
-rows as their gold SQL (`scripts/validate_gold.py --target cypher`, 14/14).
+The gold Cypher set itself was validated first: all 15 gold queries return exactly the same
+rows as their gold SQL (`scripts/validate_gold.py --target cypher`, 15/15).
 
 ## Headline
 
@@ -15,12 +15,12 @@ rows as their gold SQL (`scripts/validate_gold.py --target cypher`, 14/14).
 |-----------------|----------|--------|--------------|---------------|-----------|
 | claude-opus-4-8 | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
 | gemma4:26b      | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
-| qwen3-coder:30b | 1.00     | 1.00   | 0.93         | 0.57          | 0.58      |
-| llama3.2:latest | 1.00     | 0.86   | 0.82         | 0.21          | 0.22      |
+| qwen3-coder:30b | 1.00     | 1.00   | 0.93         | 0.53          | 0.56      |
+| llama3.2:latest | 1.00     | 0.87   | 0.82         | 0.20          | 0.21      |
 
-For contrast, on the same 14 queries the AQL target reached execution accuracy 0.93 for
-both opus and gemma (qwen 0.50, llama 0.00), and Gremlin only 0.57 (opus) and 0.71 (gemma).
-Cypher is the one target where both strong models are flawless - 28 for 28 - so every bit of
+For contrast, on the same 15 queries the AQL target reached execution accuracy 0.93 for
+both opus and gemma (qwen 0.47, llama 0.00), and Gremlin only 0.53 (opus) and 0.67 (gemma).
+Cypher is the one target where both strong models are flawless - 30 for 30 - so every bit of
 variance here lives in the two small local models. The same models, the same SQL, the same
 schema mapping: only the target language changed.
 
@@ -42,18 +42,19 @@ schema mapping: only the target language changed.
 | q12 UNION               | 1 | 1 | 0 | 0 | |
 | q13 NOT EXISTS          | 1 | 1 | 1 | 1 | |
 | q14 group by country    | 1 | 1 | 0 | 0 | qwen: `IS_SUBCLASS_OF` hallucination |
+| q15 recursive ancestors | 1 | 1 | 0 | 0 | llama: single `IS_PART_OF` hop, not `*`; qwen: constant `depth`, drops start row |
 
-The two strong models pass all 14; q01, q04 and q13 are passed by everyone; no query defeats
+The two strong models pass all 15; q01, q04 and q13 are passed by everyone; no query defeats
 all four. The interesting content is entirely in why the two local models fail.
 
 ## Anatomy of the failures (reconstructed from the records and the row cache)
 
 Every failure below was read off the recorded translation (`generated_query` vs
 `expected_query`), the recorded execution error, and the cached result rows that produced the
-metrics. There were no strong-model failures to dissect - opus and gemma execute all 14
+metrics. There were no strong-model failures to dissect - opus and gemma execute all 15
 correctly - so this is a study of the two local models.
 
-### 1. The declarative target is nearly free for a capable model (opus, gemma: 28/28)
+### 1. The declarative target is nearly free for a capable model (opus, gemma: 30/30)
 
 A SQL join maps to a Cypher `MATCH` pattern almost clause-by-clause, and `RETURN a.x, a.y`
 lines up one-to-one with the SELECT list. There is simply no result-shape space to get lost
@@ -69,10 +70,10 @@ in, which is where most Gremlin translations die. The two schema-convention trap
 Worth noting: opus and gemma are frequently *not* an exact string match to the gold (they use
 `WITH ... count()` where the gold aggregates directly, equivalent direction handling, and so
 on) yet execute correctly every time. For these two models validity, structure and execution
-all sit at ~1.00 - the validity-to-correctness gap is zero, versus 43 points for opus on
+all sit at ~1.00 - the validity-to-correctness gap is zero, versus 47 points for opus on
 Gremlin.
 
-### 2. llama3.2: relationship tables become nodes (3/14)
+### 2. llama3.2: relationship tables become nodes (3/15)
 
 llama's signature error is a data-modeling one: it treats SQL junction/relationship tables as
 node labels rather than edges. Across its failures the pattern is unmistakable -
@@ -91,12 +92,15 @@ variables: 'l'`). llama also hallucinates freely - q03 traverses `KNOWS` from `P
 q14 invents a literal `Country {name: 'country_name'}` (emitting the SQL alias as data) - and
 leaks snake_case properties (`po.creation_date`, `p.first_name`). It passes only the three
 shallowest queries: q01 (an exact-match point lookup), q04 (the one aggregation it happened to
-model as a real edge) and q13 (no-friends).
+model as a real edge) and q13 (no-friends). q15 adds a new failure shape: for the transitive
+Place-ancestor walk it writes a single `OPTIONAL MATCH (p)-[:IS_PART_OF]->(parent)` hop instead
+of a variable-length `[:IS_PART_OF*0..]` path, returning one row where the walk should climb
+three levels.
 
-### 3. qwen3-coder: fluent Cypher, wrong graph semantics (8/14)
+### 3. qwen3-coder: fluent Cypher, wrong graph semantics (8/15)
 
 qwen is the more instructive case. Its labels and clause structure are near-perfect (component
-F1 0.926), and it never models a junction table as a node. It loses exactly the queries that
+F1 0.925), and it never models a junction table as a node. It loses exactly the queries that
 turn on edge *semantics*:
 
 - **Direction (q10).** `OPTIONAL MATCH (f)<-[:HAS_MEMBER]-(p:Person)` reverses the edge (it
@@ -113,6 +117,10 @@ turn on edge *semantics*:
 - **Cartesian blow-up (q05).** Two `OPTIONAL MATCH`es on the shared tag produce a
   post x comment product that, for popular tags, does not finish inside the 180s ceiling and
   is killed (`TransactionTimedOut`).
+- **Depth bookkeeping (q15).** For the transitive Place-ancestor walk it wraps the traversal
+  in a `CALL {}` subquery whose result it discards, then emits a constant `1 AS depth` instead
+  of `length(path)` and omits the depth-0 start node; only one of three rows matches
+  (result_f1 0.33).
 
 Tellingly, qwen writes `HAS_CREATOR` in the *correct* direction in q07 (which passes) and the
 *wrong* direction in q12 - these are per-query lapses, not a systematic direction bug.
@@ -141,21 +149,22 @@ compare against the oracle catches it.
 3. **The local-model gap is conceptual, not dialectal.** llama has not internalized that a SQL
    junction table is an edge, not a node; qwen writes fluent, idiomatic Cypher but misreads
    edge direction, edge-vs-property and relationship names. Neither is a syntax problem - all
-   56 translations pass static validation. And the gap is language-independent: qwen makes the
+   60 translations pass static validation. And the gap is language-independent: qwen makes the
    *identical* `IS_SUBCLASS_OF` and `replyOfPostId` mistakes in AQL (see `aql_results.md`).
 
-4. **Structural similarity badly overstates local-model correctness.** qwen scores 0.926
-   component F1 but 0.571 execution; llama 0.817 vs 0.214. Only execution against the oracle
+4. **Structural similarity badly overstates local-model correctness.** qwen scores 0.925
+   component F1 but 0.533 execution; llama 0.823 vs 0.200. Only execution against the oracle
    separates fluent-but-wrong from correct. Even for opus and gemma the weakest structural axis
-   is edge direction (0.875), but on Cypher it never actually costs them a result.
+   is edge direction (0.883), but on Cypher it never actually costs them a result.
 
 ## Caveats
 
-- 14 queries, one run, temperature 0: differences under ~2 queries are noise. The robust
+- 15 queries, one run, temperature 0: differences under ~2 queries are noise. The robust
   signal here is categorical - both strong models are perfect, both local models are far from
   it - not any fine-grained ranking.
-- q10 is scored 0 for both local models despite a correct row count (result_f1 0.12). It is
-  the only partial-credit case and it is counted as a failure.
+- q10 (both local models, result_f1 0.12) and qwen's q15 (result_f1 0.33) score 0 despite
+  partially correct output - the right rows with the wrong values - and are counted as
+  failures.
 - qwen's q05 is a genuine cartesian blow-up killed at the 180s ceiling (`EVAL_QUERY_TIMEOUT`),
   not a fast query penalised for engine speed; `translated_runtime_s` records the 180s.
 - Strong-model queries are frequently not exact matches and carry non-zero edit distance

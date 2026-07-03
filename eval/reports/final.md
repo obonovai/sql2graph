@@ -1,14 +1,14 @@
 # rows2graph evaluation report
 
-Generated: 2026-07-03T14:08:44
+Generated: 2026-07-03T22:58:24
 
 Models under evaluation: **claude-opus-4-8, gemma4:26b, llama3.2:latest, qwen3-coder:30b**
 
 Targets: **SQL -> Cypher, SQL -> AQL, SQL -> Gremlin**
 
-Total translations: **168** (152 validated)
+Total translations: **180** (161 validated)
 
-Total tokens: **815,607** input / **135,310** output, approx **$1.21** USD
+Total tokens: **878,895** input / **144,073** output, approx **$1.32** USD
 
 
 Results are reported per target below; Cypher and AQL are never combined in one table or figure.
@@ -16,17 +16,17 @@ Results are reported per target below; Cypher and AQL are never combined in one 
 
 ## SQL -> Cypher
 
-Translations: **56** (56 validated)
+Translations: **60** (60 validated)
 
 
 ### Headline (per model)
 
 | model           |   validation_pass_rate |   pass@1 |   component_f1 |   normalized_ted |   execution_accuracy |   result_f1 |
 |-----------------|------------------------|----------|----------------|------------------|----------------------|-------------|
-| claude-opus-4-8 |                  1.000 |    1.000 |          0.979 |            0.071 |                1.000 |       1.000 |
-| gemma4:26b      |                  1.000 |    1.000 |          0.980 |            0.054 |                1.000 |       1.000 |
-| llama3.2:latest |                  1.000 |    0.857 |          0.817 |            0.402 |                0.214 |       0.223 |
-| qwen3-coder:30b |                  1.000 |    1.000 |          0.926 |            0.178 |                0.571 |       0.580 |
+| claude-opus-4-8 |                  1.000 |    1.000 |          0.980 |            0.066 |                1.000 |       1.000 |
+| gemma4:26b      |                  1.000 |    1.000 |          0.981 |            0.051 |                1.000 |       1.000 |
+| llama3.2:latest |                  1.000 |    0.867 |          0.823 |            0.405 |                0.200 |       0.208 |
+| qwen3-coder:30b |                  1.000 |    1.000 |          0.925 |            0.211 |                0.533 |       0.564 |
 
 
 ### Stratified by difficulty
@@ -35,27 +35,27 @@ Translations: **56** (56 validated)
 |--------------|---------------------|-------------|------------------------|------------------|----------------------|-------------|
 | easy         |               1.000 |       0.917 |                  0.956 |            0.079 |                0.833 |       0.833 |
 | medium       |               1.000 |       1.000 |                  0.926 |            0.238 |                0.562 |       0.562 |
-| hard         |               1.000 |       0.964 |                  0.912 |            0.183 |                0.714 |       0.723 |
+| hard         |               1.000 |       0.969 |                  0.918 |            0.195 |                0.688 |       0.706 |
 
 
 ### Component F1 breakdown (per model)
 
 | model           |   f1_node_labels |   f1_edge_types |   f1_directions |   f1_where |   f1_return |   f1_order |   f1_limit |   f1_aggregations |
 |-----------------|------------------|-----------------|-----------------|------------|-------------|------------|------------|-------------------|
-| claude-opus-4-8 |            1.000 |           1.000 |           0.875 |      0.979 |       0.978 |      1.000 |      1.000 |             1.000 |
-| gemma4:26b      |            1.000 |           1.000 |           0.875 |      0.979 |       0.987 |      1.000 |      1.000 |             1.000 |
-| llama3.2:latest |            0.758 |           1.000 |           0.517 |      0.514 |       0.878 |      0.962 |      0.929 |             0.976 |
-| qwen3-coder:30b |            0.950 |           1.000 |           0.767 |      0.765 |       0.926 |      1.000 |      1.000 |             1.000 |
+| claude-opus-4-8 |            1.000 |           1.000 |           0.883 |      0.981 |       0.979 |      1.000 |      1.000 |             1.000 |
+| gemma4:26b      |            1.000 |           1.000 |           0.883 |      0.981 |       0.988 |      1.000 |      1.000 |             1.000 |
+| llama3.2:latest |            0.774 |           1.000 |           0.549 |      0.546 |       0.875 |      0.931 |      0.933 |             0.978 |
+| qwen3-coder:30b |            0.953 |           1.000 |           0.760 |      0.781 |       0.907 |      1.000 |      1.000 |             1.000 |
 
 
 ### Cost & latency (per model)
 
 | model           |   mean_duration_s |   total_cost_usd |   mean_iterations |
 |-----------------|-------------------|------------------|-------------------|
-| claude-opus-4-8 |             2.982 |            0.364 |             1.000 |
-| gemma4:26b      |            25.378 |            0.000 |             1.000 |
-| llama3.2:latest |             7.470 |            0.000 |             1.286 |
-| qwen3-coder:30b |             5.933 |            0.000 |             1.000 |
+| claude-opus-4-8 |             2.960 |            0.396 |             1.000 |
+| gemma4:26b      |            32.369 |            0.000 |             1.000 |
+| llama3.2:latest |             8.118 |            0.000 |             1.267 |
+| qwen3-coder:30b |             8.400 |            0.000 |             1.000 |
 
 
 ### Figures
@@ -101,21 +101,23 @@ Categories: schema_error, hallucination, direction_error, predicate_error, proje
 |      14 | qwen3-coder:30b | ldbc_q12   | hard         | True                |                   0.78 |             0.49 |            |         |
 |      15 | llama3.2:latest | ldbc_q14   | medium       | True                |                   0.88 |             0.66 |            |         |
 |      16 | qwen3-coder:30b | ldbc_q14   | medium       | True                |                   0.96 |             0.10 |            |         |
+|      17 | llama3.2:latest | ldbc_q15   | hard         | True                |                   0.92 |             0.45 |            |         |
+|      18 | qwen3-coder:30b | ldbc_q15   | hard         | True                |                   0.91 |             0.68 |            |         |
 
 
 ## SQL -> AQL
 
-Translations: **56** (54 validated)
+Translations: **60** (57 validated)
 
 
 ### Headline (per model)
 
 | model           |   validation_pass_rate |   pass@1 |   component_f1 |   normalized_ted |   execution_accuracy |   result_f1 |
 |-----------------|------------------------|----------|----------------|------------------|----------------------|-------------|
-| claude-opus-4-8 |                  1.000 |    1.000 |          0.905 |            0.218 |                0.929 |       0.929 |
-| gemma4:26b      |                  1.000 |    0.929 |          0.897 |            0.218 |                0.929 |       0.929 |
-| llama3.2:latest |                  0.857 |    0.500 |          0.572 |            0.398 |                0.000 |       0.000 |
-| qwen3-coder:30b |                  1.000 |    1.000 |          0.855 |            0.297 |                0.500 |       0.500 |
+| claude-opus-4-8 |                  1.000 |    1.000 |          0.884 |            0.225 |                0.933 |       0.933 |
+| gemma4:26b      |                  1.000 |    0.933 |          0.876 |            0.226 |                0.933 |       0.933 |
+| llama3.2:latest |                  0.800 |    0.467 |          0.547 |            0.414 |                0.000 |       0.000 |
+| qwen3-coder:30b |                  1.000 |    1.000 |          0.822 |            0.326 |                0.467 |       0.467 |
 
 
 ### Stratified by difficulty
@@ -124,27 +126,27 @@ Translations: **56** (54 validated)
 |--------------|---------------------|-------------|------------------------|------------------|----------------------|-------------|
 | easy         |               1.000 |       1.000 |                  0.938 |            0.038 |                0.750 |       0.750 |
 | medium       |               0.938 |       0.938 |                  0.818 |            0.315 |                0.562 |       0.562 |
-| hard         |               0.964 |       0.750 |                  0.745 |            0.369 |                0.536 |       0.536 |
+| hard         |               0.938 |       0.750 |                  0.706 |            0.386 |                0.531 |       0.531 |
 
 
 ### Component F1 breakdown (per model)
 
 | model           |   f1_node_labels |   f1_edge_types |   f1_directions |   f1_where |   f1_return |   f1_order |   f1_limit |   f1_aggregations |
 |-----------------|------------------|-----------------|-----------------|------------|-------------|------------|------------|-------------------|
-| claude-opus-4-8 |            0.695 |           1.000 |           0.940 |      0.885 |       0.864 |      0.855 |      1.000 |             1.000 |
-| gemma4:26b      |            0.695 |           1.000 |           0.964 |      0.841 |       0.908 |      0.911 |      1.000 |             0.857 |
-| llama3.2:latest |            0.000 |           0.214 |           0.624 |      0.504 |       0.832 |      0.762 |      0.786 |             0.857 |
-| qwen3-coder:30b |            0.667 |           0.898 |           0.872 |      0.727 |       0.826 |      0.849 |      1.000 |             1.000 |
+| claude-opus-4-8 |            0.649 |           0.933 |           0.944 |      0.826 |       0.864 |      0.853 |      1.000 |             1.000 |
+| gemma4:26b      |            0.649 |           0.933 |           0.967 |      0.785 |       0.905 |      0.901 |      1.000 |             0.867 |
+| llama3.2:latest |            0.000 |           0.200 |           0.627 |      0.470 |       0.825 |      0.724 |      0.733 |             0.800 |
+| qwen3-coder:30b |            0.622 |           0.838 |           0.881 |      0.679 |       0.815 |      0.806 |      1.000 |             0.933 |
 
 
 ### Cost & latency (per model)
 
 | model           |   mean_duration_s |   total_cost_usd |   mean_iterations |
 |-----------------|-------------------|------------------|-------------------|
-| claude-opus-4-8 |             2.938 |            0.469 |             1.000 |
-| gemma4:26b      |            37.576 |            0.000 |             1.071 |
-| llama3.2:latest |            17.379 |            0.000 |             1.714 |
-| qwen3-coder:30b |             5.921 |            0.000 |             1.000 |
+| claude-opus-4-8 |             3.061 |            0.512 |             1.000 |
+| gemma4:26b      |            38.113 |            0.000 |             1.067 |
+| llama3.2:latest |            21.447 |            0.000 |             1.800 |
+| qwen3-coder:30b |             7.133 |            0.000 |             1.000 |
 
 
 ### Figures
@@ -196,21 +198,23 @@ Categories: schema_error, hallucination, direction_error, predicate_error, proje
 |      20 | llama3.2:latest | ldbc_q13   | hard         | True                |                   0.36 |             0.36 |            |         |
 |      21 | llama3.2:latest | ldbc_q14   | medium       | True                |                   0.45 |             0.73 |            |         |
 |      22 | qwen3-coder:30b | ldbc_q14   | medium       | True                |                   0.88 |             0.31 |            |         |
+|      23 | llama3.2:latest | ldbc_q15   | hard         | False               |                   0.20 |             0.64 |            |         |
+|      24 | qwen3-coder:30b | ldbc_q15   | hard         | True                |                   0.36 |             0.73 |            |         |
 
 
 ## SQL -> Gremlin
 
-Translations: **56** (42 validated)
+Translations: **60** (44 validated)
 
 
 ### Headline (per model)
 
 | model           |   validation_pass_rate |   pass@1 |   component_f1 |   normalized_ted |   execution_accuracy |   result_f1 |
 |-----------------|------------------------|----------|----------------|------------------|----------------------|-------------|
-| claude-opus-4-8 |                  1.000 |    1.000 |          0.919 |            0.324 |                0.571 |       0.598 |
-| gemma4:26b      |                  1.000 |    0.929 |          0.924 |            0.223 |                0.714 |       0.822 |
-| llama3.2:latest |                  0.214 |    0.214 |          0.667 |            0.739 |                0.000 |       0.000 |
-| qwen3-coder:30b |                  0.786 |    0.714 |          0.845 |            0.582 |                0.214 |       0.237 |
+| claude-opus-4-8 |                  1.000 |    1.000 |          0.907 |            0.348 |                0.533 |       0.558 |
+| gemma4:26b      |                  1.000 |    0.933 |          0.909 |            0.237 |                0.667 |       0.767 |
+| llama3.2:latest |                  0.200 |    0.200 |          0.653 |            0.758 |                0.000 |       0.000 |
+| qwen3-coder:30b |                  0.733 |    0.667 |          0.827 |            0.608 |                0.200 |       0.221 |
 
 
 ### Stratified by difficulty
@@ -219,27 +223,27 @@ Translations: **56** (42 validated)
 |--------------|---------------------|-------------|------------------------|------------------|----------------------|-------------|
 | easy         |               0.917 |       0.917 |                  0.923 |            0.313 |                0.500 |       0.579 |
 | medium       |               0.750 |       0.750 |                  0.794 |            0.582 |                0.312 |       0.312 |
-| hard         |               0.679 |       0.607 |                  0.828 |            0.467 |                0.357 |       0.402 |
+| hard         |               0.656 |       0.594 |                  0.802 |            0.506 |                0.312 |       0.351 |
 
 
 ### Component F1 breakdown (per model)
 
 | model           |   f1_node_labels |   f1_edge_types |   f1_directions |   f1_where |   f1_return |   f1_order |   f1_limit |   f1_aggregations |
 |-----------------|------------------|-----------------|-----------------|------------|-------------|------------|------------|-------------------|
-| claude-opus-4-8 |            0.964 |           1.000 |           0.905 |      0.853 |       0.752 |      0.947 |      1.000 |             0.929 |
-| gemma4:26b      |            0.976 |           1.000 |           0.917 |      0.836 |       0.851 |      0.882 |      1.000 |             0.929 |
-| llama3.2:latest |            0.155 |           0.793 |           0.714 |      0.476 |       0.646 |      0.788 |      1.000 |             0.762 |
-| qwen3-coder:30b |            0.905 |           0.926 |           0.797 |      0.767 |       0.650 |      0.859 |      1.000 |             0.857 |
+| claude-opus-4-8 |            0.967 |           1.000 |           0.911 |      0.863 |       0.702 |      0.950 |      1.000 |             0.867 |
+| gemma4:26b      |            0.978 |           1.000 |           0.922 |      0.847 |       0.837 |      0.823 |      1.000 |             0.867 |
+| llama3.2:latest |            0.144 |           0.784 |           0.693 |      0.445 |       0.646 |      0.802 |      1.000 |             0.711 |
+| qwen3-coder:30b |            0.911 |           0.864 |           0.747 |      0.783 |       0.640 |      0.868 |      1.000 |             0.800 |
 
 
 ### Cost & latency (per model)
 
 | model           |   mean_duration_s |   total_cost_usd |   mean_iterations |
 |-----------------|-------------------|------------------|-------------------|
-| claude-opus-4-8 |             2.780 |            0.377 |             1.000 |
-| gemma4:26b      |            39.254 |            0.000 |             1.071 |
-| llama3.2:latest |            30.037 |            0.000 |             2.571 |
-| qwen3-coder:30b |             8.829 |            0.000 |             1.429 |
+| claude-opus-4-8 |             2.733 |            0.411 |             1.000 |
+| gemma4:26b      |            38.251 |            0.000 |             1.067 |
+| llama3.2:latest |            30.926 |            0.000 |             2.600 |
+| qwen3-coder:30b |             8.829 |            0.000 |             1.400 |
 
 
 ### Figures
@@ -303,6 +307,10 @@ Categories: schema_error, hallucination, direction_error, predicate_error, proje
 |      32 | claude-opus-4-8 | ldbc_q14   | medium       | True                |                   0.79 |             0.45 |            |         |
 |      33 | llama3.2:latest | ldbc_q14   | medium       | False               |                   0.45 |             0.78 |            |         |
 |      34 | qwen3-coder:30b | ldbc_q14   | medium       | True                |                   0.72 |             0.70 |            |         |
+|      35 | claude-opus-4-8 | ldbc_q15   | hard         | True                |                   0.75 |             0.68 |            |         |
+|      36 | gemma4:26b      | ldbc_q15   | hard         | True                |                   0.70 |             0.44 |            |         |
+|      37 | llama3.2:latest | ldbc_q15   | hard         | False               |                   0.46 |             1.03 |            |         |
+|      38 | qwen3-coder:30b | ldbc_q15   | hard         | False               |                   0.57 |             0.97 |            |         |
 
 
 ## Execution-metric caveats

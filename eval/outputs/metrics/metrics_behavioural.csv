@@ -13,6 +13,7 @@ ldbc,aql,claude-opus-4-8,anthropic,ldbc_q11,hard,True,True,1,2.6444883400108665,
 ldbc,aql,claude-opus-4-8,anthropic,ldbc_q12,hard,True,True,1,4.3897649080026895,182,248,0,6080,6262,0.04511
 ldbc,aql,claude-opus-4-8,anthropic,ldbc_q13,hard,True,True,1,2.437361427000724,89,95,0,5135,5224,0.03491375
 ldbc,aql,claude-opus-4-8,anthropic,ldbc_q14,medium,True,True,1,2.135172659996897,101,103,0,6293,6394,0.04241125
+ldbc,aql,claude-opus-4-8,anthropic,ldbc_q15,hard,True,True,1,4.784418467024807,192,111,0,6349,6541,0.04341625
 ldbc,aql,gemma4:26b,ollama,ldbc_q01,easy,True,True,1,21.15921866003191,3441,453,0,0,3441,0.0
 ldbc,aql,gemma4:26b,ollama,ldbc_q02,easy,True,True,1,14.435183287016116,3818,1225,0,0,3818,0.0
 ldbc,aql,gemma4:26b,ollama,ldbc_q03,easy,True,True,1,5.401433562976308,3436,429,0,0,3436,0.0
@@ -27,6 +28,7 @@ ldbc,aql,gemma4:26b,ollama,ldbc_q11,hard,True,True,1,22.50557621504413,4445,1923
 ldbc,aql,gemma4:26b,ollama,ldbc_q12,hard,True,True,1,56.92038628901355,4190,4874,0,0,4190,0.0
 ldbc,aql,gemma4:26b,ollama,ldbc_q13,hard,True,True,1,24.14314474799903,3547,1984,0,0,3547,0.0
 ldbc,aql,gemma4:26b,ollama,ldbc_q14,medium,True,True,1,18.825314498972148,4267,1480,0,0,4267,0.0
+ldbc,aql,gemma4:26b,ollama,ldbc_q15,hard,True,True,1,45.629665625980124,4336,3031,0,0,4336,0.0
 ldbc,aql,llama3.2:latest,ollama,ldbc_q01,easy,True,True,1,10.83427373698214,3084,110,0,0,3084,0.0
 ldbc,aql,llama3.2:latest,ollama,ldbc_q02,easy,True,True,1,8.00797275902005,3412,163,0,0,3412,0.0
 ldbc,aql,llama3.2:latest,ollama,ldbc_q03,easy,True,True,1,5.9355505800340325,3081,124,0,0,3081,0.0
@@ -41,6 +43,7 @@ ldbc,aql,llama3.2:latest,ollama,ldbc_q11,hard,True,False,2,24.04806748201372,872
 ldbc,aql,llama3.2:latest,ollama,ldbc_q12,hard,False,False,3,29.984903594013304,13143,595,0,0,13143,0.0
 ldbc,aql,llama3.2:latest,ollama,ldbc_q13,hard,True,True,1,5.208754368009977,3183,101,0,0,3183,0.0
 ldbc,aql,llama3.2:latest,ollama,ldbc_q14,medium,True,True,1,15.441394903988112,3859,305,0,0,3859,0.0
+ldbc,aql,llama3.2:latest,ollama,ldbc_q15,hard,False,False,3,78.3915693720337,12593,477,0,0,12593,0.0
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q01,easy,True,True,1,18.90389098599553,3088,49,0,0,3088,0.0
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q02,easy,True,True,1,3.055459047027398,3441,61,0,0,3441,0.0
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q03,easy,True,True,1,1.827959810034372,3083,35,0,0,3083,0.0
@@ -55,6 +58,7 @@ ldbc,aql,qwen3-coder:30b,ollama,ldbc_q11,hard,True,True,1,4.077738966036122,4026
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q12,hard,True,True,1,9.615947249985766,3785,146,0,0,3785,0.0
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q13,hard,True,True,1,4.0772115149884485,3185,54,0,0,3185,0.0
 ldbc,aql,qwen3-coder:30b,ollama,ldbc_q14,medium,True,True,1,4.385119215992745,3861,53,0,0,3861,0.0
+ldbc,aql,qwen3-coder:30b,ollama,ldbc_q15,hard,True,True,1,24.099913883022964,3931,103,0,0,3931,0.0
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q01,easy,True,True,1,2.0843920379993506,57,50,0,3768,3825,0.025085
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q02,easy,True,True,1,7.16828797000926,71,87,0,4495,4566,0.03062375
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q03,easy,True,True,1,1.633419830002822,55,45,3768,0,3823,0.003284
@@ -69,6 +73,7 @@ ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q11,hard,True,True,1,2.32788621500367
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q12,hard,True,True,1,2.7579616740113124,182,173,0,4456,4638,0.033085
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q13,hard,True,True,1,2.071076959022321,89,58,0,4124,4213,0.02767
 ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q14,medium,True,True,1,3.6281788339838386,101,78,0,4889,4990,0.03301125
+ldbc,cypher,claude-opus-4-8,anthropic,ldbc_q15,hard,True,True,1,2.654465066967532,192,84,0,4694,4886,0.0323975
 ldbc,cypher,gemma4:26b,ollama,ldbc_q01,easy,True,True,1,37.73604789300589,2735,422,0,0,2735,0.0
 ldbc,cypher,gemma4:26b,ollama,ldbc_q02,easy,True,True,1,56.46791853499599,3262,1215,0,0,3262,0.0
 ldbc,cypher,gemma4:26b,ollama,ldbc_q03,easy,True,True,1,5.185734305996448,2730,415,0,0,2730,0.0
@@ -83,6 +88,7 @@ ldbc,cypher,gemma4:26b,ollama,ldbc_q11,hard,True,True,1,35.92964011098957,3576,3
 ldbc,cypher,gemma4:26b,ollama,ldbc_q12,hard,True,True,1,44.829314653994516,3253,3870,0,0,3253,0.0
 ldbc,cypher,gemma4:26b,ollama,ldbc_q13,hard,True,True,1,25.10437965003075,2957,2101,0,0,2957,0.0
 ldbc,cypher,gemma4:26b,ollama,ldbc_q14,medium,True,True,1,16.53548740595579,3460,1336,0,0,3460,0.0
+ldbc,cypher,gemma4:26b,ollama,ldbc_q15,hard,True,True,1,130.23496118199546,3379,1876,0,0,3379,0.0
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q01,easy,True,True,1,6.945830559008755,2404,35,0,0,2404,0.0
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q02,easy,True,False,3,13.532049811037723,8910,162,0,0,8910,0.0
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q03,easy,True,True,1,8.171837839006912,2401,185,0,0,2401,0.0
@@ -97,6 +103,7 @@ ldbc,cypher,llama3.2:latest,ollama,ldbc_q11,hard,True,True,1,3.798554736014921,3
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q12,hard,True,True,1,6.192570368992165,2872,127,0,0,2872,0.0
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q13,hard,True,True,1,1.9078240820090286,2613,33,0,0,2613,0.0
 ldbc,cypher,llama3.2:latest,ollama,ldbc_q14,medium,True,True,1,9.613183805020526,3077,203,0,0,3077,0.0
+ldbc,cypher,llama3.2:latest,ollama,ldbc_q15,hard,True,True,1,17.189977939997334,3010,193,0,0,3010,0.0
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q01,easy,True,True,1,17.392788244003896,2406,31,0,0,2406,0.0
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q02,easy,True,True,1,19.496969709987752,2890,71,0,0,2890,0.0
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q03,easy,True,True,1,1.185504838009365,2401,22,0,0,2401,0.0
@@ -111,6 +118,7 @@ ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q11,hard,True,True,1,2.960507468029391,3
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q12,hard,True,True,1,6.32590660196729,2888,106,0,0,2888,0.0
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q13,hard,True,True,1,2.781836428970564,2613,29,0,0,2613,0.0
 ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q14,medium,True,True,1,3.3321360800182447,3077,42,0,0,3077,0.0
+ldbc,cypher,qwen3-coder:30b,ollama,ldbc_q15,hard,True,True,1,42.936513413034845,3016,135,0,0,3016,0.0
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q01,easy,True,True,1,2.5709882989758626,57,76,0,4070,4127,0.0276225
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q02,easy,True,True,1,1.9425537960487418,71,85,0,4500,4571,0.030605
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q03,easy,True,True,1,2.1094401529990137,55,61,4070,0,4125,0.003835
@@ -125,6 +133,7 @@ ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q11,hard,True,True,1,3.2417490989901
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q12,hard,True,True,1,2.560417225002311,182,101,0,4871,5053,0.03387875
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q13,hard,True,True,1,2.1075712090241723,89,60,0,4285,4374,0.02872625
 ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q14,medium,True,True,1,2.0217072080122307,101,52,0,4900,5001,0.03243
+ldbc,gremlin,claude-opus-4-8,anthropic,ldbc_q15,hard,True,True,1,2.070553336990997,192,42,0,5164,5356,0.034285
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q01,easy,True,True,1,24.769073137023952,2998,1239,0,0,2998,0.0
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q02,easy,True,True,1,10.268601913005114,3322,829,0,0,3322,0.0
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q03,easy,True,True,1,8.568272325966973,2993,697,0,0,2993,0.0
@@ -139,6 +148,7 @@ ldbc,gremlin,gemma4:26b,ollama,ldbc_q11,hard,True,True,1,61.35621728899423,3771,
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q12,hard,True,False,2,76.56750685401494,7703,6465,0,0,7703,0.0
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q13,hard,True,True,1,11.623756874992978,3155,932,0,0,3155,0.0
 ldbc,gremlin,gemma4:26b,ollama,ldbc_q14,medium,True,True,1,61.0353852440021,3586,5302,0,0,3586,0.0
+ldbc,gremlin,gemma4:26b,ollama,ldbc_q15,hard,True,True,1,24.2029066310497,3833,1972,0,0,3833,0.0
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q01,easy,True,True,1,13.159976524009835,2671,184,0,0,2671,0.0
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q02,easy,False,False,3,30.22876248700777,9857,662,0,0,9857,0.0
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q03,easy,True,True,1,7.280943369027227,2668,164,0,0,2668,0.0
@@ -153,6 +163,7 @@ ldbc,gremlin,llama3.2:latest,ollama,ldbc_q11,hard,False,False,3,37.3530946190003
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q12,hard,False,False,3,41.2517294610152,10913,855,0,0,10913,0.0
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q13,hard,False,False,3,21.580500818032306,9607,476,0,0,9607,0.0
 ldbc,gremlin,llama3.2:latest,ollama,ldbc_q14,medium,False,False,3,38.07561394502409,10717,806,0,0,10717,0.0
+ldbc,gremlin,llama3.2:latest,ollama,ldbc_q15,hard,False,False,3,43.36836151895113,12407,739,0,0,12407,0.0
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q01,easy,True,True,1,11.60965269699227,2675,56,0,0,2675,0.0
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q02,easy,True,True,1,2.87245762697421,2992,72,0,0,2992,0.0
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q03,easy,True,True,1,1.9139213989838026,2670,41,0,0,2670,0.0
@@ -167,3 +178,4 @@ ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q11,hard,False,False,3,15.6266147469868
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q12,hard,False,False,3,33.03942103398731,12175,627,0,0,12175,0.0
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q13,hard,True,True,1,3.078812936961185,2817,50,0,0,2817,0.0
 ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q14,medium,True,True,1,3.9084961169864982,3228,58,0,0,3228,0.0
+ldbc,gremlin,qwen3-coder:30b,ollama,ldbc_q15,hard,False,False,1,,0,0,0,0,0,0.0
