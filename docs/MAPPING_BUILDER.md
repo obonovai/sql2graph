@@ -25,8 +25,8 @@ from sql2graph import build_mapping, BuildResult, CoverageReport, project_to_map
 ## The pipeline
 
 A build is three stages, each its own module, chained in order. The first two are
-deterministic and run offline; the third calls an LLM but is fenced so it can only
-improve names.
+deterministic and run offline; the third is optional and calls an LLM (only when one is
+supplied), fenced so it can only improve names.
 
 ```
 CREATE TABLE DDL
@@ -41,9 +41,10 @@ SchemaMapping skeleton  +  CoverageReport
 SchemaMapping (renamed labels / edge types / property keys, or the skeleton unchanged)
 ```
 
-`build_mapping` runs all three stages and returns a [`BuildResult`](#buildresult).
-The deterministic projection on its own (no LLM, offline and free) is available
-directly through `project_to_mapping`.
+`build_mapping` runs the deterministic stages and, when an `llm` is passed, the
+refinement stage too, returning a [`BuildResult`](#buildresult). With no `llm` it is
+deterministic, offline, and free. The deterministic projection on its own is also
+available directly through `project_to_mapping`.
 
 ### Extract: DDL to `RelationalSchema`
 
@@ -214,14 +215,15 @@ everything a build produced. Assembled in `_finalize`, its fields are:
 | `report` | `CoverageReport` | How the schema was projected (see the table above). |
 | `refined` | `bool` | `True` iff the naming pass changed the deterministic skeleton. Defaults to `False`. |
 | `warnings` | `list[str]` | Non-fatal issues from projection and refinement combined (synthesized keys, dropped edges, rejected refinement). Always safe to surface. |
-| `skeleton_yaml` | `str` | The deterministic mapping's YAML *before* refinement. Equals `yaml` when the LLM kept every name or was rejected; the "original" a reviewer compares against otherwise. |
-| `conversation` | `list[dict[str, str]]` | The refinement chat transcript. Always populated (the naming pass always runs), so a caller can show exactly what the model was asked and answered. |
-| `diff` | `MappingDiff \| None` | The renames the LLM applied. Always present; empty when it kept every name or its output was rejected. |
+| `skeleton_yaml` | `str` | The deterministic mapping's YAML *before* refinement. Equals `yaml` when refinement was skipped, kept every name, or was rejected; the "original" a reviewer compares against otherwise. |
+| `conversation` | `list[dict[str, str]]` | The refinement chat transcript, so a caller can show exactly what the model was asked and answered. Empty when no `llm` was supplied (deterministic build). |
+| `diff` | `MappingDiff \| None` | The renames the LLM applied. `None` when refinement was skipped; otherwise present but empty when it kept every name or its output was rejected. |
 
-Because the naming pass always runs, `conversation` is always populated and `diff` is
-always present (possibly empty). When the pass is rejected by the guardrail, the
-outcome's mapping *is* the skeleton, so `refined` is `False` and `diff` is empty, yet
-the conversation still records what was attempted.
+The naming pass is optional: pass an `llm` to `build_mapping` to run it, or omit it for
+a deterministic, offline build. When it is skipped, `conversation` is empty and `diff`
+is `None`. When it runs but is rejected by the guardrail, the outcome's mapping *is* the
+skeleton, so `refined` is `False` and `diff` is empty, yet the conversation still
+records what was attempted.
 
 ---
 

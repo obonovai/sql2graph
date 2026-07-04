@@ -42,6 +42,21 @@ def test_build_mapping_with_llm_refines(tpch_skeleton: Callable[..., Any], tpch_
     assert ("HAS_REGION", "IN_REGION") in {(r.before, r.after) for r in result.diff.edge_type_renames}
 
 
+def test_build_mapping_deterministic_without_llm(tpch_skeleton: Callable[..., Any], tpch_ddl: str) -> None:
+    # No llm -> deterministic only: the naming pass is skipped entirely, so there is no
+    # chat and diff is None (not an empty diff). The mapping is exactly the projection
+    # skeleton, and skeleton_yaml equals the output yaml.
+    result = build_mapping(ddl=tpch_ddl, dialect="postgres")
+    assert result.refined is False
+    assert result.conversation == []
+    assert result.diff is None
+    assert result.mapping == tpch_skeleton()
+    assert result.skeleton_yaml == result.yaml
+    # No naming pass ran, so there is no LLM cost to report.
+    assert result.token_usage.total_tokens == 0
+    assert result.duration_seconds == 0.0
+
+
 def test_report_as_dict_lists_junctions_and_warnings(tpch_ddl: str) -> None:
     report: CoverageReport = project_to_mapping(extract_schema_from_ddl(tpch_ddl, dialect="postgres")).report
     data = report.as_dict()
@@ -87,3 +102,13 @@ def test_build_mapping_async_noop_refinement(tpch_ddl: str, oneshot_async_llm: C
     assert result.skeleton_yaml == result.yaml
     assert result.conversation and result.conversation[0]["role"] == "system"
     assert result.diff is not None and result.diff.is_empty()
+
+
+def test_build_mapping_async_deterministic_without_llm(tpch_skeleton: Callable[..., Any], tpch_ddl: str) -> None:
+    # Async counterpart of the deterministic path: no llm -> no naming pass, no chat,
+    # diff is None, and the mapping is the projection skeleton.
+    result = asyncio.run(build_mapping_async(ddl=tpch_ddl, dialect="postgres"))
+    assert result.refined is False
+    assert result.conversation == []
+    assert result.diff is None
+    assert result.mapping == tpch_skeleton()

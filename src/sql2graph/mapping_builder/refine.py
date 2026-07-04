@@ -22,13 +22,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from time import perf_counter
 from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
 from sql2graph.events import ConversationCallback
-from sql2graph.llm import AsyncLLMClient, LLMClient, StreamCallback
+from sql2graph.llm import AsyncLLMClient, LLMClient, StreamCallback, TokenUsage
 from sql2graph.mapping import SchemaMapping, SemanticType
 from sql2graph.mapping_builder.relational import RelationalSchema
 from sql2graph.mapping_builder.serialize import mapping_to_yaml
@@ -49,12 +50,17 @@ class RefinementResult:
             repair round-trip), so a caller can show exactly what was asked and
             answered. Roles are ``system`` / ``user`` / ``assistant``.
         warnings: Non-fatal explanations (a rejected suggestion, an LLM error).
+        token_usage: Tokens consumed across every chat call in the pass (initial plus
+            any repair round-trip), summed. Zero when the LLM errored before replying.
+        duration_seconds: Wall-clock time of the naming pass (all chat calls + guardrail).
     """
 
     mapping: SchemaMapping
     accepted: bool
     messages: list[dict[str, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
+    duration_seconds: float = 0.0
 
 
 def refine_mapping(
@@ -78,29 +84,40 @@ def refine_mapping(
         {"role": "system", "content": _build_refine_system_prompt()},
         {"role": "user", "content": _build_refine_user_prompt(skeleton, schema)},
     ]
+    usage = TokenUsage()
+    start = perf_counter()
+
+    def _result(mapping: SchemaMapping, accepted: bool) -> RefinementResult:
+        # Closes over the reassigned `usage` (read at call time) and the in-place
+        # `messages`/`warnings`, so every return path reports the accumulated totals.
+        return RefinementResult(
+            mapping=mapping, accepted=accepted, messages=messages, warnings=warnings,
+            token_usage=usage, duration_seconds=perf_counter() - start,
+        )
 
     for attempt in range(max_repair_attempts + 1):
         try:
             reply = llm.chat(messages)
         except Exception as exc:  # noqa: BLE001 (refinement is best-effort; never crash the build)
             warnings.append(f"LLM refinement failed ({type(exc).__name__}: {exc}); kept the deterministic mapping.")
-            return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)
+            return _result(skeleton, False)
+        usage = usage + reply.usage
 
         # Record the reply in the transcript before judging it, so the chat the
         # caller renders always reflects what the model actually said.
         messages.append({"role": "assistant", "content": reply.text})
         candidate, violations = _parse_and_validate(reply.text, skeleton, schema)
         if candidate is not None:
-            return RefinementResult(mapping=candidate, accepted=True, messages=messages, warnings=warnings)
+            return _result(candidate, True)
 
         if attempt >= max_repair_attempts:
             warnings.append("LLM refinement was rejected; kept the deterministic mapping.")
             warnings.extend(violations[:_MAX_REPORTED_VIOLATIONS])
-            return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)
+            return _result(skeleton, False)
 
         messages.append({"role": "user", "content": _build_repair_prompt(violations)})
 
-    return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)  # pragma: no cover
+    return _result(skeleton, False)  # pragma: no cover
 
 
 async def refine_mapping_async(
@@ -123,29 +140,39 @@ async def refine_mapping_async(
         {"role": "user", "content": _build_refine_user_prompt(skeleton, schema)},
     ]
     _emit_conversation(on_conversation, messages)
+    usage = TokenUsage()
+    start = perf_counter()
+
+    def _result(mapping: SchemaMapping, accepted: bool) -> RefinementResult:
+        # Closes over the reassigned `usage` and the in-place `messages`/`warnings`.
+        return RefinementResult(
+            mapping=mapping, accepted=accepted, messages=messages, warnings=warnings,
+            token_usage=usage, duration_seconds=perf_counter() - start,
+        )
 
     for attempt in range(max_repair_attempts + 1):
         try:
             reply = await llm.chat(messages, stream_to=_streaming_callback(messages, on_conversation))
         except Exception as exc:  # noqa: BLE001 (refinement is best-effort; never crash the build)
             warnings.append(f"LLM refinement failed ({type(exc).__name__}: {exc}); kept the deterministic mapping.")
-            return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)
+            return _result(skeleton, False)
+        usage = usage + reply.usage
 
         messages.append({"role": "assistant", "content": reply.text})
         _emit_conversation(on_conversation, messages)
         candidate, violations = _parse_and_validate(reply.text, skeleton, schema)
         if candidate is not None:
-            return RefinementResult(mapping=candidate, accepted=True, messages=messages, warnings=warnings)
+            return _result(candidate, True)
 
         if attempt >= max_repair_attempts:
             warnings.append("LLM refinement was rejected; kept the deterministic mapping.")
             warnings.extend(violations[:_MAX_REPORTED_VIOLATIONS])
-            return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)
+            return _result(skeleton, False)
 
         messages.append({"role": "user", "content": _build_repair_prompt(violations)})
         _emit_conversation(on_conversation, messages)
 
-    return RefinementResult(mapping=skeleton, accepted=False, messages=messages, warnings=warnings)  # pragma: no cover
+    return _result(skeleton, False)  # pragma: no cover
 
 
 def _streaming_callback(

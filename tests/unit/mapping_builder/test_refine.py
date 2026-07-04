@@ -11,6 +11,7 @@ from sql2graph.mapping_builder import mapping_to_yaml
 from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
 from sql2graph.mapping_builder.diff import diff_mappings
 from sql2graph.mapping_builder.refine import refine_mapping, refine_mapping_async, validate_against_schema
+from tests.unit._doubles import ScriptedLLM
 
 
 def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
@@ -30,6 +31,20 @@ def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl
     roles = [m["role"] for m in outcome.messages]
     assert roles[:2] == ["system", "user"]
     assert "assistant" in roles
+
+
+def test_refine_sums_token_usage_across_repair_and_times_the_pass(tpch_skeleton: Callable[..., Any], tpch_ddl: str) -> None:
+    # A rejected first reply triggers one repair round-trip; usage must sum across BOTH
+    # chat calls (ScriptedLLM reports 15 tokens/call -> 30) and duration is recorded.
+    skeleton = tpch_skeleton()
+    schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
+    bad = mapping_to_yaml(skeleton).replace("primary_key: regionkey", "primary_key: not_a_column")
+    good = mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION")
+    outcome = refine_mapping(skeleton, schema, ScriptedLLM([bad, good]))
+    assert outcome.accepted is True
+    assert outcome.token_usage.total_tokens == 30
+    assert outcome.token_usage.input_tokens == 20 and outcome.token_usage.output_tokens == 10
+    assert outcome.duration_seconds >= 0.0
 
 
 def test_refine_strips_code_fences(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
