@@ -1,4 +1,7 @@
-# Tests
+# `tests/`: the test suite
+
+**Static unit tests by default; real-LLM and real-database integration tests
+behind an opt-in marker.**
 
 The suite is split into three areas, kept separate so casual development never
 accidentally hits a paid API or a database.
@@ -83,9 +86,9 @@ no Neo4j) still gets useful coverage on the slice it can run.
 
 ### Starting Neo4j locally
 
-The repo root's `docker-compose` (under `../`) starts Neo4j for the UI; the
-integration tests will reuse that instance if it's running. Otherwise the
-simplest standalone:
+The integration tests connect to Neo4j at `NEO4J_URI` (default
+`bolt://localhost:7687`); start an instance however you like. The simplest
+standalone:
 
 ```bash
 docker run --rm -d \

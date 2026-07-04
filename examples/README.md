@@ -1,5 +1,8 @@
 # `examples/`: translation inputs for sql2graph
 
+**The translation inputs: a relational schema, its graph mapping, and the
+example SQL that exercises them.**
+
 This directory holds the **inputs** a translation operates on: the relational
 schema, its graph mapping, and example SQL queries. These are *not*
 configuration. They describe *what* is being translated, not *how* the
@@ -36,8 +39,8 @@ can be translated by any model and validated against any server.
 
 A mapping YAML is not written from scratch. `ddl/tpch.sql` is the raw TPC-H
 relational schema, and `build_mapping` turns that DDL into a first-draft
-`mappings/tpch.yaml` for review. The two are kept in sync by
-`tests/test_mapping_builder.py`.
+`mappings/tpch.yaml` for review. The two are kept in sync by the tests under
+`tests/unit/mapping_builder/`.
 
 ```python
 from pathlib import Path

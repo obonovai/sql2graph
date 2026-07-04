@@ -20,17 +20,20 @@ the async path additionally supports token-by-token streaming.
 The library lives under `src/sql2graph/`: it exposes typed components
 (schema mapping, LLM client, target language, validator, orchestrator)
 connected through small structural Protocols. Both sync and async variants
-of the LLM client, validator, and translator ship side by side.
+of the LLM client, validator, and translator ship side by side. A mapping
+builder (`build_mapping`) can also bootstrap the schema mapping itself from
+SQL `CREATE TABLE` DDL, so it need not be written by hand; see
+[`docs/MAPPING_BUILDER.md`](docs/MAPPING_BUILDER.md).
 
 ## Architecture at a glance
 
 ```
                       ┌─────────────────────────┐
-                      │  User: SQL query +      │
-                      │        --mapping        │
-                      │        --model          │
-                      │        --target         │
-                      │        --validation     │
+                      │  SQLTranslator(         │
+                      │    schema_mapping,      │
+                      │    llm, target,         │
+                      │    validator)           │
+                      │  .translate(sql_query)  │
                       └────────────┬────────────┘
                                    │
                                    ▼
@@ -80,10 +83,10 @@ of the LLM client, validator, and translator ship side by side.
 `AsyncSQLTranslator` mirrors this flow step-for-step (same prompts, same
 state, same iteration semantics) with `await` at the LLM and validator
 call sites. Both translators accept an optional `on_event` callback that
-fires at every milestone (`GeneratedEvent`, `ValidatedEvent`,
-`FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`,
-`CompletedEvent`); the async path also accepts `stream_to` for
-token-by-token output.
+fires at every milestone (`ParseFailedEvent`, `UnmappedTablesEvent`,
+`UnmappedColumnsEvent`, `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`,
+`StalledEvent`, `MaxIterationsReachedEvent`, `CompletedEvent`); the async path
+also accepts `stream_to` for token-by-token output.
 
 When a fix iteration makes no progress (the model repeats its previous
 candidate, or the validator returns the same error signature twice running)
@@ -97,10 +100,11 @@ escalation still stalls, the translation ends early with
 what stops small local models (notably `qwen3-coder`) from looping on
 identical invalid output.
 
-See `docs/ARCHITECTURE.md` for the deeper technical reference, including a
-discussion of why the loop is implemented as plain Python rather than a
-graph-orchestration framework, and `docs/API.md` for the library API and YAML
-schema reference.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deeper technical
+reference, including a discussion of why the loop is implemented as plain Python
+rather than a graph-orchestration framework, and [`docs/API.md`](docs/API.md) for
+the library API and YAML schema reference. The full doc index is in
+[Documentation](#documentation) below.
 
 ## Per-query prompt assembly
 
@@ -108,7 +112,8 @@ The system prompt is assembled *per query*, not once per translator. Before
 the first LLM call, `detect_features` (in `src/sql2graph/sql_features.py`)
 parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
 operation clusters present: `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
-`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`. Both the generic
+`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`, `SCALAR`,
+`NULL`. Both the generic
 rules block and the target-language section (see
 `src/sql2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
 chunks corresponding to features actually in the query, so the LLM is not
@@ -191,7 +196,7 @@ the translation runs.
 |---|---|---|
 | `examples/mappings/` | Schema mapping (nodes + edges); a translation *input*. | Always: one per relational schema. |
 | `config/models/`   | LLM provider config (`provider: ollama` or `anthropic`). | Always: one per backend. |
-| `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only for `--validation server` against *your own* database; omit `--server` to auto-provision a throwaway one (needs Docker). |
+| `config/servers/`  | Graph DB connection (`type: neo4j`, `arangodb`, or `gremlin`). | Only for `server` validation against *your own* database (`make_validator(target, "server", server_config=...)`); omit the server config to auto-provision a throwaway one via managed mode (needs Docker). |
 
 These are orthogonal: the same mapping can be paired with any model and
 validated against any server, and the same model drives any mapping. Two
@@ -279,6 +284,22 @@ reference and a `docker run` recipe for Neo4j.
 The project enforces `mypy --strict` across all source files and the same
 ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 
+## Documentation
+
+| Document | What's in it |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Design rationale: the plain-Python loop, `Protocol` extension points, the pre-flight gate, per-query prompt assembly, the async path. |
+| [`docs/API.md`](docs/API.md) | The public Python API surface and the three YAML schemas (mapping, model, server). |
+| [`docs/MAPPING_BUILDER.md`](docs/MAPPING_BUILDER.md) | Generating a first-draft schema mapping from SQL DDL (extract → project → LLM-refine). |
+| [`docs/SYNTAX_VALIDATION.md`](docs/SYNTAX_VALIDATION.md) | The deployment-free, grammar-based (ANTLR) syntax validators and how to regenerate the parsers. |
+| [`docs/EXTENDING.md`](docs/EXTENDING.md) | How to add a new target language or LLM provider. |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common failures and how to resolve them. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, lint/type/test, and parser regeneration. |
+| [`eval/README.md`](eval/README.md) · [`eval/METRICS.md`](eval/METRICS.md) | The evaluation harness (how to run) and the metric definitions (how F1, tree-edit distance, execution accuracy, etc. are computed). |
+
+Directory READMEs: [`config/`](config/README.md), [`examples/`](examples/README.md),
+[`tests/`](tests/README.md).
+
 ## Acknowledgments
 
 The generate-validate-fix loop pattern was inspired by prior work on LLM
@@ -287,3 +308,7 @@ a generated artifact is checked by a compiler-like tool and validator
 errors are fed back as additional context for retry. `sql2graph` adapts
 that core pattern with a plain-Python loop (no graph-orchestration
 framework) and targets SQL-to-graph query translation.
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Ivona Oboňová.

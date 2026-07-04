@@ -3,6 +3,8 @@ name = "sql2graph"
 version = "0.1.0"
 description = "LLM-driven SQL-to-graph-database query translator with a generate-validate-fix loop."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [
     { name = "Ivona Oboňová", email = "ivonaobonova@gmail.com" },

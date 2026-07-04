@@ -1,5 +1,8 @@
 # Syntax validation
 
+**How deployment-free, grammar-based query validation works, and how to
+maintain it.**
+
 How the deployment-free, grammar-based syntax validation works, why it replaced
 the original regex checks, and how to maintain it (including regenerating the
 parsers). For the public validator surface see [API.md](API.md) ("Validator
@@ -189,6 +192,7 @@ otherwise-valid prefix is reported rather than silently accepted:
 
 - Cypher: `statements`
 - Gremlin: `queryList`
+- AQL: `queryStart`
 
 ### A validator class
 
@@ -271,13 +275,14 @@ That precise, located message is the main advantage over the old regex strings.
      `sql2graph.validators._grammar.generated.*` -> `ignore_errors` (generated
      code is not strict-clean),
    - ruff `extend-exclude = ["src/sql2graph/validators/_grammar/generated"]`.
-8. **Tests** in `tests/test_static.py`: assert valid queries pass and malformed
-   ones fail (including the regression that `MATCH (n {name:'a)b'}) RETURN n`
-   now passes, which the old bracket-counting rejected), that
-   `make_validator("aql","syntax")` returns `AqlSyntaxValidator`, and that
-   `valid_modes_for_target` is correct. `tests/test_integration.py` cross-checks
-   the offline AQL grammar against ArangoDB's own `db.aql.validate` so the
-   hand-port can't silently drift.
+8. **Tests** in `tests/unit/validators/test_syntax.py`: assert valid queries pass
+   and malformed ones fail (including the regression that
+   `MATCH (n {name:'a)b'}) RETURN n` now passes, which the old bracket-counting
+   rejected). `tests/unit/validators/test_factory.py` asserts that
+   `make_validator("aql","syntax")` returns `AqlSyntaxValidator` and that
+   `valid_modes_for_target` is correct. `tests/integration/test_managed.py`
+   cross-checks the offline AQL grammar against ArangoDB's own `db.aql.validate`
+   so the hand-port can't silently drift.
 9. **Update downstream consumers:** the web backend derives the
    allowed modes from `valid_modes_for_target`; its `/api/options`
    exposes `validation_modes_by_target` (built from it), and the web UI offers
@@ -325,12 +330,15 @@ What `syntax` does and does not catch:
   (against a schema-aware backend) on the output side, and the input-side
   pre-flight gate already blocks SQL that references unmapped tables/columns.
 
-Mode availability is per target: `cypher` and `gremlin` support
-`none`/`syntax`/`server`; `aql` supports `none`/`server` only.
+Mode availability is uniform across targets: `cypher`, `gremlin`, and `aql` all
+support `none`/`syntax`/`server` (see `valid_modes_for_target`). AQL's `syntax`
+mode uses the hand-ported ArangoDB grammar described in section 3; it is
+best-effort, and the `server` / `managed` validator remains authoritative.
 
 ## 8. Testing and verification
 
-- Unit tests live in `tests/test_static.py` (no network, no DB). Run them with
+- Unit tests live under `tests/unit/` (no network, no DB) -- notably
+  `tests/unit/validators/test_syntax.py` and `tests/unit/sql/`. Run them with
   `uv run pytest -m "not integration"`.
 - Type and lint gates: `uv run mypy src tests` (strict; the generated
   package is excluded via the override) and `uv run ruff check .` /

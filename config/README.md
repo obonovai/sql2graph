@@ -1,5 +1,8 @@
 # `config/`: deployment configuration for sql2graph
 
+**How a translation run is wired: which LLM translates, and which graph
+database validates the result.**
+
 This directory holds the operational configuration the `sql2graph` library
 loads: which LLM to translate with, and which graph database to validate
 against. These are *deployment* settings - they select and tune the machinery,

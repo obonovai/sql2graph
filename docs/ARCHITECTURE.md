@@ -1,5 +1,8 @@
 # Architecture
 
+**Why `sql2graph` is built the way it is: the reasoning behind the
+generate-validate-fix loop and its extension points.**
+
 This document explains the *why* behind the design decisions in `sql2graph`.
 For setup and usage see `README.md`; for the library API and YAML schemas
 see `API.md`.
@@ -18,7 +21,8 @@ The framework deliberately optimises for four properties, in this order:
    framework reflects this by giving each its own typed configuration
    class and its own YAML subdirectory (`examples/mappings/`,
    `config/models/`, `config/servers/`), and by combining them through
-   explicit CLI flags rather than a single conflated config blob. An
+   explicit constructor arguments to `SQLTranslator` rather than a single
+   conflated config blob. An
    earlier revision of the project used one Pydantic super-config
    (`AppConfig`) that fanned out all three concerns into one file, which
    required N × M × K example files to demonstrate the cross-product of
@@ -66,7 +70,7 @@ functions (`SchemaMapping.from_yaml`, `load_model_config`,
 `SQLTranslator.__init__`. Removing the super-config gives each piece
 independent testability: a unit test can construct a `SQLTranslator`
 against an in-memory fake LLM and a real syntax validator with no YAML
-files involved (see `tests/test_static.py`'s `_FakeLLM`).
+files involved (see the `ScriptedLLM` double in `tests/unit/_doubles.py`).
 
 ---
 
@@ -74,31 +78,94 @@ files involved (see `tests/test_static.py`'s `_FakeLLM`).
 
 | Module | Purpose | Key public API |
 |---|---|---|
-| `mapping.py` | Parse and validate the schema mapping YAML. | `SchemaMapping.from_yaml(path) -> SchemaMapping` |
+| `mapping.py` | Parse and validate the schema mapping YAML. | `SchemaMapping.from_yaml(path) -> SchemaMapping`, `NodeMapping`, `EdgeMapping`, `SemanticType` |
+| `sql_features.py` | Parse the SQL once (sqlglot); detect operation clusters, source tables, and column refs. | `SqlFeature`, `SqlAnalysis`, `analyze_sql`, `detect_features`, `ALL_FEATURES` |
+| `preflight.py` | Input-side gate run before the loop: parse / unmapped-table / unmapped-column policy. | `PreflightAction`, `evaluate_preflight`, `find_unmapped_tables`, `find_unmapped_columns`, `build_rejected_result` |
 | `state.py`   | Loop-internal state + public result. | `TranslationState`, `TranslationResult` |
-| `events.py`  | Typed iteration events emitted by the loop. | `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`, `MaxIterationsReachedEvent`, `CompletedEvent`, `TranslationEvent`, `EventHandler` |
-| `prompts.py` | Assemble system/user/fix prompts. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `format_schema_context` |
-| `sql_features.py` | Parse SQL with sqlglot and detect which operation clusters it uses. | `SqlFeature`, `ALL_FEATURES`, `detect_features` |
+| `events.py`  | Typed iteration events emitted by the loop. | `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`, `ParseFailedEvent`, `UnmappedTablesEvent`, `UnmappedColumnsEvent`, `CompletedEvent`, `TranslationEvent`, `EventHandler`, `ConversationCallback` |
+| `prompts.py` | Assemble system/generate/fix/escalation prompts + stall helpers. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `build_escalation_prompt`, `format_schema_context`, `normalize_query`, `error_signature` |
 | `_env.py` | YAML env-var interpolation helper. | `interpolate_env` (internal) |
-| `llm/__init__.py` | LLM Protocols + discriminated-union config. | `LLMClient`, `AsyncLLMClient`, `StreamCallback`, `ModelConfig`, `load_model_config`, `make_llm`, `make_async_llm` |
-| `llm/ollama.py`   | Wrap `ollama.Client` and `ollama.AsyncClient`. | `OllamaConfig`, `OllamaLLMClient`, `AsyncOllamaLLMClient` |
-| `llm/anthropic.py`| Wrap `anthropic.Anthropic` and `anthropic.AsyncAnthropic` (direct API). | `AnthropicConfig`, `AnthropicLLMClient`, `AsyncAnthropicLLMClient` |
-| `targets/__init__.py` | Target-language Protocol + factory. | `TargetLanguage`, `make_target` |
-| `targets/cypher.py`   | Cypher prompt + extractor. | `CypherTarget` |
-| `targets/aql.py`      | AQL prompt + extractor. | `AqlTarget` |
-| `validators/__init__.py` | Validator Protocols + discriminated-union config. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator` |
+| `llm/__init__.py` | LLM Protocols + discriminated-union config + factories. | `LLMClient`, `AsyncLLMClient`, `StreamCallback`, `ModelConfig`, `VALID_PROVIDERS`, `load_model_config`, `make_llm`, `make_async_llm` |
+| `llm/ollama.py`   | Wrap `ollama.Client` / `ollama.AsyncClient` (handwritten retry/backoff). | `OllamaConfig`, `OllamaLLMClient`, `AsyncOllamaLLMClient` |
+| `llm/anthropic.py`| Wrap `anthropic.Anthropic` / `AsyncAnthropic` (direct API) + prompt caching. | `AnthropicConfig`, `AnthropicLLMClient`, `AsyncAnthropicLLMClient` |
+| `llm/usage.py` | Backend-agnostic token accounting; the value returned by `chat`. | `TokenUsage`, `ChatReply` |
+| `targets/__init__.py` | Target-language Protocol + factory. | `TargetLanguage`, `make_target`, `VALID_TARGETS` |
+| `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py` | Per-language prompt sections + query extractor (AQL also supplies a clause-ordering `repair_hint`). | `CypherTarget`, `AqlTarget`, `GremlinTarget` |
+| `targets/_schema.py` | Shared prompt-section scaffolding rendered uniformly for all three targets. | `BaseRules`, `FeatureRule`, `compose_section`, `extract_query` |
+| `validators/__init__.py` | Validator Protocols, factories, mode helpers, `ServerConfig` union. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator`, `valid_modes_for_target`, `resolve_validation_mode`, `VALID_VALIDATION_MODES`, `TARGET_SERVER_TYPE` |
 | `validators/noop.py` | Pass-through (sync + async). | `NoopValidator`, `AsyncNoopValidator` |
 | `validators/_grammar/` | Shared ANTLR parse routine + committed parsers generated from the vendored grammars in `validators/grammars/`. | `parse_errors` |
-| `validators/cypher/syntax.py` | Grammar-based (ANTLR, Neo4j's own grammar) Cypher validation (sync + async). | `CypherSyntaxValidator`, `AsyncCypherSyntaxValidator` |
-| `validators/cypher/server.py` | Neo4j `EXPLAIN` validation (sync + async) + `Neo4jConfig`. | `Neo4jConfig`, `CypherServerValidator`, `AsyncCypherServerValidator` |
-| `validators/gremlin/syntax.py` | Grammar-based (ANTLR, TinkerPop's own grammar) Gremlin validation (sync + async). | `GremlinSyntaxValidator`, `AsyncGremlinSyntaxValidator` |
-| `validators/aql/server.py` | ArangoDB `db.aql.validate` validation (sync + async) + `ArangoDBConfig`. AQL has no offline grammar, so no syntax validator; it is server/managed only. | `ArangoDBConfig`, `AqlServerValidator`, `AsyncAqlServerValidator` |
+| `validators/cypher/{syntax,server}.py` | Grammar (Neo4j `Cypher25`) + `EXPLAIN` validation (sync + async). | `CypherSyntaxValidator`, `CypherServerValidator`, `Neo4jConfig` |
+| `validators/gremlin/{syntax,server}.py` | Grammar (TinkerPop `Gremlin.g4`) + Gremlin Server script submission (sync + async). | `GremlinSyntaxValidator`, `GremlinServerValidator`, `GremlinConfig` |
+| `validators/aql/{syntax,server}.py` | Grammar (hand-ported ArangoDB) + `db.aql.validate` validation (sync + async). | `AqlSyntaxValidator`, `AqlServerValidator`, `ArangoDBConfig` |
+| `validators/provision/` | Managed (auto-provisioned) validators via `testcontainers`: spin up a throwaway DB, validate, tear down. | `ManagedServerValidator`, `AsyncManagedServerValidator` |
 | `translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
 | `async_translator.py` | Async sibling of `translator.py`. | `AsyncSQLTranslator(...)` |
+| `mapping_builder/` | Bootstrap a first-draft `SchemaMapping` from SQL DDL (extract → project → LLM-refine). | `build_mapping`, `build_mapping_async`, `BuildResult`, `CoverageReport`, `RelationalSchema`, `extract_schema_from_ddl`, `project_to_mapping`, `mapping_to_yaml`, `diff_mappings` |
 
-The grammar-based syntax validators (Cypher and Gremlin) are documented in
-detail, with the parser-regeneration steps, in
-[SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md).
+All three targets ship a grammar-based syntax validator: Cypher and Gremlin use
+each engine's own published grammar, AQL uses a hand-port of ArangoDB's parser.
+They are documented in detail, with the parser-regeneration steps, in
+[SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md). The `mapping_builder/` subpackage
+has its own reference in [MAPPING_BUILDER.md](MAPPING_BUILDER.md), and the
+extension points (adding a target language or LLM provider) are walked through in
+[EXTENDING.md](EXTENDING.md).
+
+---
+
+## Pre-flight gate (input side)
+
+The generate-validate-fix loop validates the LLM's *output*. A separate
+**pre-flight gate** (`src/sql2graph/preflight.py`) validates the *input* before
+any LLM call, so a query that cannot translate faithfully is rejected cheaply
+rather than burning a generation. Both translators call `evaluate_preflight`
+identically at the top of `translate()`, before the timer starts.
+
+Three checks run in order and **at most one fires**:
+
+1. **Parse failure** - `analyze_sql` could not parse the SQL. Default action
+   `WARN`: translate anyway, because sqlglot is dialect-flexible and can
+   false-fail on valid-but-exotic SQL.
+2. **Unmapped tables** - the SQL reads tables with no node/edge in the mapping.
+   Default action `REJECT`: with no mapping the LLM has nothing to translate
+   them *to*.
+3. **Unmapped columns** - the SQL names a column of a *mapped* node table that
+   the mapping does not expose. Default action `REJECT`: there is no graph
+   property to map it to. The check is conservative (only columns confidently
+   attributed to a node source-table), so false positives are rare.
+
+Each check's policy is a `PreflightAction` (`IGNORE` / `WARN` / `REJECT`), a
+constructor argument on both translators (`parse_error_action`,
+`unmapped_tables_action`, `unmapped_columns_action`). A `REJECT` returns a
+terminal `TranslationResult` with the matching `status`
+(`parse_error` / `unmapped_tables` / `unmapped_columns`), `generated_query=None`,
+and zero `token_usage`; a `WARN` emits the corresponding event and proceeds,
+and the flagged names still surface on `TranslationResult.unmapped_tables` /
+`unmapped_columns`. The gate emits one of `ParseFailedEvent`,
+`UnmappedTablesEvent`, or `UnmappedColumnsEvent` so an observer sees why the
+input was flagged.
+
+---
+
+## Mapping builder
+
+The library can also generate a *first-draft* schema mapping from SQL
+`CREATE TABLE` DDL (`src/sql2graph/mapping_builder/`), so the layer-1 mapping
+need not be written entirely by hand. Three stages:
+
+1. **Extract** - parse the DDL into a dependency-free `RelationalSchema` IR
+   (via sqlglot).
+2. **Project** - apply deterministic relational→graph heuristics (tables→node
+   labels, foreign keys→edges, junction tables collapsed into edges) to produce
+   a skeleton mapping that is *valid by construction*, plus a `CoverageReport`.
+3. **Refine** - a *guarded* LLM pass that may only **rename** labels, edge types,
+   and property keys. A preservation guardrail rejects any structural change and
+   falls back to the deterministic skeleton on violation.
+
+This mirrors the translator's own generate-then-check discipline: an LLM
+proposes, a deterministic guard verifies. The full reference - the `BuildResult`,
+the guardrail, and a worked example - is in
+[MAPPING_BUILDER.md](MAPPING_BUILDER.md).
 
 ---
 
@@ -142,8 +209,8 @@ without validating it again.
 `src/sql2graph/async_translator.py` and exposes the same surface (same
 constructor parameters, same `translate()` return type, same iteration
 semantics) with `await` at the LLM and validator call sites. Both
-translators co-exist; the sync path stays the default for scripts,
-notebooks, and the CLI.
+translators co-exist; the sync path stays the default for scripts and
+notebooks.
 
 **Why bother, given that the loop is sequential per translation?** A
 single translation will not finish faster under async: each iteration's
@@ -167,8 +234,9 @@ The wins are elsewhere:
 `translate()` body is a copy of the sync one with `await` added at the
 right places. The events emitted, the iteration numbering, the
 `TranslationResult` produced, and even the log lines are identical. Tests
-in `tests/test_static.py` assert event-sequence parity between the two
-paths against the same fake LLM.
+in `tests/unit/translator/` (e.g. `test_events.py`, `test_async_loop.py`)
+assert event-sequence parity between the two paths against the same
+scripted LLM double.
 
 **Shared helpers prevent silent divergence in the interesting logic.**
 `llm/anthropic.py` factors `_build_anthropic_kwargs`, `_log_anthropic_usage`,
@@ -196,6 +264,22 @@ The loop emits a typed event at every milestone. The contract is in
 `src/sql2graph/events.py`:
 
 ```python
+# Pre-flight (input-side) events -- at most one fires, before generation:
+@dataclass(frozen=True)
+class ParseFailedEvent:         # the SQL did not parse
+    message: str
+
+@dataclass(frozen=True)
+class UnmappedTablesEvent:      # SQL reads tables absent from the mapping
+    tables: list[str]
+    message: str
+
+@dataclass(frozen=True)
+class UnmappedColumnsEvent:     # SQL uses columns a mapped table omits
+    columns: list[str]
+    message: str
+
+# Loop events:
 @dataclass(frozen=True)
 class GeneratedEvent:           # initial LLM call finished
     iteration: int              # always 1
@@ -214,6 +298,12 @@ class FixGeneratedEvent:        # a fix LLM call finished
     query: str                  # candidate for iteration N+1
 
 @dataclass(frozen=True)
+class StalledEvent:             # no-progress escalation (fresh-context retry)
+    iteration: int
+    query: str
+    errors: list[str]
+
+@dataclass(frozen=True)
 class MaxIterationsReachedEvent:
     iteration: int
     errors: list[str]
@@ -223,8 +313,9 @@ class CompletedEvent:           # always emitted last
     result: TranslationResult
 
 TranslationEvent = (
-    GeneratedEvent | ValidatedEvent | FixGeneratedEvent
-    | MaxIterationsReachedEvent | CompletedEvent
+    ParseFailedEvent | UnmappedTablesEvent | UnmappedColumnsEvent
+    | GeneratedEvent | ValidatedEvent | FixGeneratedEvent
+    | StalledEvent | MaxIterationsReachedEvent | CompletedEvent
 )
 EventHandler = Callable[[TranslationEvent], None]
 ```
@@ -323,7 +414,7 @@ the corresponding rule chunks.
 
 `detect_features` (in `src/sql2graph/sql_features.py`) calls
 `sqlglot.parse_one`, walks the resulting AST with `find_all`, and returns
-a `frozenset[SqlFeature]` naming the clusters present. The enum has eleven
+a `frozenset[SqlFeature]` naming the clusters present. The enum has thirteen
 members:
 
 | `SqlFeature` | sqlglot nodes that light it up |
@@ -339,6 +430,8 @@ members:
 | `SUBQUERY` | `exp.Subquery`, `exp.Exists` (CTEs are excluded: they get their own bucket) |
 | `DISTINCT` | `exp.Distinct` |
 | `TEMPORAL` | an ISO-shaped date/timestamp `exp.Literal`, `exp.Cast` to a DATE/TIMESTAMP type, or `exp.CurrentDate`/`exp.CurrentTimestamp` (see `_has_temporal`) |
+| `SCALAR` | a scalar string/number function (`UPPER`/`LOWER`/`LENGTH`/`SUBSTRING`/`TRIM`/`CONCAT`/`COALESCE`/`NULLIF`/`ROUND`/`ABS`/`\|\|`) or a non-temporal `exp.Cast` (see `_has_scalar`) |
+| `NULL` | an `IS NULL` / `IS NOT NULL` predicate: an `exp.Is` carrying an `exp.Null` (see `_has_null_predicate`) |
 
 On any `sqlglot.errors.ParseError` the function returns `ALL_FEATURES`,
 which restores the pre-refactor "ship every rule" behaviour. That
@@ -405,8 +498,8 @@ chunk states the no-op explicitly. Coverage stays total, so a genuine
 Both model configs and server configs form Pydantic discriminated unions:
 
 ```python
-ModelConfig  = Annotated[OllamaConfig  | AnthropicConfig, Field(discriminator="provider")]
-ServerConfig = Annotated[Neo4jConfig   | ArangoDBConfig,  Field(discriminator="type")]
+ModelConfig  = Annotated[OllamaConfig | AnthropicConfig, Field(discriminator="provider")]
+ServerConfig = Annotated[Neo4jConfig | ArangoDBConfig | GremlinConfig, Field(discriminator="type")]
 ```
 
 A YAML file with `provider: "ollama"` deserialises to `OllamaConfig`; one
@@ -443,14 +536,15 @@ Three Protocols define the extension surface:
 
 ```python
 class LLMClient(Protocol):
-    def chat(self, messages: list[dict[str, Any]]) -> str: ...
+    def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply: ...
     def close(self) -> None: ...
 
 class TargetLanguage(Protocol):
     @property
     def name(self) -> str: ...
-    def system_prompt_section(self) -> str: ...
+    def system_prompt_section(self, features: frozenset[SqlFeature]) -> str: ...
     def extract_query(self, llm_response: str) -> str: ...
+    def repair_hint(self, errors: list[str]) -> str | None: ...
 
 class QueryValidator(Protocol):
     def validate(self, query: str) -> list[str]: ...
@@ -490,8 +584,8 @@ implementation.
   of a chain-of-runnables.
 * **Easier to test.** Mocking `ollama.Client` or `anthropic.Anthropic` is
   trivial; mocking LangChain's full ecosystem is not. The
-  `_FakeLLM` / `_FakeAsyncLLM` doubles in `tests/test_static.py` are a
-  dozen lines each.
+  `ScriptedLLM` / `ScriptedAsyncLLM` doubles in `tests/unit/_doubles.py` are
+  a dozen lines each.
 
 The trade-off: if the project grows to need tool calling, multi-agent
 orchestration, or persistent checkpointing, a framework like LangGraph
@@ -522,8 +616,8 @@ overhead.
   numbering) has no shared definition. The mitigations are (a) shared
   helpers for the interesting non-loop logic (Anthropic kwargs builder,
   usage logger, response extractor), and (b) explicit parity tests in
-  `tests/test_static.py` that drive both translators with the same fake
-  LLM and assert identical event sequences. If a future change
+  `tests/unit/translator/` that drive both translators with the same
+  scripted LLM double and assert identical event sequences. If a future change
   introduces a real algorithmic divergence between the two, this would
   be the place to factor a shared helper out, but trying to share the
   loop bodies themselves would force one path to compromise (probably

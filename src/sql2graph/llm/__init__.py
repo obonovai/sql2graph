@@ -5,8 +5,8 @@ This package abstracts the LLM provider behind a structural :class:`Protocol`,
 
 * :class:`sql2graph.llm.ollama.OllamaLLMClient`: local-first via the
   Ollama HTTP API.
-* :class:`sql2graph.llm.anthropic.AnthropicLLMClient`: Claude on Google
-  Vertex AI.
+* :class:`sql2graph.llm.anthropic.AnthropicLLMClient`: Claude via the
+  direct Anthropic API (``api.anthropic.com``).
 
 Each backend ships its own Pydantic configuration class
 (:class:`OllamaConfig`, :class:`AnthropicConfig`) carrying a literal

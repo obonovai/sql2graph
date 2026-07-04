@@ -1,6 +1,6 @@
 """sql2graph: LLM-driven SQL → graph query translator.
 
-Public API. The framework exposes three layers:
+Public API. The framework exposes four layers:
 
 1. **Schema mapping**: :class:`SchemaMapping`, :class:`NodeMapping`,
    :class:`EdgeMapping`. Describes how a relational schema maps to a
@@ -8,14 +8,19 @@ Public API. The framework exposes three layers:
    :meth:`SchemaMapping.from_yaml`.
 2. **Pluggable components**: :class:`LLMClient`, :class:`TargetLanguage`,
    :class:`QueryValidator` (all :class:`~typing.Protocol`-typed). Concrete
-   implementations ship for two LLM backends (Ollama, Anthropic on
-   Vertex AI), three target languages (Cypher, AQL, Gremlin), and three
-   validation modes (syntax, server, none). Factories
-   (:func:`make_llm`, :func:`make_target`, :func:`make_validator`) build
-   the components from their typed config objects.
-3. **Orchestration**: :class:`SQLTranslator` ties the three components
-   together via the generate-validate-fix loop. Returns a typed
-   :class:`TranslationResult` per call.
+   implementations ship for two LLM backends (Ollama, Anthropic via the
+   direct API), three target languages (Cypher, AQL, Gremlin), and four
+   validation modes (none, syntax, server, and auto-provisioned managed).
+   Factories (:func:`make_llm`, :func:`make_target`, :func:`make_validator`)
+   build the components from their typed config objects.
+3. **Orchestration**: :class:`SQLTranslator` (and its async sibling
+   :class:`AsyncSQLTranslator`) ties the three components together via the
+   generate-validate-fix loop. Returns a typed :class:`TranslationResult`
+   per call.
+4. **Mapping builder**: :func:`build_mapping` (and
+   :func:`build_mapping_async`) bootstrap a first-draft
+   :class:`SchemaMapping` from SQL ``CREATE TABLE`` DDL, so the layer-1
+   mapping need not be written entirely by hand. See ``docs/MAPPING_BUILDER.md``.
 
 A minimal end-to-end usage::
 
@@ -60,11 +65,13 @@ from sql2graph.llm import (
     AsyncAnthropicLLMClient,
     AsyncLLMClient,
     AsyncOllamaLLMClient,
+    ChatReply,
     LLMClient,
     ModelConfig,
     OllamaConfig,
     OllamaLLMClient,
     StreamCallback,
+    TokenUsage,
     load_model_config,
     make_async_llm,
     make_llm,
@@ -153,6 +160,7 @@ __all__ = [
     "AsyncQueryValidator",
     "AsyncSQLTranslator",
     "BuildResult",
+    "ChatReply",
     "CompletedEvent",
     "ConversationCallback",
     "CoverageReport",
@@ -191,6 +199,7 @@ __all__ = [
     "StalledEvent",
     "StreamCallback",
     "TargetLanguage",
+    "TokenUsage",
     "TranslationEvent",
     "TranslationResult",
     "UnmappedColumnsEvent",

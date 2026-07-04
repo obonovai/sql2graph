@@ -1,4 +1,7 @@
-# Vendored grammars
+# `grammars/`: vendored ANTLR grammars
+
+**The source of truth the committed Python parsers are generated from: Cypher
+and Gremlin (engine-published) plus a hand-ported AQL grammar.**
 
 ANTLR4 grammars backing the deployment-free, grammar-based syntax validators
 (`sql2graph.validators.{cypher,gremlin,aql}.syntax`). A generated query is
