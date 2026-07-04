@@ -17,7 +17,6 @@ dependencies = [
     "python-arango>=8.0",
     "gremlinpython>=3.7",
     "anthropic>=0.96.0",
-    "rich>=13",
     "sqlglot>=23",
     "testcontainers[neo4j,arangodb]>=4.0",
     "antlr4-python3-runtime>=4.13,<4.14",
