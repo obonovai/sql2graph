@@ -16,6 +16,5 @@ instructions and a quick start. This directory holds the deeper references.
 
 Related material outside `docs/`:
 
-- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) - dev setup, lint/type/test, and parser regeneration.
 - [`../eval/README.md`](../eval/README.md) and [`../eval/METRICS.md`](../eval/METRICS.md) - the evaluation harness (how to run) and the metric methodology (how the numbers are computed).
 - Directory READMEs: [`../config/`](../config/README.md), [`../examples/`](../examples/README.md), [`../tests/`](../tests/README.md), and [`../src/sql2graph/validators/grammars/`](../src/sql2graph/validators/grammars/README.md).

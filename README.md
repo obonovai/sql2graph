@@ -294,7 +294,6 @@ ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 | [`docs/SYNTAX_VALIDATION.md`](docs/SYNTAX_VALIDATION.md) | The deployment-free, grammar-based (ANTLR) syntax validators and how to regenerate the parsers. |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | How to add a new target language or LLM provider. |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common failures and how to resolve them. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, lint/type/test, and parser regeneration. |
 | [`eval/README.md`](eval/README.md) · [`eval/METRICS.md`](eval/METRICS.md) | The evaluation harness (how to run) and the metric definitions (how F1, tree-edit distance, execution accuracy, etc. are computed). |
 
 Directory READMEs: [`config/`](config/README.md), [`examples/`](examples/README.md),
