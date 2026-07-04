@@ -2,7 +2,7 @@
 
 This is the only part of the harness that calls the LLM. :func:`run_translation`
 builds the work list for one :class:`~harness.config.RunConfig`, runs each
-SQL query through :class:`~rows2graph.SQLTranslator`, and writes one
+SQL query through :class:`~sql2graph.SQLTranslator`, and writes one
 :class:`AttemptRecord` per query to ``records_<dataset>_<target>_<model>.json``,
 incrementally so a crash mid-run preserves prior work. Token counts come straight
 from ``result.token_usage`` (the library reports them first-class; no log
@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from rows2graph import (
+from sql2graph import (
     AnthropicConfig,
     OllamaConfig,
     PreflightAction,

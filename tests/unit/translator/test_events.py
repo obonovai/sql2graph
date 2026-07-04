@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
+from sql2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
 
 
 def test_translator_emits_event_sequence_on_first_try_success(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     """One-shot success: Generated → Validated(passed=True) → Completed."""
-    from rows2graph import CompletedEvent, GeneratedEvent, TranslationEvent, ValidatedEvent
+    from sql2graph import CompletedEvent, GeneratedEvent, TranslationEvent, ValidatedEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
     events: list[TranslationEvent] = []
@@ -36,7 +36,7 @@ def test_translator_emits_event_sequence_on_first_try_success(scripted_llm: Call
 
 def test_translator_emits_event_sequence_on_fix_loop(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     """One fix cycle: Generated → Validated(failed) → FixGenerated → Validated(passed) → Completed."""
-    from rows2graph import (
+    from sql2graph import (
         CompletedEvent,
         FixGeneratedEvent,
         GeneratedEvent,
@@ -77,7 +77,7 @@ def test_translator_emits_event_sequence_on_fix_loop(scripted_llm: Callable[...,
 
 
 def test_translator_emits_max_iterations_event_when_loop_gives_up(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import CompletedEvent, MaxIterationsReachedEvent, TranslationEvent
+    from sql2graph import CompletedEvent, MaxIterationsReachedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (p:Person"] * 3)  # always invalid
     events: list[TranslationEvent] = []

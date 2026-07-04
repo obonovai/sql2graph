@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import EdgeMapping, NodeMapping, SchemaMapping
-from rows2graph.preflight import find_unmapped_columns, find_unmapped_tables
+from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
+from sql2graph.preflight import find_unmapped_columns, find_unmapped_tables
 
 
 def test_schema_mapping_source_tables_unions_nodes_and_edges(person_forum_schema: Callable[..., Any]) -> None:

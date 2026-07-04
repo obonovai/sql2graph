@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
-from rows2graph.preflight import PreflightAction
+from sql2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
+from sql2graph.preflight import PreflightAction
 
 
 def test_translator_rejects_unmapped_tables_without_calling_llm(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import CompletedEvent, TranslationEvent, UnmappedTablesEvent
+    from sql2graph import CompletedEvent, TranslationEvent, UnmappedTablesEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])  # must never be consumed
     events: list[TranslationEvent] = []
@@ -36,7 +36,7 @@ def test_translator_rejects_unmapped_tables_without_calling_llm(scripted_llm: Ca
 
 
 def test_translator_warns_on_parse_failure_but_still_translates(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import GeneratedEvent, ParseFailedEvent, TranslationEvent
+    from sql2graph import GeneratedEvent, ParseFailedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
     events: list[TranslationEvent] = []
@@ -59,7 +59,7 @@ def test_translator_warns_on_parse_failure_but_still_translates(scripted_llm: Ca
 
 
 def test_translator_no_preflight_events_for_mapped_query(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
+    from sql2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
     events: list[TranslationEvent] = []
@@ -93,7 +93,7 @@ def test_translator_does_not_flag_cte_name_as_unmapped(scripted_llm: Callable[..
 def test_translator_ignore_action_keeps_legacy_behavior(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     # With both actions IGNORE, an unmapped table is translated as before
     # (the LLM is called, no preflight events, no rejection).
-    from rows2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
+    from sql2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
 
     fake = scripted_llm(["MATCH (x) RETURN x"])
     events: list[TranslationEvent] = []
@@ -113,7 +113,7 @@ def test_translator_ignore_action_keeps_legacy_behavior(scripted_llm: Callable[.
 
 
 def test_translator_warns_on_unmapped_column_when_configured_to_warn(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import GeneratedEvent, TranslationEvent, UnmappedColumnsEvent
+    from sql2graph import GeneratedEvent, TranslationEvent, UnmappedColumnsEvent
 
     fake = scripted_llm(["MATCH (f:Forum) RETURN f"])
     events: list[TranslationEvent] = []
@@ -138,7 +138,7 @@ def test_translator_warns_on_unmapped_column_when_configured_to_warn(scripted_ll
 
 
 def test_translator_rejects_unmapped_column_by_default(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import CompletedEvent, TranslationEvent
+    from sql2graph import CompletedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (f:Forum) RETURN f"])  # must never be consumed
     events: list[TranslationEvent] = []
@@ -160,7 +160,7 @@ def test_translator_rejects_unmapped_column_by_default(scripted_llm: Callable[..
 
 
 def test_translator_no_column_signal_for_mapped_or_star_queries(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
-    from rows2graph import TranslationEvent, UnmappedColumnsEvent
+    from sql2graph import TranslationEvent, UnmappedColumnsEvent
 
     for sql in ("SELECT * FROM persons", "SELECT full_name FROM persons WHERE id = 1"):
         fake = scripted_llm(["MATCH (p:Person) RETURN p"])

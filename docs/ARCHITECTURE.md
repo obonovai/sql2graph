@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains the *why* behind the design decisions in `rows2graph`.
+This document explains the *why* behind the design decisions in `sql2graph`.
 For setup and usage see `README.md`; for the library API and YAML schemas
 see `API.md`.
 
@@ -27,7 +27,7 @@ The framework deliberately optimises for four properties, in this order:
 
 2. **Simplicity over framework ceremony.** The full generate-validate-fix
    loop is implemented as a single `while` loop in
-   `src/rows2graph/translator.py`. Comparable LLM-feedback-loop projects
+   `src/sql2graph/translator.py`. Comparable LLM-feedback-loop projects
    in this space typically reach for LangGraph + LangChain + a tracing
    layer, easily ten heavy dependencies. For one retry edge a plain
    `while` loop with explicit state is shorter, easier to trace through,
@@ -37,7 +37,7 @@ The framework deliberately optimises for four properties, in this order:
    `typing.Protocol` (PEP 544) gives structural subtyping without forcing
    implementations to import a base class. A future `GremlinTarget` or
    `SparqlValidator` can live in a separate package without any import
-   coupling to `rows2graph` core.
+   coupling to `sql2graph` core.
 
 4. **Strict typing end-to-end.** `mypy --strict` is enforced in
    `pyproject.toml`. Pydantic validates every external input (mapping,
@@ -139,7 +139,7 @@ without validating it again.
 ## Async path
 
 `AsyncSQLTranslator` lives next to `SQLTranslator` in
-`src/rows2graph/async_translator.py` and exposes the same surface (same
+`src/sql2graph/async_translator.py` and exposes the same surface (same
 constructor parameters, same `translate()` return type, same iteration
 semantics) with `await` at the LLM and validator call sites. Both
 translators co-exist; the sync path stays the default for scripts,
@@ -193,7 +193,7 @@ contaminated by deltas from a discarded prior attempt.
 ## Iteration events
 
 The loop emits a typed event at every milestone. The contract is in
-`src/rows2graph/events.py`:
+`src/sql2graph/events.py`:
 
 ```python
 @dataclass(frozen=True)
@@ -303,7 +303,7 @@ system-prompt cost on cache reads.
 
 Cache hit/write counts surface in the per-call `Anthropic call:` INFO log
 line so consumers can observe cache effectiveness directly (see
-`_log_anthropic_usage` in `src/rows2graph/llm/anthropic.py`). The
+`_log_anthropic_usage` in `src/sql2graph/llm/anthropic.py`). The
 single-shot first call necessarily writes; every subsequent retry within
 the TTL reads.
 
@@ -321,7 +321,7 @@ the corresponding rule chunks.
 
 ### The detector
 
-`detect_features` (in `src/rows2graph/sql_features.py`) calls
+`detect_features` (in `src/sql2graph/sql_features.py`) calls
 `sqlglot.parse_one`, walks the resulting AST with `find_all`, and returns
 a `frozenset[SqlFeature]` naming the clusters present. The enum has eleven
 members:
@@ -460,8 +460,8 @@ class QueryValidator(Protocol):
 ### Why `Protocol`, not `ABC`?
 
 * **Zero coupling.** Implementations do not need to `import` anything
-  from `rows2graph`. A third-party Gremlin validator in a separate pip
-  package can satisfy the protocol without touching `rows2graph`
+  from `sql2graph`. A third-party Gremlin validator in a separate pip
+  package can satisfy the protocol without touching `sql2graph`
   internals.
 * **Duck-typed, mypy-verified.** `mypy --strict` checks that returned
   instances match the protocol shape.
@@ -540,7 +540,7 @@ overhead.
 
 ## Generalising the pattern
 
-The structural idea behind `rows2graph` is independent of both SQL and
+The structural idea behind `sql2graph` is independent of both SQL and
 graph databases: *generate an artifact with an LLM, validate it with a
 deterministic compiler-like tool, then retry with the validator's errors
 as additional context*. Any domain that pairs an LLM-generatable

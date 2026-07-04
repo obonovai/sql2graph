@@ -18,7 +18,7 @@ from collections.abc import Callable
 
 import pytest
 
-from rows2graph import EdgeMapping, NodeMapping, SchemaMapping
+from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
 from tests.unit._doubles import ScriptedAsyncLLM, ScriptedLLM
 
 

@@ -8,18 +8,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from rows2graph import OllamaConfig
+from sql2graph import OllamaConfig
 
 
 def test_ollama_chat_retries_on_request_error_then_succeeds() -> None:
     """Connection-layer failures (RequestError) are retried with backoff."""
     from ollama import RequestError
 
-    from rows2graph.llm.ollama import OllamaLLMClient
+    from sql2graph.llm.ollama import OllamaLLMClient
 
     with (
-        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
-        patch("rows2graph.llm.ollama.time.sleep") as mock_sleep,
+        patch("sql2graph.llm.ollama.Client") as mock_client_cls,
+        patch("sql2graph.llm.ollama.time.sleep") as mock_sleep,
     ):
         mock_response = MagicMock()
         mock_response.message.content = "ok"
@@ -43,11 +43,11 @@ def test_ollama_chat_retries_on_request_error_then_succeeds() -> None:
 def test_ollama_chat_retries_on_5xx_response_error() -> None:
     from ollama import ResponseError
 
-    from rows2graph.llm.ollama import OllamaLLMClient
+    from sql2graph.llm.ollama import OllamaLLMClient
 
     with (
-        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
-        patch("rows2graph.llm.ollama.time.sleep"),
+        patch("sql2graph.llm.ollama.Client") as mock_client_cls,
+        patch("sql2graph.llm.ollama.time.sleep"),
     ):
         mock_response = MagicMock()
         mock_response.message.content = "ok"
@@ -66,11 +66,11 @@ def test_ollama_chat_does_not_retry_on_4xx_response_error() -> None:
     """4xx errors are client-side bugs; retrying just wastes time."""
     from ollama import ResponseError
 
-    from rows2graph.llm.ollama import OllamaLLMClient
+    from sql2graph.llm.ollama import OllamaLLMClient
 
     with (
-        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
-        patch("rows2graph.llm.ollama.time.sleep") as mock_sleep,
+        patch("sql2graph.llm.ollama.Client") as mock_client_cls,
+        patch("sql2graph.llm.ollama.time.sleep") as mock_sleep,
     ):
         mock_client_cls.return_value.chat.side_effect = ResponseError("unknown model", 404)
         client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=3))
@@ -83,11 +83,11 @@ def test_ollama_chat_does_not_retry_on_4xx_response_error() -> None:
 def test_ollama_chat_exhausts_retries_and_reraises() -> None:
     from ollama import RequestError
 
-    from rows2graph.llm.ollama import OllamaLLMClient
+    from sql2graph.llm.ollama import OllamaLLMClient
 
     with (
-        patch("rows2graph.llm.ollama.Client") as mock_client_cls,
-        patch("rows2graph.llm.ollama.time.sleep"),
+        patch("sql2graph.llm.ollama.Client") as mock_client_cls,
+        patch("sql2graph.llm.ollama.time.sleep"),
     ):
         mock_client_cls.return_value.chat.side_effect = RequestError("nope")
         client = OllamaLLMClient(OllamaConfig(model="m", host="http://x:1", max_retries=2))

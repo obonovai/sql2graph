@@ -10,14 +10,14 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from rows2graph import NodeMapping, SchemaMapping, SemanticType
-from rows2graph.mapping_builder import mapping_to_yaml
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.refine import refine_mapping
-from rows2graph.mapping_builder.sql_types import semantic_type_for_sql
-from rows2graph.prompts import build_system_prompt, format_schema_context
-from rows2graph.sql_features import SqlFeature
-from rows2graph.targets import make_target
+from sql2graph import NodeMapping, SchemaMapping, SemanticType
+from sql2graph.mapping_builder import mapping_to_yaml
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.refine import refine_mapping
+from sql2graph.mapping_builder.sql_types import semantic_type_for_sql
+from sql2graph.prompts import build_system_prompt, format_schema_context
+from sql2graph.sql_features import SqlFeature
+from sql2graph.targets import make_target
 
 
 def test_semantic_type_for_sql_maps_families() -> None:

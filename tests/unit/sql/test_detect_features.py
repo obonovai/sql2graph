@@ -1,8 +1,8 @@
-"""Feature-detection tests for ``detect_features`` (rows2graph.sql_features)."""
+"""Feature-detection tests for ``detect_features`` (sql2graph.sql_features)."""
 
 from __future__ import annotations
 
-from rows2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
+from sql2graph.sql_features import ALL_FEATURES, SqlFeature, detect_features
 
 
 def test_detect_features_plain_select_is_empty() -> None:

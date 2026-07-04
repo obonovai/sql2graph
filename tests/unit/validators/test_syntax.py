@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AqlSyntaxValidator,
     CypherSyntaxValidator,
     GremlinSyntaxValidator,
@@ -121,7 +121,7 @@ def test_async_cypher_syntax_validator_matches_sync() -> None:
     """Async syntax validator returns the same errors as its sync sibling."""
     import asyncio
 
-    from rows2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
+    from sql2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
     async_v = AsyncCypherSyntaxValidator()
     sync_v = CypherSyntaxValidator()

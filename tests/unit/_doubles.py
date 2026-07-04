@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rows2graph.llm.usage import ChatReply, TokenUsage
+from sql2graph.llm.usage import ChatReply, TokenUsage
 
 
 class ScriptedLLM:

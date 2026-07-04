@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from rows2graph import (
+from sql2graph import (
     AnthropicConfig,
     ArangoDBConfig,
     GremlinConfig,
@@ -17,7 +17,7 @@ from rows2graph import (
     load_model_config,
     load_server_config,
 )
-from rows2graph._env import interpolate_env
+from sql2graph._env import interpolate_env
 
 
 def test_interpolate_env_substitutes_variables(monkeypatch: pytest.MonkeyPatch) -> None:

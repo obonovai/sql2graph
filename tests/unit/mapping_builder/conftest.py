@@ -12,9 +12,9 @@ from collections.abc import Callable
 
 import pytest
 
-from rows2graph import SchemaMapping
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.project import project_to_mapping
+from sql2graph import SchemaMapping
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.project import project_to_mapping
 from tests.unit._doubles import OneShotAsyncLLM, OneShotLLM
 
 # A graphonauts-style TPC-H schema whose column names match the shipped

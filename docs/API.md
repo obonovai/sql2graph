@@ -1,14 +1,14 @@
 # API reference
 
 This document is the canonical reference for the public Python API of
-`rows2graph` and for the three YAML schemas the library consumes. For the
+`sql2graph` and for the three YAML schemas the library consumes. For the
 *why* behind the design see `ARCHITECTURE.md`; for hands-on usage see the
 top-level `README.md`.
 
 All public symbols are re-exported from the top-level package:
 
 ```python
-from rows2graph import SchemaMapping, SQLTranslator, ...
+from sql2graph import SchemaMapping, SQLTranslator, ...
 ```
 
 ---
@@ -301,7 +301,7 @@ an observer hook, not a control point.
 ## End-to-end example (library)
 
 ```python
-from rows2graph import (
+from sql2graph import (
     SchemaMapping, SQLTranslator,
     load_model_config, make_llm,
     make_target, make_validator,
@@ -333,7 +333,7 @@ with SQLTranslator(
 
 ```python
 import asyncio
-from rows2graph import (
+from sql2graph import (
     AsyncSQLTranslator, SchemaMapping,
     GeneratedEvent, ValidatedEvent, FixGeneratedEvent,
     MaxIterationsReachedEvent, CompletedEvent, TranslationEvent,

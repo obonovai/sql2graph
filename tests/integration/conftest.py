@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AnthropicConfig,
     EdgeMapping,
     Neo4jConfig,

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from rows2graph import AnthropicConfig
+from sql2graph import AnthropicConfig
 
 
 def test_anthropic_config_rejects_negative_max_retries() -> None:
@@ -20,9 +20,9 @@ def test_anthropic_chat_marks_system_prompt_cacheable() -> None:
     """System block must carry cache_control=ephemeral so multi-iteration
     translations reuse the schema+rules prompt instead of re-sending it.
     """
-    from rows2graph.llm.anthropic import AnthropicLLMClient
+    from sql2graph.llm.anthropic import AnthropicLLMClient
 
-    with patch("rows2graph.llm.anthropic.Anthropic") as mock_anthropic:
+    with patch("sql2graph.llm.anthropic.Anthropic") as mock_anthropic:
         mock_response = MagicMock()
         mock_response.content = [MagicMock(type="text", text="ok")]
         mock_response.usage = None
@@ -52,9 +52,9 @@ def test_anthropic_chat_omits_system_when_no_system_messages() -> None:
     kwarg is omitted entirely: adding an empty cacheable block would be
     both wasteful and (for an empty string) likely rejected by the API.
     """
-    from rows2graph.llm.anthropic import AnthropicLLMClient
+    from sql2graph.llm.anthropic import AnthropicLLMClient
 
-    with patch("rows2graph.llm.anthropic.Anthropic") as mock_anthropic:
+    with patch("sql2graph.llm.anthropic.Anthropic") as mock_anthropic:
         mock_response = MagicMock()
         mock_response.content = [MagicMock(type="text", text="ok")]
         mock_response.usage = None

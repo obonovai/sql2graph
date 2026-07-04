@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from rows2graph import SchemaMapping
-from rows2graph.mapping_builder import mapping_to_yaml
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.project import project_to_mapping
+from sql2graph import SchemaMapping
+from sql2graph.mapping_builder import mapping_to_yaml
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.project import project_to_mapping
 
 
 def test_generated_tpch_matches_shipped_join_semantics(tpch_ddl: str, mappings_dir: Path) -> None:

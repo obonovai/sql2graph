@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rows2graph import AqlTarget, CypherTarget, GremlinTarget, make_target
+from sql2graph import AqlTarget, CypherTarget, GremlinTarget, make_target
 
 
 def test_make_target_cypher() -> None:

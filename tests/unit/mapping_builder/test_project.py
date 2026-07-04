@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from rows2graph import SchemaMapping
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.project import (
+from sql2graph import SchemaMapping
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.project import (
     choose_primary_key,
     is_junction_table,
     project_to_mapping,

@@ -7,7 +7,7 @@ import logging
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AnthropicConfig,
     AnthropicLLMClient,
     AsyncSQLTranslator,
@@ -49,7 +49,7 @@ def test_real_anthropic_logs_token_usage(
 ) -> None:
     """The Anthropic chat helper must log AND return non-zero token counts."""
     client = AnthropicLLMClient(anthropic_config)
-    with caplog.at_level(logging.INFO, logger="rows2graph.llm.anthropic"):
+    with caplog.at_level(logging.INFO, logger="sql2graph.llm.anthropic"):
         reply = client.chat(
             [
                 {"role": "system", "content": "Respond with exactly the word OK."},

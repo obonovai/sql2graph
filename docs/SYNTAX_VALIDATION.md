@@ -8,7 +8,7 @@ components"); for where validation sits in the system see
 
 ## 1. Overview
 
-`rows2graph` translates SQL into a graph query with an LLM, then runs a
+`sql2graph` translates SQL into a graph query with an LLM, then runs a
 generate-validate-fix loop: a validator inspects the generated query and returns
 a list of error strings (empty means valid); any errors are fed back to the LLM
 to repair the query. There are three validation modes:
@@ -92,7 +92,7 @@ offline check is a fast first pass. The per-target rule is centralised in
 `valid_modes_for_target`:
 
 ```python
-from rows2graph import valid_modes_for_target
+from sql2graph import valid_modes_for_target
 
 valid_modes_for_target("cypher")   # ("none", "syntax", "server")
 valid_modes_for_target("gremlin")  # ("none", "syntax", "server")
@@ -104,7 +104,7 @@ valid_modes_for_target("aql")      # ("none", "syntax", "server")
 ### The validator contract
 
 Every validator is a structural `Protocol` (no base class to inherit), defined
-in `src/rows2graph/validators/__init__.py`:
+in `src/sql2graph/validators/__init__.py`:
 
 ```python
 class QueryValidator(Protocol):
@@ -126,7 +126,7 @@ make_async_validator(target, mode, *, server_config=None) -> AsyncQueryValidator
 ### File layout
 
 ```
-src/rows2graph/validators/
+src/sql2graph/validators/
   __init__.py            # QueryValidator protocol, factory, valid_modes_for_target
   grammars/              # ANTLR grammars (the source of truth)
     Cypher25Lexer.g4
@@ -233,7 +233,7 @@ That precise, located message is the main advantage over the old regex strings.
 ## 5. Implementation steps (reproducible recipe)
 
 1. **Vendor the grammars.** Copy each engine's official ANTLR grammar into
-   `src/rows2graph/validators/grammars/` and record provenance (upstream URL,
+   `src/sql2graph/validators/grammars/` and record provenance (upstream URL,
    version, license, any edits) in `grammars/README.md`. Both grammars are
    Apache-2.0 and vendored verbatim. See section 9 for sources.
 2. **Get the toolchain.** Regeneration (dev-time only) needs a JDK and the ANTLR
@@ -268,9 +268,9 @@ That precise, located message is the main advantage over the old regex strings.
 7. **Packaging and typing** (`pyproject.toml`):
    - dependency `antlr4-python3-runtime>=4.13,<4.14` (must match the tool version),
    - mypy override `antlr4.*` -> `ignore_missing_imports`, and
-     `rows2graph.validators._grammar.generated.*` -> `ignore_errors` (generated
+     `sql2graph.validators._grammar.generated.*` -> `ignore_errors` (generated
      code is not strict-clean),
-   - ruff `extend-exclude = ["src/rows2graph/validators/_grammar/generated"]`.
+   - ruff `extend-exclude = ["src/sql2graph/validators/_grammar/generated"]`.
 8. **Tests** in `tests/test_static.py`: assert valid queries pass and malformed
    ones fail (including the regression that `MATCH (n {name:'a)b'}) RETURN n`
    now passes, which the old bracket-counting rejected), that
@@ -307,7 +307,7 @@ upgrade a grammar, replace the `.g4` under `grammars/`, update
 ## 7. Usage
 
 ```python
-from rows2graph import make_validator
+from sql2graph import make_validator
 
 v = make_validator("cypher", "syntax")
 v.validate("MATCH (n:Person) RETURN n.name")          # []  (valid)
@@ -347,7 +347,7 @@ Mode availability is per target: `cypher` and `gremlin` support
   `gremlin-language/src/main/antlr4/Gremlin.g4`, Apache-2.0.
   <https://github.com/apache/tinkerpop>
 - ANTLR Python target runtime: `antlr4-python3-runtime` (4.13.x).
-- See also: `src/rows2graph/validators/grammars/README.md` (provenance),
+- See also: `src/sql2graph/validators/grammars/README.md` (provenance),
   [API.md](API.md) (public validator surface), and [ARCHITECTURE.md](ARCHITECTURE.md)
   (the generate-validate-fix loop and module responsibilities).
 

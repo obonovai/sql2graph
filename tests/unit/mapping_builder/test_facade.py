@@ -6,10 +6,10 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import SchemaMapping, build_mapping, build_mapping_async
-from rows2graph.mapping_builder import mapping_to_yaml
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.project import CoverageReport, project_to_mapping
+from sql2graph import SchemaMapping, build_mapping, build_mapping_async
+from sql2graph.mapping_builder import mapping_to_yaml
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.project import CoverageReport, project_to_mapping
 
 
 def test_build_mapping_noop_refinement(tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:

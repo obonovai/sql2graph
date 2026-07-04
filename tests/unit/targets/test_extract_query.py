@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rows2graph import AqlTarget, CypherTarget, GremlinTarget
+from sql2graph import AqlTarget, CypherTarget, GremlinTarget
 
 # Target classes for parametrized cross-target parity tests.
 _ALL_TARGET_CLASSES = [CypherTarget, AqlTarget, GremlinTarget]

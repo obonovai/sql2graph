@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rows2graph.sql_features import ALL_FEATURES, SqlFeature, analyze_sql
+from sql2graph.sql_features import ALL_FEATURES, SqlFeature, analyze_sql
 
 
 def test_analyze_sql_reports_features_tables_and_parse_ok() -> None:

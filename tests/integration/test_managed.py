@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AqlSyntaxValidator,
     AsyncManagedServerValidator,
     ManagedServerValidator,

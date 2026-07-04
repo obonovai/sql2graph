@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AqlSyntaxValidator,
     AqlTarget,
     CypherSyntaxValidator,
@@ -17,12 +17,12 @@ from rows2graph import (
     GremlinTarget,
     SQLTranslator,
 )
-from rows2graph.prompts import build_system_prompt
-from rows2graph.sql_features import ALL_FEATURES, SqlFeature
-from rows2graph.targets import aql as aql_target
-from rows2graph.targets import cypher as cypher_target
-from rows2graph.targets import gremlin as gremlin_target
-from rows2graph.targets._schema import EX_JOIN_FILTER_SQL, EX_POINT_LOOKUP_SQL
+from sql2graph.prompts import build_system_prompt
+from sql2graph.sql_features import ALL_FEATURES, SqlFeature
+from sql2graph.targets import aql as aql_target
+from sql2graph.targets import cypher as cypher_target
+from sql2graph.targets import gremlin as gremlin_target
+from sql2graph.targets._schema import EX_JOIN_FILTER_SQL, EX_POINT_LOOKUP_SQL
 
 # Target classes and modules for parametrized cross-target parity tests.
 _ALL_TARGET_CLASSES = [CypherTarget, AqlTarget, GremlinTarget]

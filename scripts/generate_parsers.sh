@@ -4,7 +4,7 @@
 #
 # Dev-time only: requires Java (any JDK 11+) and the ANTLR 4.13.x "complete" jar.
 # End users and CI need NEITHER: the generated parsers are committed under
-# src/rows2graph/validators/_grammar/generated/, and only the pure-Python
+# src/sql2graph/validators/_grammar/generated/, and only the pure-Python
 # `antlr4-python3-runtime` is required at runtime.
 #
 # Usage:
@@ -21,8 +21,8 @@ set -euo pipefail
 
 ANTLR_VERSION="${ANTLR_VERSION:-4.13.2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GRAMMARS="$HERE/src/rows2graph/validators/grammars"
-OUT="$HERE/src/rows2graph/validators/_grammar/generated"
+GRAMMARS="$HERE/src/sql2graph/validators/grammars"
+OUT="$HERE/src/sql2graph/validators/_grammar/generated"
 
 JAVA_BIN="${JAVA:-java}"
 ANTLR_JAR="${ANTLR_JAR:-$HOME/.m2/repository/org/antlr/antlr4/$ANTLR_VERSION/antlr4-$ANTLR_VERSION-complete.jar}"

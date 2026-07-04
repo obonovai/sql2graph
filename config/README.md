@@ -1,6 +1,6 @@
-# `config/`: deployment configuration for rows2graph
+# `config/`: deployment configuration for sql2graph
 
-This directory holds the operational configuration the `rows2graph` library
+This directory holds the operational configuration the `sql2graph` library
 loads: which LLM to translate with, and which graph database to validate
 against. These are *deployment* settings - they select and tune the machinery,
 they do not describe the data being translated. The relational-to-graph
@@ -11,8 +11,8 @@ Two categories live here, one per subdirectory:
 
 | Subdirectory | Purpose | Pydantic model | Loader |
 |---|---|---|---|
-| `models/`  | LLM provider configuration. Discriminator: `provider`. | `OllamaConfig` \| `AnthropicConfig` | `rows2graph.load_model_config(path)` |
-| `servers/` | Graph database connection settings (only needed for server-side validation). Discriminator: `type`. | `Neo4jConfig` \| `ArangoDBConfig` \| `GremlinConfig` | `rows2graph.load_server_config(path)` |
+| `models/`  | LLM provider configuration. Discriminator: `provider`. | `OllamaConfig` \| `AnthropicConfig` | `sql2graph.load_model_config(path)` |
+| `servers/` | Graph database connection settings (only needed for server-side validation). Discriminator: `type`. | `Neo4jConfig` \| `ArangoDBConfig` \| `GremlinConfig` | `sql2graph.load_server_config(path)` |
 
 The two are orthogonal to each other and to the mapping input: the same
 `anthropic.yaml` model config drives any mapping against any server, and the
@@ -21,7 +21,7 @@ model. A translation always needs a model; it needs a server only when
 validating against a live database.
 
 ```python
-from rows2graph import (
+from sql2graph import (
     SchemaMapping, SQLTranslator, load_model_config,
     make_llm, make_target, make_validator,
 )

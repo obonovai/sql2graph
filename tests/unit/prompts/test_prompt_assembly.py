@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import AqlTarget, CypherTarget, GremlinTarget
-from rows2graph.prompts import (
+from sql2graph import AqlTarget, CypherTarget, GremlinTarget
+from sql2graph.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
     build_generate_prompt,

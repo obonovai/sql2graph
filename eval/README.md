@@ -1,6 +1,6 @@
 # Evaluation harness
 
-Measures how well `rows2graph`'s LLM-driven SQL -> graph translator performs, across a
+Measures how well `sql2graph`'s LLM-driven SQL -> graph translator performs, across a
 matrix of **dataset x target language x model**. The reusable run/record/metric logic
 lives in the `harness` package; the notebooks are the analysis surface.
 

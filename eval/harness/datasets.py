@@ -7,7 +7,7 @@ carrying the source SQL plus one expected query per target language
 for that config's single target, skipping queries that lack the target's gold
 column (so a Cypher run is unaffected by a query that only has ``expected_aql``).
 
-The relational->graph :class:`~rows2graph.SchemaMapping` the translator reasons
+The relational->graph :class:`~sql2graph.SchemaMapping` the translator reasons
 over lives separately under ``examples/mappings/<name>.yaml`` and is loaded by
 :func:`mapping_for`.
 """
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from rows2graph import SchemaMapping
+from sql2graph import SchemaMapping
 
 from .config import GOLD_DIR, MAPPINGS_DIR, RunConfig, Target
 

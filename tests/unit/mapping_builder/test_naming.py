@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from rows2graph.mapping_builder.naming import (
+from sql2graph.mapping_builder.naming import (
     edge_type_for_fk,
     junction_to_edge_type,
     table_to_label,
 )
-from rows2graph.mapping_builder.relational import ForeignKey
+from sql2graph.mapping_builder.relational import ForeignKey
 
 
 @pytest.mark.parametrize(

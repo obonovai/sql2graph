@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from rows2graph import (
+from sql2graph import (
     AnthropicConfig,
     AnthropicLLMClient,
     CypherTarget,
@@ -14,7 +14,7 @@ from rows2graph import (
     SchemaMapping,
     SQLTranslator,
 )
-from rows2graph.validators.cypher.server import (
+from sql2graph.validators.cypher.server import (
     AsyncCypherServerValidator,
     CypherServerValidator,
 )

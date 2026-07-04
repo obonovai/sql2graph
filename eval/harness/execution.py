@@ -48,7 +48,7 @@ PG_DSN = (
 # The graph-DB connection settings (Neo4j/ArangoDB/Gremlin) are sourced from the library's
 # server configs under config/servers/*.yaml, so a local eval run needs no exported passwords.
 # Env vars still override per field (env value wins; otherwise the config value is used) via
-# the _server_cfg() helper below. Loaded lazily -- rows2graph.load_server_config pulls in the
+# the _server_cfg() helper below. Loaded lazily -- sql2graph.load_server_config pulls in the
 # DB drivers through the validators package, and this module is import-light by design (see the
 # module docstring), so nothing loads until a runner is first used.
 _CONFIG_SERVERS_DIR = Path(__file__).resolve().parents[2] / "config" / "servers"
@@ -58,7 +58,7 @@ _server_cfg_cache: dict = {}
 def _server_cfg(name: str):
     """Load and cache the config/servers/<name>.yaml server config (lazily)."""
     if name not in _server_cfg_cache:
-        from rows2graph import load_server_config
+        from sql2graph import load_server_config
 
         _server_cfg_cache[name] = load_server_config(_CONFIG_SERVERS_DIR / f"{name}.yaml")
     return _server_cfg_cache[name]

@@ -1,8 +1,8 @@
-# rows2graph
+# sql2graph
 
 **LLM-driven SQL-to-graph-database query translator with a validation feedback loop.**
 
-`rows2graph` is a Python framework that translates SQL queries into queries
+`sql2graph` is a Python framework that translates SQL queries into queries
 for property-graph databases (Cypher for Neo4j, AQL for ArangoDB, and
 Gremlin-Groovy for Apache TinkerPop / JanusGraph / Neptune / Cosmos DB
 Gremlin API) by prompting a large language model with a user-provided
@@ -17,7 +17,7 @@ for UIs and concurrent multi-translation services. Both support an
 optional typed event callback that surfaces every loop milestone in real time;
 the async path additionally supports token-by-token streaming.
 
-The library lives under `src/rows2graph/`: it exposes typed components
+The library lives under `src/sql2graph/`: it exposes typed components
 (schema mapping, LLM client, target language, validator, orchestrator)
 connected through small structural Protocols. Both sync and async variants
 of the LLM client, validator, and translator ship side by side.
@@ -105,12 +105,12 @@ schema reference.
 ## Per-query prompt assembly
 
 The system prompt is assembled *per query*, not once per translator. Before
-the first LLM call, `detect_features` (in `src/rows2graph/sql_features.py`)
+the first LLM call, `detect_features` (in `src/sql2graph/sql_features.py`)
 parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
 operation clusters present: `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
 `CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`. Both the generic
 rules block and the target-language section (see
-`src/rows2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
+`src/sql2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
 chunks corresponding to features actually in the query, so the LLM is not
 distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
 no string predicates. On any parser failure the function returns
@@ -120,7 +120,7 @@ Unparseable input degrades prompt focus, never translation correctness.
 The Anthropic backends (sync and async) send the assembled system block
 with `cache_control: ephemeral` set, so iterations 2+ of any multi-iteration
 translation read the schema + rules from Anthropic's prompt cache instead
-of re-billing them as input tokens. See `src/rows2graph/llm/anthropic.py`.
+of re-billing them as input tokens. See `src/sql2graph/llm/anthropic.py`.
 The `Anthropic call:` log line reports `cache_read` and `cache_write`
 counts alongside the regular input/output totals so cache hit rate is
 observable per call. Those per-call counts are also accumulated across the
@@ -149,7 +149,7 @@ language, and a validator. Build them from the shipped YAML configs and hand
 them to `SQLTranslator`:
 
 ```python
-from rows2graph import (
+from sql2graph import (
     SchemaMapping, SQLTranslator,
     load_model_config, make_llm, make_target, make_validator,
 )
@@ -204,7 +204,7 @@ schemas.
 ## As a library
 
 ```python
-from rows2graph import (
+from sql2graph import (
     SchemaMapping, SQLTranslator,
     load_model_config, make_llm,
     make_target, make_validator,
@@ -233,7 +233,7 @@ and result type are identical to the sync path.
 
 ```python
 import asyncio
-from rows2graph import (
+from sql2graph import (
     AsyncSQLTranslator, SchemaMapping, TranslationEvent,
     load_model_config, make_async_llm, make_async_validator, make_target,
 )
@@ -284,6 +284,6 @@ ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 The generate-validate-fix loop pattern was inspired by prior work on LLM
 code generation paired with deterministic-validator feedback loops, where
 a generated artifact is checked by a compiler-like tool and validator
-errors are fed back as additional context for retry. `rows2graph` adapts
+errors are fed back as additional context for retry. `sql2graph` adapts
 that core pattern with a plain-Python loop (no graph-orchestration
 framework) and targets SQL-to-graph query translation.

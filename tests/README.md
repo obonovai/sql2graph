@@ -17,8 +17,8 @@ tests/
     conftest.py            # puts eval/ on sys.path
 ```
 
-The folder tree mirrors `src/rows2graph/`, so a test's home is predictable: a
-change to `src/rows2graph/validators/` is exercised under `tests/unit/validators/`.
+The folder tree mirrors `src/sql2graph/`, so a test's home is predictable: a
+change to `src/sql2graph/validators/` is exercised under `tests/unit/validators/`.
 
 ## Unit tests (`unit/`)
 

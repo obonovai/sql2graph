@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from rows2graph.mapping_builder.ddl import DdlParseError, extract_schema_from_ddl
-from rows2graph.mapping_builder.project import project_to_mapping
+from sql2graph.mapping_builder.ddl import DdlParseError, extract_schema_from_ddl
+from sql2graph.mapping_builder.project import project_to_mapping
 
 
 def test_extract_inline_pk_and_not_null() -> None:

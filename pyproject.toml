@@ -1,5 +1,5 @@
 [project]
-name = "rows2graph"
+name = "sql2graph"
 version = "0.1.0"
 description = "LLM-driven SQL-to-graph-database query translator with a generate-validate-fix loop."
 readme = "README.md"
@@ -45,15 +45,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # Hatchling's src-layout discovery is unreliable without explicit package paths,
-# so name them. The wheel exposes the `rows2graph` package at top level.
+# so name them. The wheel exposes the `sql2graph` package at top level.
 [tool.hatch.build.targets.wheel]
-packages = ["src/rows2graph"]
+packages = ["src/sql2graph"]
 
 [tool.ruff]
 line-length = 120
 output-format = "full"
 # ANTLR-generated lexers/parsers are machine-generated; don't lint/format them.
-extend-exclude = ["src/rows2graph/validators/_grammar/generated"]
+extend-exclude = ["src/sql2graph/validators/_grammar/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "PERF", "ARG", "W", "UP", "B"]
@@ -90,7 +90,7 @@ ignore_missing_imports = true
 
 # ANTLR-generated parsers are machine-generated and not strict-clean; skip them.
 [[tool.mypy.overrides]]
-module = "rows2graph.validators._grammar.generated.*"
+module = "sql2graph.validators._grammar.generated.*"
 ignore_errors = true
 
 # harness lives under eval/ (an optional extra, not the library src); the

@@ -6,11 +6,11 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import EdgeMapping, NodeMapping, SchemaMapping
-from rows2graph.mapping_builder import mapping_to_yaml
-from rows2graph.mapping_builder.ddl import extract_schema_from_ddl
-from rows2graph.mapping_builder.diff import diff_mappings
-from rows2graph.mapping_builder.refine import refine_mapping, refine_mapping_async, validate_against_schema
+from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
+from sql2graph.mapping_builder import mapping_to_yaml
+from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
+from sql2graph.mapping_builder.diff import diff_mappings
+from sql2graph.mapping_builder.refine import refine_mapping, refine_mapping_async, validate_against_schema
 
 
 def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:

@@ -1,4 +1,4 @@
-# rows2graph evaluation report
+# sql2graph evaluation report
 
 Generated: 2026-07-03T22:58:24
 

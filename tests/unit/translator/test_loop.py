@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rows2graph import (
+from sql2graph import (
     CypherSyntaxValidator,
     CypherTarget,
     GremlinSyntaxValidator,
@@ -22,7 +22,7 @@ def test_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Callable[..
     valid vendor-specific query parse (keeping the unmapped-table/column checks
     live) instead of false-failing under the neutral parser.
     """
-    import rows2graph.translator as translator_mod
+    import sql2graph.translator as translator_mod
 
     seen = spy_analyze_sql(translator_mod)
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -41,7 +41,7 @@ def test_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Callable[..
 def test_translator_dialect_defaults_to_none(spy_analyze_sql: Callable[..., Any], scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     """Omitting ``dialect`` keeps the pre-flight parse dialect-neutral (``None``),
     i.e. identical to the behaviour before the parameter existed."""
-    import rows2graph.translator as translator_mod
+    import sql2graph.translator as translator_mod
 
     seen = spy_analyze_sql(translator_mod)
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -131,7 +131,7 @@ def test_translator_hits_max_iterations(scripted_llm: Callable[..., Any], person
 
 def test_translator_escalates_on_stall_then_recovers(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     """A repeated (stalled) candidate triggers one fresh-context, hot retry that recovers."""
-    from rows2graph import StalledEvent, TranslationEvent
+    from sql2graph import StalledEvent, TranslationEvent
 
     # gen=bad, fix=identical bad (→ stall), escalation=good.
     fake = scripted_llm(["MATCH (p:Person", "MATCH (p:Person", "MATCH (p:Person) RETURN p"])
@@ -160,7 +160,7 @@ def test_translator_escalates_on_stall_then_recovers(scripted_llm: Callable[...,
 
 def test_translator_aborts_early_when_stalled_instead_of_burning_iterations(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
     """When even the escalation makes no progress, abort as 'stalled', not 10 identical tries."""
-    from rows2graph import StalledEvent, TranslationEvent
+    from sql2graph import StalledEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (p:Person"] * 4)  # always invalid; one response left unused
     events: list[TranslationEvent] = []

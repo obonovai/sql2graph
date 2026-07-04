@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from rows2graph import EdgeMapping, NodeMapping, SchemaMapping
+from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
 
 
 def test_schema_rejects_unknown_edge_source_node() -> None:

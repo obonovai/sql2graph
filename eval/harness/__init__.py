@@ -1,4 +1,4 @@
-"""Reusable evaluation harness for rows2graph SQL -> graph translation.
+"""Reusable evaluation harness for sql2graph SQL -> graph translation.
 
 The notebooks under ``eval/notebooks/`` import from here. The run logic lives in
 :mod:`harness.runner`, the matrix/config in :mod:`harness.config`, gold-dataset
