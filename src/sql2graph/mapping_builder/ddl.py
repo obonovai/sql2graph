@@ -16,12 +16,18 @@ requirement.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import Any
 
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
+
+# ``REFERENCES t(c) ON DELETE CASCADE`` -> sqlglot keeps the action as a string in
+# ``Reference.args["options"]`` (e.g. ``["ON DELETE CASCADE"]``). This matches the
+# supported referential actions; the projection only reasons about ``CASCADE``.
+_ON_DELETE_RE = re.compile(r"ON\s+DELETE\s+(CASCADE|RESTRICT|SET\s+NULL|SET\s+DEFAULT|NO\s+ACTION)", re.IGNORECASE)
 
 from sql2graph.mapping_builder.relational import (
     Column,
@@ -310,4 +316,21 @@ def _foreign_key_from_reference(reference: Any, *, local_columns: list[str], nam
         ref_table=ref_table_node.name,
         ref_columns=tuple(ref_columns),
         name=name,
+        on_delete=_on_delete_action(reference),
     )
+
+
+def _on_delete_action(reference: Any) -> str | None:
+    """Return the upper-cased ``ON DELETE`` action of a reference, or ``None``.
+
+    sqlglot stores referential actions as strings in ``Reference.args["options"]``
+    (``["ON DELETE CASCADE"]``); older/other builds may store expression nodes, so
+    each option is coerced to text before matching. Whitespace inside a multi-word
+    action (``SET NULL``) is normalized to a single space.
+    """
+    for option in reference.args.get("options") or []:
+        text = option if isinstance(option, str) else option.sql()
+        match = _ON_DELETE_RE.search(text)
+        if match:
+            return re.sub(r"\s+", " ", match.group(1).upper())
+    return None

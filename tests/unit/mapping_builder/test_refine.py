@@ -17,8 +17,10 @@ def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     improved_yaml = mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION").replace("label: Lineitem", "label: LineItem")
-    # keep edges that reference the renamed label consistent
-    improved_yaml = improved_yaml.replace("source_node: Lineitem", "source_node: LineItem")
+    # Keep every edge that references the renamed label consistent. Lineitem appears
+    # as both a source_node and a target_node (its identifying orderkey FK makes the
+    # Order->LineItem composition edge point at it), so rename all `node:` references.
+    improved_yaml = improved_yaml.replace("node: Lineitem", "node: LineItem")
     outcome = refine_mapping(skeleton, schema, oneshot_llm(improved_yaml))
     assert outcome.accepted is True
     assert outcome.warnings == []
@@ -138,7 +140,7 @@ def test_diff_mappings_detects_label_and_edge_renames(tpch_skeleton: Callable[..
     renamed = (
         mapping_to_yaml(skeleton)
         .replace("label: Lineitem", "label: LineItem")
-        .replace("source_node: Lineitem", "source_node: LineItem")
+        .replace("node: Lineitem", "node: LineItem")  # Lineitem is both a source_ and target_node
         .replace("HAS_REGION", "IN_REGION")
     )
     diff = diff_mappings(skeleton, SchemaMapping.from_yaml_string(renamed))

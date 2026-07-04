@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from sql2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
+from sql2graph.mapping import EdgeMapping, ListProperty, NodeMapping, SchemaMapping, SemanticType
 
 
 def mapping_to_yaml(mapping: SchemaMapping, *, header: str | None = None) -> str:
@@ -49,13 +49,35 @@ def _props_out(properties: dict[str, str], property_types: dict[str, SemanticTyp
     return out
 
 
+def _list_props_out(list_properties: dict[str, ListProperty]) -> dict[str, Any]:
+    """Render the ``list_properties`` block; the ``type`` key is dropped when untyped.
+
+    Each entry round-trips straight back into a :class:`ListProperty` via Pydantic
+    (``source_table``/``foreign_key``/``column`` required, ``type`` optional).
+    """
+    out: dict[str, Any] = {}
+    for name, lp in list_properties.items():
+        entry: dict[str, Any] = {
+            "source_table": lp.source_table,
+            "foreign_key": lp.foreign_key,
+            "column": lp.column,
+        }
+        if lp.type is not None:
+            entry["type"] = lp.type.value
+        out[name] = entry
+    return out
+
+
 def _node_dict(node: NodeMapping) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "label": node.label,
         "source_table": node.source_table,
         "properties": _props_out(node.properties, node.property_types),
-        "primary_key": node.primary_key,
     }
+    if node.list_properties:
+        out["list_properties"] = _list_props_out(node.list_properties)
+    out["primary_key"] = node.primary_key
+    return out
 
 
 def _edge_dict(edge: EdgeMapping) -> dict[str, Any]:

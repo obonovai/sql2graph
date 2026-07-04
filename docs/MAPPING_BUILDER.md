@@ -98,6 +98,20 @@ The heuristics:
   key. A composite (multi-column) foreign key is collapsed to its first column with a
   warning; a foreign key referencing an unknown table, or one modeled as an edge, is
   dropped with a reason.
+- **Edge direction — composition vs association.** By default an FK edge points
+  *FK-holder → referenced* (child → parent), which is right for a reference /
+  association. When the schema marks the foreign key as **composition** (the parent
+  owns the child), the edge is reversed to *parent → child* — the join columns
+  (`source_table` / `source_foreign_key` / `target_primary_key`) are unchanged, only the
+  labeled `source_node` / `target_node` swap. `is_composition_fk(table, fk)` recognizes
+  two structural signals: an `ON DELETE CASCADE` referential action, or an **identifying
+  relationship** (the FK column is part of the table's primary key — a weak entity such
+  as `lineitem(orderkey, linenumber)`). A plain foreign key (no cascade, not in the
+  primary key) is never reversed, so no existing schema's edges change direction unless
+  it declares one of these markers; every reversal is recorded in `warnings`. A lone 1:N
+  foreign key is otherwise direction-ambiguous (it looks identical whether it means
+  "belongs to" or "contains"), so this is the only structural handle on direction — see
+  [LDBC_NORMALIZATION.md](LDBC_NORMALIZATION.md).
 - **Junction table becomes an edge.** `is_junction_table(table, schema)` detects a
   pure association table and collapses it into a single edge carrying its non-FK
   columns as edge properties. The predicate is intentionally *strict* (precision over
@@ -105,6 +119,17 @@ The heuristics:
   a primary key equal to exactly those two FK columns, that nothing else references the
   table, and that both referenced tables are present. A real entity that merely happens
   to have two foreign keys is kept as a node and flagged rather than silently dissolved.
+- **Value-list table becomes a list property.** `is_multivalue_property_table(table,
+  schema)` detects a multi-valued attribute stored relationally as a child table —
+  **exactly one** single-column foreign key to a present table, at least one non-FK value
+  column, referenced by nothing, and **every column part of the primary key**
+  (`pk == all columns`, so the row is a bare value with no identity of its own, e.g.
+  `person_email(person_id, email)` or `person_speaks(person_id, language)`). Instead of a
+  spurious node, it folds into a `ListProperty` on the *parent* node
+  (`Person.email`, `Person.language`) — a multi-valued property the scalar `properties`
+  map (one graph property ← one column of the node's own table) cannot express. The
+  parent-table → list-properties resolution is `_resolve_list_properties`; the folded
+  child tables are recorded in `report.list_property_tables`.
 - **Primary-key choice.** `choose_primary_key(table)` returns `(column, synthesized)`.
   It prefers a declared primary-key column that is *not* itself a foreign key (so a
   composite PK like `lineitem(orderkey, linenumber)` yields `linenumber`, since
@@ -122,7 +147,8 @@ account of what was done and what to check:
 |---|---|---|
 | `node_tables` | `list[str]` | Tables that became node labels. |
 | `edge_tables` | `list[str]` | Junction tables collapsed into edges. |
-| `fk_edges` | `list[str]` | One line per emitted edge, e.g. `"Lineitem -[SUPP]-> Supplier (lineitem.suppkey)"` (deterministic labels, before refinement). |
+| `list_property_tables` | `list[str]` | Value-list child tables folded into node list properties (`person_email`, `person_speaks`). |
+| `fk_edges` | `list[str]` | One line per emitted edge, e.g. `"Lineitem -[SUPP]-> Supplier (lineitem.suppkey)"` (deterministic labels, before refinement); a composition edge is tagged `[reversed to parent->child: …]`. |
 | `dropped_objects` | `list[tuple[str, str]]` | `(name, reason)` for things that produced nothing (views, FKs to unknown tables, empty-column tables, duplicate names). |
 | `synthesized_keys` | `list[str]` | Tables whose primary key had to be guessed. |
 | `warnings` | `list[str]` | Soft issues a reviewer should look at (synthesized keys, collapsed composite FKs, candidate association tables kept as nodes, label collisions). |
@@ -297,6 +323,11 @@ Note that the `partsupp` table does not appear as a node: `is_junction_table` co
 it into a single `Part -> Supplier` edge that carries `availqty`, `supplycost`, and
 `comment` as edge properties.
 
+`lineitem.orderkey` is part of `lineitem`'s composite primary key — an identifying
+relationship — so `is_composition_fk` emits its edge as the composition `Order ->
+LineItem` (an order contains its line items) rather than the default `LineItem ->
+Order`; the join columns are identical, only the direction flips.
+
 **After (LLM-refined, in `result.yaml`).** The naming pass keeps every SQL identifier
 byte-for-byte and rewrites only the graph-facing names - `Lineitem` becomes
 `LineItem`, and the mechanical edge types become idiomatic relationship names, as in
@@ -398,7 +429,7 @@ stored with original casing while comparisons casefold):
 | `RelationalSchema` | `tables: tuple[Table, ...]`, `skipped_objects: tuple[SkippedObject, ...]`. |
 | `Table` | `name`, `schema`, `columns`, `primary_key`, `foreign_keys`; helpers `column_names()`, `fk_columns()`, `single_column_foreign_keys()`. |
 | `Column` | `name`, `data_type` (rendered SQL type, informational), `nullable`. |
-| `ForeignKey` | `columns`, `ref_table`, `ref_columns`, `name`. |
+| `ForeignKey` | `columns`, `ref_table`, `ref_columns`, `name`, `on_delete` (the `ON DELETE` referential action, e.g. `"CASCADE"`, or `None`; drives composition direction). |
 | `SkippedObject` | `name`, `kind`, `reason`. |
 
 ### Naming

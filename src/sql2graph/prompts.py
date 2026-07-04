@@ -69,6 +69,11 @@ def format_schema_context(schema: SchemaMapping) -> str:
         for graph_prop, sql_col in node.properties.items():
             suffix = _type_suffix(node.property_types.get(graph_prop))
             lines.append(f"    - `{graph_prop}` <- SQL column `{sql_col}`{suffix}")
+        if node.list_properties:
+            lines.append("  List properties (multi-valued, stored as a list on the node):")
+            for graph_prop, lp in node.list_properties.items():
+                suffix = _type_suffix(lp.type)
+                lines.append(f"    - `{graph_prop}` (list) <- SQL column `{lp.source_table}.{lp.column}`{suffix}")
 
     lines.append("")
     lines.append("### Relationships (Edges)")

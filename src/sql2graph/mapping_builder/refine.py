@@ -200,6 +200,15 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
         for prop, column in node.properties.items():
             if column.casefold() not in cols:
                 violations.append(f"node '{node.label}': property '{prop}' maps to missing column '{node.source_table}.{column}'")
+        for prop, lp in node.list_properties.items():
+            lp_cols = columns_by_table.get(lp.source_table.casefold())
+            if lp_cols is None:
+                violations.append(f"node '{node.label}': list property '{prop}' source_table '{lp.source_table}' is not a table in the schema")
+                continue
+            if lp.foreign_key.casefold() not in lp_cols:
+                violations.append(f"node '{node.label}': list property '{prop}' foreign_key '{lp.foreign_key}' is not a column of '{lp.source_table}'")
+            if lp.column.casefold() not in lp_cols:
+                violations.append(f"node '{node.label}': list property '{prop}' column '{lp.column}' is not a column of '{lp.source_table}'")
 
     for edge in mapping.edges:
         cols = columns_by_table.get(edge.source_table.casefold())
@@ -265,6 +274,10 @@ def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozens
             n.source_table.casefold(),
             n.primary_key.casefold(),
             frozenset(_typed_columns(n.properties, n.property_types)),
+            frozenset(
+                (lp.source_table.casefold(), lp.foreign_key.casefold(), lp.column.casefold(), lp.type.value if lp.type else None)
+                for lp in n.list_properties.values()
+            ),
         )
         for n in mapping.nodes
     )
@@ -330,13 +343,16 @@ def _build_refine_system_prompt() -> str:
         "  - node `label` values (e.g. `foo_bar` or `Foobar` -> `FooBar`),\n"
         "  - edge `type` values (tidy a mechanical names into a more idiomatic relationship name),\n"
         "    but respect the direction of the edge (source node -> target node).\n"
-        "  - the KEYS of any `properties` map (the graph-facing property names).\n\n"
+        "  - the KEYS of any `properties` map (the graph-facing property names),\n"
+        "  - the KEYS of any `list_properties` map (the graph-facing names of multi-valued props).\n\n"
         "You MUST NOT change any SQL identifier. Every `source_table`, `primary_key`, "
         "`source_foreign_key`, `target_primary_key`, and every `properties` VALUE must be "
         "copied verbatim from the draft. A `properties` VALUE may be a bare column name or "
         "an object `{column: ..., type: ...}`; copy the column AND any `type` verbatim, "
-        "renaming only the property KEY. Do not add or remove nodes or edges, and do not "
-        "drop any table. If an edge `source_node`/`target_node` references a label you "
+        "renaming only the property KEY. A `list_properties` entry has "
+        "`source_table`/`foreign_key`/`column`/`type` fields - copy them all verbatim, "
+        "renaming only the entry's KEY, and keep every list property. Do not add or remove "
+        "nodes or edges, and do not drop any table. If an edge `source_node`/`target_node` references a label you "
         "rename, update those references consistently so every edge still points at a "
         "declared node.\n\n"
         "Respond with ONLY the improved mapping as YAML - the same `nodes:`/`edges:` "

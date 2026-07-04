@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from sql2graph import SchemaMapping
+from sql2graph import SchemaMapping, SemanticType
 from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
 from sql2graph.mapping_builder.project import (
     choose_primary_key,
+    is_composition_fk,
     is_junction_table,
+    is_multivalue_property_table,
     project_to_mapping,
 )
 
@@ -57,6 +59,116 @@ def test_referenced_table_is_never_a_junction() -> None:
     link = schema.table("link")
     assert link is not None
     assert is_junction_table(link, schema) is False
+
+
+def test_multivalue_table_becomes_list_property() -> None:
+    # person_email(person_id, email) keyed entirely by (person_id, email) is a
+    # value list, not a node or an edge: it folds into a Person list property.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE person (id INT PRIMARY KEY, name TEXT);
+        CREATE TABLE person_email (person_id INT REFERENCES person(id), email VARCHAR(64), PRIMARY KEY (person_id, email));
+        CREATE TABLE person_speaks (person_id INT REFERENCES person(id), language TEXT, PRIMARY KEY (person_id, language));
+        """,
+        dialect="postgres",
+    )
+    person_email = schema.table("person_email")
+    assert person_email is not None
+    assert is_multivalue_property_table(person_email, schema) is True
+
+    result = project_to_mapping(schema)
+    assert {n.source_table for n in result.mapping.nodes} == {"person"}  # no PersonEmail/PersonSpeak node
+    assert result.mapping.edges == []  # no HAS_PERSON edges
+    person = next(n for n in result.mapping.nodes if n.source_table == "person")
+    assert set(person.list_properties) == {"email", "language"}
+    email = person.list_properties["email"]
+    assert (email.source_table, email.foreign_key, email.column) == ("person_email", "person_id", "email")
+    assert email.type is SemanticType.STRING  # VARCHAR -> string
+    assert sorted(result.report.list_property_tables) == ["person_email", "person_speaks"]
+
+
+def test_surrogate_key_single_fk_table_stays_a_node() -> None:
+    # A one-FK table WITH its own surrogate id is a real entity (its id is not the
+    # foreign key), so it must remain a node, not fold into a list property.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE person (id INT PRIMARY KEY);
+        CREATE TABLE post (id INT PRIMARY KEY, content TEXT, creator_id INT REFERENCES person(id));
+        """
+    )
+    post = schema.table("post")
+    assert post is not None
+    assert is_multivalue_property_table(post, schema) is False
+    result = project_to_mapping(schema)
+    assert "post" in {n.source_table for n in result.mapping.nodes}
+
+
+def test_junction_table_is_not_a_multivalue_property() -> None:
+    # Two-FK association tables are edges, never list properties.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE person (id INT PRIMARY KEY);
+        CREATE TABLE tag (id INT PRIMARY KEY);
+        CREATE TABLE has_interest (person_id INT REFERENCES person(id), tag_id INT REFERENCES tag(id), PRIMARY KEY (person_id, tag_id));
+        """
+    )
+    has_interest = schema.table("has_interest")
+    assert has_interest is not None
+    assert is_multivalue_property_table(has_interest, schema) is False
+    assert is_junction_table(has_interest, schema) is True
+
+
+def test_on_delete_cascade_reverses_edge_direction() -> None:
+    # ON DELETE CASCADE marks composition (forum owns its posts) -> Forum -> Post,
+    # the reverse of the default FK-holder -> referenced direction. The join columns
+    # are unchanged; only the labeled endpoints swap.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE forum (id INT PRIMARY KEY);
+        CREATE TABLE post (id INT PRIMARY KEY, forum_id INT NOT NULL REFERENCES forum(id) ON DELETE CASCADE);
+        """,
+        dialect="postgres",
+    )
+    post = schema.table("post")
+    assert post is not None
+    assert is_composition_fk(post, post.single_column_foreign_keys()[0]) is True
+    edge = next(e for e in project_to_mapping(schema).mapping.edges if e.source_table == "post")
+    assert (edge.source_node, edge.target_node) == ("Forum", "Post")
+    assert (edge.source_foreign_key, edge.target_primary_key) == ("forum_id", "id")
+
+
+def test_plain_fk_keeps_default_child_to_parent_direction() -> None:
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE forum (id INT PRIMARY KEY);
+        CREATE TABLE post (id INT PRIMARY KEY, forum_id INT NOT NULL REFERENCES forum(id));
+        """,
+        dialect="postgres",
+    )
+    post = schema.table("post")
+    assert post is not None
+    assert is_composition_fk(post, post.single_column_foreign_keys()[0]) is False
+    edge = next(e for e in project_to_mapping(schema).mapping.edges if e.source_table == "post")
+    assert (edge.source_node, edge.target_node) == ("Post", "Forum")
+
+
+def test_identifying_fk_reverses_direction_and_is_reported() -> None:
+    # A weak entity (FK is part of the PK, plus a non-key attribute so it is not a
+    # pure value-list table) is composition -> parent -> child.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE orders (id INT PRIMARY KEY);
+        CREATE TABLE lineitem (order_id INT REFERENCES orders(id), line_no INT, qty INT, PRIMARY KEY (order_id, line_no));
+        """,
+        dialect="postgres",
+    )
+    lineitem = schema.table("lineitem")
+    assert lineitem is not None
+    assert is_composition_fk(lineitem, lineitem.single_column_foreign_keys()[0]) is True
+    result = project_to_mapping(schema)
+    edge = next(e for e in result.mapping.edges if e.source_table == "lineitem")
+    assert (edge.source_node, edge.target_node) == ("Order", "Lineitem")
+    assert any("composition" in w.lower() for w in result.report.warnings)
 
 
 def test_choose_primary_key_prefers_non_fk_of_composite(tpch_ddl: str) -> None:

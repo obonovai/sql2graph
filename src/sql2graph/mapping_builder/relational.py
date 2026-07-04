@@ -54,12 +54,17 @@ class ForeignKey:
             DDL omitted them (``REFERENCES t`` with no column list), in which
             case the projection falls back to the referenced table's primary key.
         name: The constraint name if one was declared, else ``None``.
+        on_delete: The upper-cased ``ON DELETE`` referential action if the DDL
+            declared one (e.g. ``"CASCADE"``, ``"RESTRICT"``, ``"SET NULL"``),
+            else ``None``. ``CASCADE`` signals composition (the parent owns the
+            child), which the projection uses to direct the edge parent -> child.
     """
 
     columns: tuple[str, ...]
     ref_table: str
     ref_columns: tuple[str, ...] = ()
     name: str | None = None
+    on_delete: str | None = None
 
 
 @dataclass(frozen=True)

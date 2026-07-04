@@ -76,7 +76,7 @@ from sql2graph.llm import (
     make_async_llm,
     make_llm,
 )
-from sql2graph.mapping import EdgeMapping, NodeMapping, SchemaMapping, SemanticType
+from sql2graph.mapping import EdgeMapping, ListProperty, NodeMapping, SchemaMapping, SemanticType
 from sql2graph.mapping_builder import (
     BuildResult,
     CoverageReport,
@@ -177,6 +177,7 @@ __all__ = [
     "GremlinSyntaxValidator",
     "GremlinTarget",
     "LLMClient",
+    "ListProperty",
     "ManagedServerValidator",
     "MappingDiff",
     "MaxIterationsReachedEvent",

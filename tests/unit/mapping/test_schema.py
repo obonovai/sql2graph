@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
+from sql2graph import EdgeMapping, ListProperty, NodeMapping, SchemaMapping, SemanticType
 
 
 def test_schema_rejects_unknown_edge_source_node() -> None:
@@ -168,6 +168,54 @@ def test_schema_allows_same_type_different_target() -> None:
         ],
     )
     assert len(mapping.edges) == 2
+
+
+def test_list_property_loads_and_covers_source_table() -> None:
+    yaml_text = """
+nodes:
+  - label: "Person"
+    source_table: "person"
+    primary_key: "id"
+    properties:
+      id: "id"
+    list_properties:
+      email:
+        source_table: "person_email"
+        foreign_key: "person_id"
+        column: "email"
+        type: "string"
+      language:
+        source_table: "person_speaks"
+        foreign_key: "person_id"
+        column: "language"
+edges: []
+"""
+    mapping = SchemaMapping.from_yaml_string(yaml_text)
+    person = mapping.nodes[0]
+    assert set(person.list_properties) == {"email", "language"}
+    assert person.list_properties["email"].source_table == "person_email"
+    assert person.list_properties["email"].type is SemanticType.STRING
+    assert person.list_properties["language"].type is None  # untyped is allowed
+    # The child tables count as covered source tables, so pre-flight won't flag them.
+    assert {"person_email", "person_speaks"} <= mapping.source_tables()
+
+
+def test_list_property_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError):
+        ListProperty(source_table="t", foreign_key="fk", column="c", typ="string")  # type: ignore[call-arg]
+
+
+def test_node_rejects_property_declared_scalar_and_list() -> None:
+    with pytest.raises(ValidationError, match="both scalar and list"):
+        NodeMapping(
+            label="Person",
+            source_table="person",
+            primary_key="id",
+            properties={"email": "email"},
+            list_properties={
+                "email": ListProperty(source_table="person_email", foreign_key="person_id", column="email")
+            },
+        )
 
 
 def test_schema_mapping_accessors() -> None:

@@ -32,7 +32,14 @@ from sql2graph.llm import AsyncLLMClient, LLMClient
 from sql2graph.mapping import SchemaMapping
 from sql2graph.mapping_builder.ddl import DdlParseError, extract_schema_from_ddl
 from sql2graph.mapping_builder.diff import MappingDiff, RenameDiff, diff_mappings
-from sql2graph.mapping_builder.project import CoverageReport, ProjectionResult, is_junction_table, project_to_mapping
+from sql2graph.mapping_builder.project import (
+    CoverageReport,
+    ProjectionResult,
+    is_composition_fk,
+    is_junction_table,
+    is_multivalue_property_table,
+    project_to_mapping,
+)
 from sql2graph.mapping_builder.refine import (
     RefinementResult,
     refine_mapping,
@@ -161,7 +168,9 @@ __all__ = [
     "build_mapping_async",
     "diff_mappings",
     "extract_schema_from_ddl",
+    "is_composition_fk",
     "is_junction_table",
+    "is_multivalue_property_table",
     "mapping_to_yaml",
     "project_to_mapping",
     "refine_mapping",

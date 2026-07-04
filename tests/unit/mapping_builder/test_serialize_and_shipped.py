@@ -61,6 +61,53 @@ def test_bundled_tpch_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path
     assert direct_triples(generated) == direct_triples(shipped)
 
 
+def test_bundled_ldbc_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path) -> None:
+    # The gold DDL (examples/ddl/ldbc.sql), built deterministically with NO LLM,
+    # must reproduce the official LDBC structure captured in the curated ldbc.yaml:
+    # the same 8 node tables, the same 23 edge join triples, and Person's two
+    # multi-valued attributes as list properties. This guards the ldbc.sql <->
+    # ldbc.yaml correspondence against silent drift.
+    generated = project_to_mapping(
+        extract_schema_from_ddl((examples_dir / "ddl" / "ldbc.sql").read_text(), dialect="postgres")
+    ).mapping
+    shipped = SchemaMapping.from_yaml(mappings_dir / "ldbc.yaml")
+
+    assert len(generated.nodes) == 8
+    assert len(generated.edges) == 23
+    assert {n.source_table for n in generated.nodes} == {n.source_table for n in shipped.nodes}
+
+    def triples(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
+        return {(e.source_table, e.source_foreign_key, e.target_primary_key) for e in mapping.edges}
+
+    # Join semantics agree exactly (edge type names/directions aside).
+    assert triples(generated) == triples(shipped)
+
+    def list_sides(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
+        return {(lp.source_table, lp.foreign_key, lp.column) for n in mapping.nodes for lp in n.list_properties.values()}
+
+    assert list_sides(generated) == list_sides(shipped) == {
+        ("person_email", "person_id", "email"),
+        ("person_speaks", "person_id", "language"),
+    }
+
+    # The forum-post containment FK carries ON DELETE CASCADE, so the builder emits
+    # the LDBC-correct Forum -> Post direction (not the default Post -> Forum).
+    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == "forum_id")
+    assert (containment.source_node, containment.target_node) == ("Forum", "Post")
+
+
+def test_bundled_ldbc_naive_ddl_reverses_containment(examples_dir: Path) -> None:
+    # The naive twin drops ON DELETE CASCADE from post.forum_id; with no composition
+    # signal the builder falls back to Post -> Forum -- the sole divergence from LDBC.
+    generated = project_to_mapping(
+        extract_schema_from_ddl((examples_dir / "ddl" / "ldbc_naive.sql").read_text(), dialect="postgres")
+    ).mapping
+    assert len(generated.nodes) == 8
+    assert len(generated.edges) == 23
+    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == "forum_id")
+    assert (containment.source_node, containment.target_node) == ("Post", "Forum")
+
+
 @pytest.mark.parametrize("name", ["tpch.yaml", "ldbc.yaml"])
 def test_shipped_mapping_round_trips(name: str, mappings_dir: Path) -> None:
     mapping = SchemaMapping.from_yaml(mappings_dir / name)
@@ -70,6 +117,22 @@ def test_shipped_mapping_round_trips(name: str, mappings_dir: Path) -> None:
 def test_generated_mapping_round_trips(tpch_ddl: str) -> None:
     mapping = project_to_mapping(extract_schema_from_ddl(tpch_ddl, dialect="postgres")).mapping
     assert SchemaMapping.from_yaml_string(mapping_to_yaml(mapping)) == mapping
+
+
+def test_list_properties_serialize_and_round_trip() -> None:
+    mapping = project_to_mapping(
+        extract_schema_from_ddl(
+            """
+            CREATE TABLE person (id INT PRIMARY KEY, name TEXT);
+            CREATE TABLE person_email (person_id INT REFERENCES person(id), email TEXT, PRIMARY KEY (person_id, email));
+            """,
+            dialect="postgres",
+        )
+    ).mapping
+    yaml_text = mapping_to_yaml(mapping)
+    assert "list_properties:" in yaml_text
+    assert "person_email" in yaml_text
+    assert SchemaMapping.from_yaml_string(yaml_text) == mapping  # exact round-trip
 
 
 def test_empty_edge_properties_are_omitted(tpch_ddl: str) -> None:

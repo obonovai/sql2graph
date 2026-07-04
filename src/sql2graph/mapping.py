@@ -127,6 +127,34 @@ def _check_property_types_subset(
         raise ValueError(f"property_types keys {sorted(orphan)} are not declared properties")
 
 
+class ListProperty(_StrictModel):
+    """A multi-valued node property materialised from a child table.
+
+    LDBC-style multi-valued attributes - the ``email`` addresses a Person owns,
+    the ``language``s they ``speak`` - are stored relationally in a dedicated
+    child table keyed by the parent's id (``person_email(person_id, email)``,
+    ``person_speaks(person_id, language)``). In the property graph they are a
+    **list property on the parent node**, not separate nodes: the scalar
+    :class:`NodeMapping.properties` shape (one graph property <- one column of the
+    node's own ``source_table``) cannot express them, so a :class:`NodeMapping`
+    declares one :class:`ListProperty` per multi-valued attribute instead.
+
+    Attributes:
+        source_table: The child table holding the values (e.g. ``person_email``).
+        foreign_key: The child-table column referencing the parent node's key
+            (e.g. ``person_id``); the join is ``source_table.foreign_key =
+            <parent>.primary_key``.
+        column: The child-table column holding each element value (e.g. ``email``).
+        type: Optional :class:`SemanticType` of each element, surfaced in the
+            prompt so the LLM knows the element type. ``None`` when untyped.
+    """
+
+    source_table: NonBlankStr
+    foreign_key: NonBlankStr
+    column: NonBlankStr
+    type: SemanticType | None = None
+
+
 class NodeMapping(_StrictModel):
     """A single graph node label, sourced from one relational table.
 
@@ -143,6 +171,10 @@ class NodeMapping(_StrictModel):
         property_types: Optional mapping from graph property name to a
             :class:`SemanticType`, surfaced in the prompt so the LLM knows a
             value's type instead of guessing it. Empty when untyped.
+        list_properties: Optional mapping from graph property name to a
+            :class:`ListProperty` describing a multi-valued attribute sourced
+            from a child table (e.g. ``email``, ``language``). Empty for the
+            common single-table node.
         primary_key: SQL column that uniquely identifies rows in
             ``source_table``. Used by the LLM to reason about joins.
     """
@@ -151,6 +183,7 @@ class NodeMapping(_StrictModel):
     source_table: NonBlankStr
     properties: dict[NonBlankStr, NonBlankStr]
     property_types: dict[NonBlankStr, SemanticType] = Field(default_factory=dict)
+    list_properties: dict[NonBlankStr, ListProperty] = Field(default_factory=dict)
     primary_key: NonBlankStr
 
     @model_validator(mode="before")
@@ -161,6 +194,14 @@ class NodeMapping(_StrictModel):
     @model_validator(mode="after")
     def _validate_property_types(self) -> Self:
         _check_property_types_subset(self.properties, self.property_types)
+        return self
+
+    @model_validator(mode="after")
+    def _reject_property_name_clash(self) -> Self:
+        """A graph property name must be either scalar or a list, not both."""
+        clash = set(self.properties) & set(self.list_properties)
+        if clash:
+            raise ValueError(f"property name(s) declared as both scalar and list: {sorted(clash)}")
         return self
 
 
@@ -231,10 +272,16 @@ class SchemaMapping(_StrictModel):
         """Every relational table this mapping covers (node + edge sources).
 
         Returned with each table's casing exactly as written in the mapping.
-        Coverage comparisons against a SQL query are case-insensitive and live
-        in :func:`sql2graph.preflight.find_unmapped_tables`, not here.
+        Includes the child tables backing multi-valued list properties, so a SQL
+        query reading ``person_email`` is not flagged as unmapped. Coverage
+        comparisons against a SQL query are case-insensitive and live in
+        :func:`sql2graph.preflight.find_unmapped_tables`, not here.
         """
-        return {n.source_table for n in self.nodes} | {e.source_table for e in self.edges}
+        return (
+            {n.source_table for n in self.nodes}
+            | {e.source_table for e in self.edges}
+            | {lp.source_table for n in self.nodes for lp in n.list_properties.values()}
+        )
 
     def node_labels(self) -> set[str]:
         """The set of declared graph node labels."""
