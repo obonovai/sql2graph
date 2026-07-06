@@ -61,6 +61,16 @@ class AnthropicConfig(BaseModel):
     max_output_tokens: int = 4096
     max_retries: int = Field(default=3, ge=0)
 
+    # Reasoning controls. ``thinking="adaptive"`` turns on extended thinking (the
+    # model decides when and how much to think); omitting it -- the default -- means
+    # Opus 4.7/4.8 run with *no* thinking at all. ``effort`` maps to the API's
+    # ``output_config.effort`` (``low|medium|high|xhigh|max`` on Opus 4.7/4.8);
+    # ``None`` sends nothing, i.e. the API default of ``high``. Note the older
+    # ``thinking={"type":"enabled","budget_tokens":N}`` form is *rejected* (HTTP 400)
+    # on Opus 4.7/4.8 -- adaptive thinking + ``effort`` is the replacement.
+    thinking: Literal["off", "adaptive"] = "off"
+    effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+
 
 class AnthropicLLMClient:
     """Synchronous chat client for the direct Anthropic API.
@@ -89,6 +99,8 @@ class AnthropicLLMClient:
         self._model = config.model
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens
+        self._thinking = config.thinking
+        self._effort = config.effort
 
     def chat(self, messages: list[dict[str, Any]], *, temperature: float | None = None) -> ChatReply:
         kwargs = _build_anthropic_kwargs(
@@ -96,6 +108,8 @@ class AnthropicLLMClient:
             model=self._model,
             max_tokens=self._max_tokens,
             temperature=self._temperature if temperature is None else temperature,
+            thinking=self._thinking,
+            effort=self._effort,
         )
         response = self._client.messages.create(**kwargs)
         usage = _anthropic_usage(response, self._model)
@@ -129,6 +143,8 @@ def _build_anthropic_kwargs(
     model: str,
     max_tokens: int,
     temperature: float,
+    thinking: str = "off",
+    effort: str | None = None,
 ) -> dict[str, Any]:
     """Shared kwargs builder for the sync and async Anthropic clients.
 
@@ -164,6 +180,14 @@ def _build_anthropic_kwargs(
                 "cache_control": {"type": "ephemeral"},
             }
         ]
+    # Extended thinking is opt-in: only Opus 4.7/4.8's adaptive mode is wired up here
+    # (the `budget_tokens` form 400s on those models). `effort` rides in `extra_body`
+    # so it reaches the request body regardless of whether the installed SDK types
+    # `output_config` yet; the API reads it identically either way.
+    if thinking == "adaptive":
+        kwargs["thinking"] = {"type": "adaptive"}
+    if effort is not None:
+        kwargs["extra_body"] = {"output_config": {"effort": effort}}
     return kwargs
 
 
@@ -220,6 +244,8 @@ class AsyncAnthropicLLMClient:
         self._model = config.model
         self._temperature = config.temperature
         self._max_tokens = config.max_output_tokens
+        self._thinking = config.thinking
+        self._effort = config.effort
 
     async def chat(
         self,
@@ -233,6 +259,8 @@ class AsyncAnthropicLLMClient:
             model=self._model,
             max_tokens=self._max_tokens,
             temperature=self._temperature if temperature is None else temperature,
+            thinking=self._thinking,
+            effort=self._effort,
         )
 
         if stream_to is None:

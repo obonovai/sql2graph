@@ -77,8 +77,20 @@ def make_llm_for(rc: RunConfig):
             )
         )
     if rc.provider == "anthropic":
-        # api_key omitted -> SDK reads $ANTHROPIC_API_KEY.
-        return make_llm(AnthropicConfig(model=rc.model, temperature=rc.temperature))
+        # api_key omitted -> SDK reads $ANTHROPIC_API_KEY. thinking/effort default to
+        # off/None so the plain opus rows are unchanged; the thinking variant sets them
+        # (adaptive + xhigh) plus a larger max_output_tokens (thinking spends the same
+        # output budget). The real model id (rc.model) is what hits the API -- rc.label
+        # is only a stratification key for records/metrics.
+        return make_llm(
+            AnthropicConfig(
+                model=rc.model,
+                temperature=rc.temperature,
+                max_output_tokens=rc.max_output_tokens,
+                thinking=rc.thinking,
+                effort=rc.effort,
+            )
+        )
     raise ValueError(f"Unknown provider: {rc.provider!r}")
 
 
@@ -154,7 +166,9 @@ def run_translation(rc: RunConfig) -> list[dict]:
             dataset=rc.dataset,
             query_id=item.query_id,
             target=rc.target,
-            model=rc.model,
+            # Stratify on the label when set (e.g. the thinking variant) so it reads
+            # as its own model across every metric notebook; falls back to rc.model.
+            model=rc.label or rc.model,
             provider=rc.provider,
             difficulty=item.difficulty,
             sql_features=item.sql_features,

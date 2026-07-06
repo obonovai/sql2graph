@@ -22,6 +22,9 @@ from __future__ import annotations
 MODEL_PRICING: dict[str, tuple[float, float]] = {
     # Confirmed against platform.claude.com for the recorded opus-4-8 run.
     "claude-opus-4-8": (5.0, 25.0),
+    # Same model + rates, distinct stratification label for the thinking variant.
+    # Thinking tokens bill as output tokens, so the output rate already covers them.
+    "claude-opus-4-8-thinking": (5.0, 25.0),
     "claude-opus-4-7": (5.0, 25.0),
 }
 

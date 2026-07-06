@@ -87,6 +87,17 @@ class RunConfig:
     validation_mode: ValidationMode | None = None
     max_iterations: int = 3
     temperature: float = 0.0
+    # Anthropic reasoning knobs (ignored for provider="ollama"). thinking="adaptive"
+    # turns on extended thinking; effort maps to output_config.effort (Opus 4.7/4.8
+    # accept low|medium|high|xhigh|max; None = the API default "high"). label is the
+    # stratification id used for the records filename and record["model"], so a
+    # thinking variant of a model gets its own record file rather than colliding with
+    # -- and resume-skipping -- the plain run. max_output_tokens is raised for the
+    # thinking variant, since extended thinking spends the same output budget.
+    label: str | None = None
+    thinking: Literal["off", "adaptive"] = "off"
+    effort: str | None = None
+    max_output_tokens: int = 4096
     # Ollama-specific knob (ignored for provider="anthropic"). The Ollama endpoint
     # is not configured here: the SDK resolves $OLLAMA_HOST (its default when unset).
     num_ctx: int = 16384
@@ -104,8 +115,13 @@ def model_slug(model: str) -> str:
 
 
 def records_filename(rc: RunConfig) -> str:
-    """Per-cell records file, e.g. ``records_ldbc_cypher_qwen3-coder_30b.json``."""
-    return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.model)}.json"
+    """Per-cell records file, e.g. ``records_ldbc_cypher_qwen3-coder_30b.json``.
+
+    Keyed on ``rc.label or rc.model`` so a variant of a model (e.g. the same model
+    run with thinking on) writes to its own file instead of overwriting/resuming
+    the plain run's records.
+    """
+    return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.label or rc.model)}.json"
 
 
 # The evaluation matrix: LDBC x {cypher, aql, gremlin} x 4 models. Extend by
@@ -130,4 +146,18 @@ RUN_MATRIX: list[RunConfig] = [
     RunConfig(dataset="ldbc", target="gremlin", model="qwen3-coder:30b", provider="ollama"),
     RunConfig(dataset="ldbc", target="gremlin", model="gemma4:26b", provider="ollama"),
     RunConfig(dataset="ldbc", target="gremlin", model="claude-opus-4-8", provider="anthropic"),
+    # 5th option: the same claude-opus-4-8, but with adaptive (extended) thinking on
+    # and effort="xhigh" -- a fair comparison against the reasoning Ollama models. The
+    # `label` stratifies it separately from the plain opus-4-8 rows above (own records
+    # file, own series in every metric/plot); the real model sent to the API is still
+    # claude-opus-4-8. max_output_tokens is raised so thinking has room to breathe.
+    RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic",
+              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
+              max_output_tokens=16000),
+    RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic",
+              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
+              max_output_tokens=16000),
+    RunConfig(dataset="ldbc", target="gremlin", model="claude-opus-4-8", provider="anthropic",
+              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
+              max_output_tokens=16000),
 ]
