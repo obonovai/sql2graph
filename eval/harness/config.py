@@ -124,6 +124,14 @@ def records_filename(rc: RunConfig) -> str:
     return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.label or rc.model)}.json"
 
 
+# Stratification labels for reasoning variants (adaptive thinking + effort). A row with
+# label="claude-opus-4-8-thinking" still calls the real claude-opus-4-8 on the API, but
+# records/metrics/plots stratify on the label, so the thinking run is its own series. The
+# notebooks import this to keep the thinking variant *out* of the shared 4-model comparison
+# views and show it in a dedicated section instead. Extend it if you add more variants.
+THINKING_LABELS: tuple[str, ...] = ("claude-opus-4-8-thinking",)
+
+
 # The evaluation matrix: LDBC x {cypher, aql, gremlin} x 4 models. Extend by
 # appending rows, e.g. a server-validated cell:
 #   RunConfig(dataset="ldbc", target="aql", model="qwen3-coder:30b",

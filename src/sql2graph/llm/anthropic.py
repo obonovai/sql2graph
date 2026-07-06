@@ -199,20 +199,30 @@ def _anthropic_usage(response: Any, model: str) -> TokenUsage:
     prompt portion; the API reports cache reads/writes separately, which map
     onto the ``cache_read_tokens`` / ``cache_creation_tokens`` fields.
     """
+    # A ``thinking`` (or ``redacted_thinking``) content block is present only when the
+    # model actually engaged extended thinking -- adaptive thinking omits the block
+    # entirely when it decides not to think -- so its presence is the exact "thinking
+    # used" signal (independent of ``display``, which only controls the block's text).
+    thinking_used = any(
+        getattr(block, "type", None) in ("thinking", "redacted_thinking")
+        for block in (getattr(response, "content", None) or [])
+    )
     if response.usage is None:
-        return TokenUsage()
+        return TokenUsage(thinking_used=thinking_used)
     usage = TokenUsage(
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
         cache_read_tokens=getattr(response.usage, "cache_read_input_tokens", 0) or 0,
         cache_creation_tokens=getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+        thinking_used=thinking_used,
     )
     logger.info(
-        "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d tokens (model=%s)",
+        "Anthropic call: input=%d output=%d cache_read=%d cache_write=%d thinking=%s tokens (model=%s)",
         usage.input_tokens,
         usage.output_tokens,
         usage.cache_read_tokens,
         usage.cache_creation_tokens,
+        thinking_used,
         model,
     )
     return usage

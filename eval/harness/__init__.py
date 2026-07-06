@@ -36,6 +36,7 @@ from .config import (
     REPO_ROOT,
     REPORTS_DIR,
     RUN_MATRIX,
+    THINKING_LABELS,
     Provider,
     RunConfig,
     Target,
@@ -90,6 +91,7 @@ __all__ = [
     "EXECUTION_CACHE_PATH",
     # config: the matrix
     "RUN_MATRIX",
+    "THINKING_LABELS",
     "RunConfig",
     "Provider",
     "Target",

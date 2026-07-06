@@ -61,6 +61,9 @@ class AttemptRecord:
     cache_read_tokens: int
     cache_creation_tokens: int
     total_tokens: int
+    # True if the model produced an extended-thinking block on any iteration of this
+    # translation (exact, from the Anthropic response). Always False for Ollama.
+    thinking_used: bool
     # --- harness error (e.g. backend unreachable), distinct from validation ---
     error: str | None
 
@@ -187,6 +190,7 @@ def run_translation(rc: RunConfig) -> list[dict]:
             cache_read_tokens=usage.cache_read_tokens if usage else 0,
             cache_creation_tokens=usage.cache_creation_tokens if usage else 0,
             total_tokens=usage.total_tokens if usage else 0,
+            thinking_used=usage.thinking_used if usage else False,
             error=error_message,
         )
         records.append(asdict(record))

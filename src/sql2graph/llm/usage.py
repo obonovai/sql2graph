@@ -37,6 +37,11 @@ class TokenUsage(BaseModel):
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    # True if *any* accumulated call produced an extended-thinking block. Set by the
+    # Anthropic client from the response content (a ``thinking`` block is present only
+    # when the model actually thinks); always False for Ollama. Accumulates by OR, so a
+    # multi-iteration translation is "thinking used" if thinking engaged on any turn.
+    thinking_used: bool = False
 
     # @computed_field surfaces total_tokens in model_dump()/model_dump_json()
     # for eval + display. mypy can't model the property/decorator stack, hence
@@ -52,6 +57,7 @@ class TokenUsage(BaseModel):
             output_tokens=self.output_tokens + other.output_tokens,
             cache_read_tokens=self.cache_read_tokens + other.cache_read_tokens,
             cache_creation_tokens=self.cache_creation_tokens + other.cache_creation_tokens,
+            thinking_used=self.thinking_used or other.thinking_used,
         )
 
 
