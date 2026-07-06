@@ -8,7 +8,9 @@ from typing import Any
 from sql2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
 
 
-def test_translator_emits_event_sequence_on_first_try_success(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_emits_event_sequence_on_first_try_success(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """One-shot success: Generated → Validated(passed=True) → Completed."""
     from sql2graph import CompletedEvent, GeneratedEvent, TranslationEvent, ValidatedEvent
 
@@ -34,7 +36,9 @@ def test_translator_emits_event_sequence_on_first_try_success(scripted_llm: Call
     assert events[2].result.status == "success"
 
 
-def test_translator_emits_event_sequence_on_fix_loop(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_emits_event_sequence_on_fix_loop(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """One fix cycle: Generated → Validated(failed) → FixGenerated → Validated(passed) → Completed."""
     from sql2graph import (
         CompletedEvent,
@@ -76,7 +80,9 @@ def test_translator_emits_event_sequence_on_fix_loop(scripted_llm: Callable[...,
     assert isinstance(events[4], CompletedEvent)
 
 
-def test_translator_emits_max_iterations_event_when_loop_gives_up(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_emits_max_iterations_event_when_loop_gives_up(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import CompletedEvent, MaxIterationsReachedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (p:Person"] * 3)  # always invalid
@@ -99,7 +105,9 @@ def test_translator_emits_max_iterations_event_when_loop_gives_up(scripted_llm: 
     assert events[-1].result.status == "max_iterations_reached"
 
 
-def test_translator_translates_without_on_event_handler(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_translates_without_on_event_handler(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """Backwards-compat: omitting on_event must not change behavior."""
     fake = scripted_llm(["MATCH (p) RETURN p"])
     with SQLTranslator(
@@ -112,7 +120,9 @@ def test_translator_translates_without_on_event_handler(scripted_llm: Callable[.
     assert result.status == "success"
 
 
-def test_translator_swallows_handler_exceptions(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_swallows_handler_exceptions(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """A misbehaving handler must not abort the translation."""
 
     def boom(_event: object) -> None:

@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from sql2graph import CypherSyntaxValidator, CypherTarget, SQLTranslator
-from sql2graph.preflight import PreflightAction
+from sql2graph import CypherSyntaxValidator, CypherTarget, PreflightAction, SQLTranslator
 
 
-def test_translator_rejects_unmapped_tables_without_calling_llm(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_rejects_unmapped_tables_without_calling_llm(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import CompletedEvent, TranslationEvent, UnmappedTablesEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])  # must never be consumed
@@ -35,7 +36,9 @@ def test_translator_rejects_unmapped_tables_without_calling_llm(scripted_llm: Ca
     assert isinstance(events[-1], CompletedEvent)
 
 
-def test_translator_warns_on_parse_failure_but_still_translates(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_warns_on_parse_failure_but_still_translates(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import GeneratedEvent, ParseFailedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -58,7 +61,9 @@ def test_translator_warns_on_parse_failure_but_still_translates(scripted_llm: Ca
     assert events.index(parse_events[0]) < next(i for i, e in enumerate(events) if isinstance(e, GeneratedEvent))
 
 
-def test_translator_no_preflight_events_for_mapped_query(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_no_preflight_events_for_mapped_query(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
 
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -74,7 +79,9 @@ def test_translator_no_preflight_events_for_mapped_query(scripted_llm: Callable[
     assert not any(isinstance(e, (ParseFailedEvent, UnmappedTablesEvent)) for e in events)
 
 
-def test_translator_does_not_flag_cte_name_as_unmapped(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_does_not_flag_cte_name_as_unmapped(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     # A CTE alias must not be mistaken for an unmapped table: the underlying
     # 'persons' is mapped, so this translates normally.
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -90,7 +97,9 @@ def test_translator_does_not_flag_cte_name_as_unmapped(scripted_llm: Callable[..
     assert result.unmapped_tables == []
 
 
-def test_translator_ignore_action_keeps_legacy_behavior(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_ignore_action_keeps_legacy_behavior(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     # With both actions IGNORE, an unmapped table is translated as before
     # (the LLM is called, no preflight events, no rejection).
     from sql2graph import ParseFailedEvent, TranslationEvent, UnmappedTablesEvent
@@ -112,7 +121,9 @@ def test_translator_ignore_action_keeps_legacy_behavior(scripted_llm: Callable[.
     assert not any(isinstance(e, (ParseFailedEvent, UnmappedTablesEvent)) for e in events)
 
 
-def test_translator_warns_on_unmapped_column_when_configured_to_warn(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_warns_on_unmapped_column_when_configured_to_warn(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import GeneratedEvent, TranslationEvent, UnmappedColumnsEvent
 
     fake = scripted_llm(["MATCH (f:Forum) RETURN f"])
@@ -137,7 +148,9 @@ def test_translator_warns_on_unmapped_column_when_configured_to_warn(scripted_ll
     assert events.index(parse[0]) < next(i for i, e in enumerate(events) if isinstance(e, GeneratedEvent))
 
 
-def test_translator_rejects_unmapped_column_by_default(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_rejects_unmapped_column_by_default(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import CompletedEvent, TranslationEvent
 
     fake = scripted_llm(["MATCH (f:Forum) RETURN f"])  # must never be consumed
@@ -159,7 +172,9 @@ def test_translator_rejects_unmapped_column_by_default(scripted_llm: Callable[..
     assert isinstance(events[-1], CompletedEvent)
 
 
-def test_translator_no_column_signal_for_mapped_or_star_queries(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_no_column_signal_for_mapped_or_star_queries(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     from sql2graph import TranslationEvent, UnmappedColumnsEvent
 
     for sql in ("SELECT * FROM persons", "SELECT full_name FROM persons WHERE id = 1"):

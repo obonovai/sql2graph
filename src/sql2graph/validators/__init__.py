@@ -88,7 +88,7 @@ class QueryValidator(Protocol):
 class AsyncQueryValidator(Protocol):
     """Structural type for any async query validator.
 
-    Consumed by :class:`sql2graph.async_translator.AsyncSQLTranslator`.
+    Consumed by :class:`sql2graph.engine.async_translator.AsyncSQLTranslator`.
     Same shape as :class:`QueryValidator` with both methods made async.
     """
 

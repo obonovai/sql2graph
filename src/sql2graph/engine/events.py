@@ -1,6 +1,6 @@
 """Typed events emitted by the translation loop.
 
-The :meth:`~sql2graph.translator.SQLTranslator.translate` method accepts an
+The :meth:`~sql2graph.engine.translator.SQLTranslator.translate` method accepts an
 optional ``on_event`` callback that fires at every milestone of the
 generate-validate-fix loop. This gives consumers (notably the Streamlit UI)
 a structured, decoupled hook for live progress display, replacing the
@@ -37,7 +37,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sql2graph.state import TranslationResult
+from sql2graph.engine.state import TranslationResult
 
 
 @dataclass(frozen=True)
@@ -162,8 +162,8 @@ class MaxIterationsReachedEvent:
 class CompletedEvent:
     """Final event of a translation, always emitted last.
 
-    Carries the same :class:`~sql2graph.state.TranslationResult` that
-    :meth:`~sql2graph.translator.SQLTranslator.translate` returns.
+    Carries the same :class:`~sql2graph.engine.state.TranslationResult` that
+    :meth:`~sql2graph.engine.translator.SQLTranslator.translate` returns.
     """
 
     result: TranslationResult

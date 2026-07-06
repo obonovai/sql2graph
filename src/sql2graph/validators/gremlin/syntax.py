@@ -18,9 +18,9 @@ property checks.
 
 from __future__ import annotations
 
-from sql2graph.validators._grammar.errors import parse_errors
 from sql2graph.validators._grammar.generated.gremlin.GremlinLexer import GremlinLexer
 from sql2graph.validators._grammar.generated.gremlin.GremlinParser import GremlinParser
+from sql2graph.validators._grammar.runtime import parse_errors
 
 # Entry rule of TinkerPop's Gremlin grammar; anchors EOF, so trailing input is reported.
 _START_RULE = "queryList"

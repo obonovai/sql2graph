@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sql2graph.events import ConversationCallback
+from sql2graph.engine.events import ConversationCallback
 from sql2graph.llm import AsyncLLMClient, LLMClient, TokenUsage
 from sql2graph.mapping import SchemaMapping
 from sql2graph.mapping_builder.ddl import DdlParseError, extract_schema_from_ddl

@@ -19,9 +19,7 @@ def test_extract_inline_pk_and_not_null() -> None:
 
 
 def test_extract_table_level_and_composite_pk() -> None:
-    schema = extract_schema_from_ddl(
-        "CREATE TABLE t (a INT, b INT, c INT, PRIMARY KEY (a, b));"
-    )
+    schema = extract_schema_from_ddl("CREATE TABLE t (a INT, b INT, c INT, PRIMARY KEY (a, b));")
     table = schema.table("t")
     assert table is not None
     assert table.primary_key == ("a", "b")
@@ -56,18 +54,14 @@ def test_extract_drops_schema_qualifier_and_preserves_casing() -> None:
 
 
 def test_extract_skips_views_and_records_them() -> None:
-    schema = extract_schema_from_ddl(
-        "CREATE TABLE t (id INT PRIMARY KEY); CREATE VIEW v AS SELECT 1;"
-    )
+    schema = extract_schema_from_ddl("CREATE TABLE t (id INT PRIMARY KEY); CREATE VIEW v AS SELECT 1;")
     assert schema.table("v") is None
     assert schema.table_names() == {"t"}
     assert [(o.name, o.kind) for o in schema.skipped_objects] == [("v", "view")]
 
 
 def test_extract_self_referential_fk_and_omitted_ref_columns() -> None:
-    schema = extract_schema_from_ddl(
-        "CREATE TABLE node (id INT PRIMARY KEY, parent_id INT REFERENCES node);"
-    )
+    schema = extract_schema_from_ddl("CREATE TABLE node (id INT PRIMARY KEY, parent_id INT REFERENCES node);")
     table = schema.table("node")
     assert table is not None
     fk = table.foreign_keys[0]

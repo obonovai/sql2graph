@@ -28,7 +28,9 @@ def test_build_mapping_noop_refinement(tpch_ddl: str, oneshot_llm: Callable[...,
     assert any("rejected" in w.lower() for w in result.warnings)
 
 
-def test_build_mapping_with_llm_refines(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_build_mapping_with_llm_refines(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     improved = mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION")
     result = build_mapping(ddl=tpch_ddl, dialect="postgres", llm=oneshot_llm(improved))
@@ -64,7 +66,12 @@ def test_report_as_dict_lists_junctions_and_warnings(tpch_ddl: str) -> None:
     assert isinstance(data["warnings"], list)
 
 
-def test_build_mapping_async_streams_and_matches_sync(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_async_llm: Callable[..., Any], oneshot_llm: Callable[..., Any]) -> None:
+def test_build_mapping_async_streams_and_matches_sync(
+    tpch_skeleton: Callable[..., Any],
+    tpch_ddl: str,
+    oneshot_async_llm: Callable[..., Any],
+    oneshot_llm: Callable[..., Any],
+) -> None:
     skeleton = tpch_skeleton()
     improved = mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION")
     snapshots: list[list[dict[str, str]]] = []

@@ -36,7 +36,7 @@ SQL + mapping
    v
 pre-flight gate (input side, before the LLM): mapping validity + SQL parse +
    unmapped tables/columns. Rejects bad input so the LLM is never asked to
-   translate against a broken schema. (See preflight.py and mapping.py.)
+   translate against a broken schema. (See engine/preflight.py and mapping.py.)
    |
    v
 LLM generates a candidate query
@@ -50,7 +50,7 @@ validator.validate(query)  <-- syntax (this doc) | server | none
 ```
 
 Syntax validation is the **output side**: it checks the query the LLM produced.
-The input-side mapping/SQL gate is separate (see `preflight.py` and the
+The input-side mapping/SQL gate is separate (see `engine/preflight.py` and the
 `SchemaMapping` validation in `mapping.py`).
 
 ## 2. Why grammar-based instead of regex
@@ -157,7 +157,7 @@ the pure-Python `antlr4-python3-runtime` (no Java, no codegen).
 
 ### The shared parse routine
 
-Both syntax validators delegate to one function in `_grammar/errors.py`. It
+Both syntax validators delegate to one function in `_grammar/runtime.py`. It
 attaches a listener that **collects** ANTLR's syntax errors (instead of printing
 them) as `line:col` strings, runs the grammar's start rule, and returns the
 (capped) list:
@@ -225,7 +225,7 @@ scheduling overhead without unblocking the event loop.
 ### How errors reach the LLM
 
 `validate()` returns a `list[str]`. The translator stores it on the state and,
-when non-empty, passes it to `build_fix_prompt(...)` (see `prompts.py`), so the
+when non-empty, passes it to `build_fix_prompt(...)` (see `engine/prompts.py`), so the
 LLM sees messages like:
 
 ```
@@ -237,7 +237,7 @@ That precise, located message is the main advantage over the old regex strings.
 ## 5. Implementation steps (reproducible recipe)
 
 1. **Vendor the grammars.** Copy each engine's official ANTLR grammar into
-   `src/sql2graph/validators/grammars/` and record provenance (upstream URL,
+   `src/sql2graph/validators/_grammar/sources/` and record provenance (upstream URL,
    version, license, any edits) in `grammars/README.md`. Both grammars are
    Apache-2.0 and vendored verbatim. See section 9 for sources.
 2. **Get the toolchain.** Regeneration (dev-time only) needs a JDK and the ANTLR
@@ -259,7 +259,7 @@ That precise, located message is the main advantage over the old regex strings.
    parameter annotations at definition time, so `String` raises `NameError`;
    3.14 does not. PEP 563 makes every annotation a lazy string, so the undefined
    Java types are never evaluated. The generated parsers are then **committed**.
-4. **Add the shared plumbing** `_grammar/errors.py` (`_CollectingErrorListener`
+4. **Add the shared plumbing** `_grammar/runtime.py` (`_CollectingErrorListener`
    + `parse_errors`), as shown in section 4.
 5. **Write the validator classes** `cypher/syntax.py`, `gremlin/syntax.py`, and
    `aql/syntax.py`: keep the empty-query fast path, delegate to `parse_errors`
@@ -355,7 +355,7 @@ best-effort, and the `server` / `managed` validator remains authoritative.
   `gremlin-language/src/main/antlr4/Gremlin.g4`, Apache-2.0.
   <https://github.com/apache/tinkerpop>
 - ANTLR Python target runtime: `antlr4-python3-runtime` (4.13.x).
-- See also: `src/sql2graph/validators/grammars/README.md` (provenance),
+- See also: `src/sql2graph/validators/_grammar/sources/README.md` (provenance),
   [API.md](API.md) (public validator surface), and [ARCHITECTURE.md](ARCHITECTURE.md)
   (the generate-validate-fix loop and module responsibilities).
 

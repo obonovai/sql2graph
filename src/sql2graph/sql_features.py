@@ -1,7 +1,7 @@
 """Learn what we can from parsing a SQL query once: which operations it uses
 and which tables it reads.
 
-The system prompt assembled by :mod:`sql2graph.prompts` is the largest
+The system prompt assembled by :mod:`sql2graph.engine.prompts` is the largest
 per-translation input the LLM sees. Historically every translation received
 the full rule set for the target language, including, for example, Cypher's
 14-line ``LIKE``/``ILIKE`` mapping table even on queries with no string
@@ -145,7 +145,7 @@ def detect_features(sql_query: str, *, dialect: str | None = None) -> frozenset[
     """Return the set of :class:`SqlFeature` values present in *sql_query*.
 
     Thin delegate over :func:`analyze_sql`; preserved as the entry point for
-    callers (notably :func:`sql2graph.prompts.build_system_prompt`) that only
+    callers (notably :func:`sql2graph.engine.prompts.build_system_prompt`) that only
     need the feature set. Returns :data:`ALL_FEATURES` on parser failure so an
     unparseable query still receives the full rule set rather than a
     silently-trimmed one.

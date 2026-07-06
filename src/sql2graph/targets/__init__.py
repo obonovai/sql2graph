@@ -19,7 +19,7 @@ no abstract base class to inherit from.
 Adding a further target language (e.g. SPARQL) requires implementing the
 Protocol in a new module and extending :func:`make_target` to recognise
 its name. Note that
-:attr:`sql2graph.state.TranslationState.target_language` is a
+:attr:`sql2graph.engine.state.TranslationState.target_language` is a
 ``Literal["cypher", "aql", "gremlin"]``; widening that literal is the
 one non-Protocol-friendly step in adding a new target.
 """

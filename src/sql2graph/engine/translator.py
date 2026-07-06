@@ -27,26 +27,24 @@ from __future__ import annotations
 import logging
 from time import perf_counter
 from types import TracebackType
-from typing import Any, Self
+from typing import Self
 
-from sql2graph.events import (
+from sql2graph.engine._loop import build_result, emit_event, snapshot_messages, to_message
+from sql2graph.engine.events import (
     CompletedEvent,
     EventHandler,
     FixGeneratedEvent,
     GeneratedEvent,
     MaxIterationsReachedEvent,
     StalledEvent,
-    TranslationEvent,
     ValidatedEvent,
 )
-from sql2graph.llm import LLMClient
-from sql2graph.mapping import SchemaMapping
-from sql2graph.preflight import (
+from sql2graph.engine.preflight import (
     PreflightAction,
     build_rejected_result,
     evaluate_preflight,
 )
-from sql2graph.prompts import (
+from sql2graph.engine.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
     build_generate_prompt,
@@ -54,8 +52,10 @@ from sql2graph.prompts import (
     error_signature,
     normalize_query,
 )
+from sql2graph.engine.state import TranslationResult, TranslationState
+from sql2graph.llm import LLMClient
+from sql2graph.mapping import SchemaMapping
 from sql2graph.sql_features import analyze_sql
-from sql2graph.state import TranslationResult, TranslationState
 from sql2graph.targets import TargetLanguage
 from sql2graph.validators import QueryValidator
 
@@ -90,7 +90,7 @@ class SQLTranslator:
         self._target = target
         self._validator = validator
         self._max_iterations = max_iterations
-        # Input-side pre-flight policy (see sql2graph.preflight). Defaults match
+        # Input-side pre-flight policy (see sql2graph.engine.preflight). Defaults match
         # the product decision: warn-and-translate on an unparseable query (a
         # weak signal: sqlglot can false-fail on valid exotic SQL), and reject on
         # a query that reads tables (or names columns of a mapped table) absent
@@ -144,13 +144,13 @@ class SQLTranslator:
             on_event: Optional callback invoked at each loop milestone
                 (initial generation, each validation pass, each fix,
                 max-iterations hit, completion). See
-                :mod:`sql2graph.events`. Handler exceptions are caught,
+                :mod:`sql2graph.engine.events`. Handler exceptions are caught,
                 logged at WARNING, and do not abort the translation.
         """
         target_name = self._target.name
         if target_name not in ("cypher", "aql", "gremlin"):
             # TranslationState's Literal currently restricts to these three.
-            # See note in src/sql2graph/state.py about widening it.
+            # See note in src/sql2graph/engine/state.py about widening it.
             raise ValueError(f"Unsupported target language for TranslationState: {target_name!r}")
 
         # Pre-flight: parse the SQL once and decide whether to warn or reject
@@ -165,12 +165,12 @@ class SQLTranslator:
             self._unmapped_columns_action,
         )
         if outcome is not None:
-            _emit(on_event, outcome.event)
+            emit_event(on_event, outcome.event)
             if outcome.is_reject:
                 logger.info("Pre-flight rejected translation: %s", outcome.message)
                 self.last_messages = []
                 result = build_rejected_result(sql_query, target_name, outcome)
-                _emit(on_event, CompletedEvent(result=result))
+                emit_event(on_event, CompletedEvent(result=result))
                 return result
 
         # Provision the validator (e.g. boot a managed throwaway database) before
@@ -189,19 +189,19 @@ class SQLTranslator:
         features = analysis.features
         logger.info("Detected SQL features: %s", sorted(f.value for f in features))
         system_prompt = build_system_prompt(self._schema_mapping, self._target, features)
-        state.messages.append(_msg("system", system_prompt))
+        state.messages.append(to_message("system", system_prompt))
 
         user_msg = build_generate_prompt(sql_query)
-        state.messages.append(_msg("user", user_msg))
+        state.messages.append(to_message("user", user_msg))
 
         reply = self._llm.chat(state.messages)
         state.token_usage = state.token_usage + reply.usage
         raw_content = reply.text
-        state.messages.append(_msg("assistant", raw_content))
+        state.messages.append(to_message("assistant", raw_content))
         state.generated_query = self._target.extract_query(raw_content)
 
         logger.info("Initial query generated:\n%s", state.generated_query)
-        _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
+        emit_event(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
         # Stall tracking: a fix that reproduces the prior candidate, or draws
         # the *same* validator error twice running, means the loop is stuck. On
@@ -221,7 +221,7 @@ class SQLTranslator:
                 state.validation_passed = True
                 state.final_status = "success"
                 logger.info("Validation passed on iteration %d", state.validation_iteration)
-                _emit(
+                emit_event(
                     on_event,
                     ValidatedEvent(
                         iteration=state.validation_iteration,
@@ -238,7 +238,7 @@ class SQLTranslator:
                 len(errors),
                 errors,
             )
-            _emit(
+            emit_event(
                 on_event,
                 ValidatedEvent(
                     iteration=state.validation_iteration,
@@ -255,7 +255,7 @@ class SQLTranslator:
                     self._max_iterations,
                     errors,
                 )
-                _emit(
+                emit_event(
                     on_event,
                     MaxIterationsReachedEvent(
                         iteration=state.validation_iteration,
@@ -289,7 +289,7 @@ class SQLTranslator:
                     "No progress on iteration %d: escalating with a fresh context",
                     state.validation_iteration,
                 )
-                _emit(
+                emit_event(
                     on_event,
                     StalledEvent(
                         iteration=state.validation_iteration,
@@ -303,13 +303,13 @@ class SQLTranslator:
                     errors=errors,
                     repair_hint=repair_hint,
                 )
-                state.messages.append(_msg("user", escalation_msg))
+                state.messages.append(to_message("user", escalation_msg))
                 # Re-ask from a CLEAN context (system turn + this one). The
                 # accumulated history is several copies of the rejected query
                 # and its error, exactly what pins a low-temperature model to
                 # reproducing it. The full record still keeps the turn.
                 reply = self._llm.chat(
-                    [state.messages[0], _msg("user", escalation_msg)],
+                    [state.messages[0], to_message("user", escalation_msg)],
                     temperature=self._escalation_temperature,
                 )
             else:
@@ -319,16 +319,16 @@ class SQLTranslator:
                     errors=errors,
                     repair_hint=repair_hint,
                 )
-                state.messages.append(_msg("user", fix_msg))
+                state.messages.append(to_message("user", fix_msg))
                 reply = self._llm.chat(state.messages, temperature=self._fix_temperature)
 
             state.token_usage = state.token_usage + reply.usage
             raw_content = reply.text
-            state.messages.append(_msg("assistant", raw_content))
+            state.messages.append(to_message("assistant", raw_content))
             state.generated_query = self._target.extract_query(raw_content)
 
             logger.info("Fix iteration %d produced:\n%s", state.validation_iteration, state.generated_query)
-            _emit(
+            emit_event(
                 on_event,
                 FixGeneratedEvent(
                     iteration=state.validation_iteration,
@@ -338,24 +338,10 @@ class SQLTranslator:
 
         state.iterations_used = state.validation_iteration
         state.duration_seconds = perf_counter() - start_time
-        self.last_messages = [{"role": str(m["role"]), "content": str(m["content"])} for m in state.messages]
+        self.last_messages = snapshot_messages(state.messages)
 
-        result = TranslationResult(
-            sql_query=state.sql_query,
-            generated_query=state.generated_query,
-            target_language=state.target_language,
-            validation_passed=state.validation_passed,
-            validation_errors=state.validation_errors,
-            iterations_used=state.iterations_used,
-            status=state.final_status,
-            # A surviving ``outcome`` here is a WARN (a reject returned earlier),
-            # so the result stays self-describing about what the pre-flight flagged.
-            unmapped_tables=list(outcome.tables) if outcome is not None else [],
-            unmapped_columns=list(outcome.columns) if outcome is not None else [],
-            duration_seconds=state.duration_seconds,
-            token_usage=state.token_usage,
-        )
-        _emit(on_event, CompletedEvent(result=result))
+        result = build_result(state, outcome)
+        emit_event(on_event, CompletedEvent(result=result))
         return result
 
     def close(self) -> None:
@@ -370,22 +356,3 @@ class SQLTranslator:
             self._validator.close()
         finally:
             self._llm.close()
-
-
-def _msg(role: str, content: str) -> dict[str, Any]:
-    return {"role": role, "content": content}
-
-
-def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:
-    """Invoke an event handler, isolating its exceptions from the loop.
-
-    A misbehaving handler should not abort the user's translation; we log
-    the exception at WARNING and continue. The handler is responsible for
-    its own thread/coroutine safety.
-    """
-    if handler is None:
-        return
-    try:
-        handler(event)
-    except Exception:  # noqa: BLE001 (the whole point is to swallow user errors)
-        logger.warning("Event handler raised on %s", type(event).__name__, exc_info=True)

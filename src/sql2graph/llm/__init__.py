@@ -74,7 +74,7 @@ class AsyncLLMClient(Protocol):
     """Structural type for the async LLM backends.
 
     The async translator
-    (:class:`sql2graph.async_translator.AsyncSQLTranslator`) consumes this
+    (:class:`sql2graph.engine.async_translator.AsyncSQLTranslator`) consumes this
     Protocol. Implementations must define both :meth:`chat` and
     :meth:`close` as ``async``. Same shape as :class:`LLMClient` otherwise:
     one chat method that takes a flat message list and returns the

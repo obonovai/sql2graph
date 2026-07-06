@@ -190,7 +190,13 @@ def test_projection_is_valid_by_construction(tpch_ddl: str) -> None:
     result = project_to_mapping(extract_schema_from_ddl(tpch_ddl, dialect="postgres"))
     assert isinstance(result.mapping, SchemaMapping)
     assert {n.source_table for n in result.mapping.nodes} == {
-        "region", "nation", "supplier", "customer", "part", "orders", "lineitem"
+        "region",
+        "nation",
+        "supplier",
+        "customer",
+        "part",
+        "orders",
+        "lineitem",
     }
     assert result.report.edge_tables == ["partsupp"]
 
@@ -199,9 +205,7 @@ def test_label_collision_is_disambiguated() -> None:
     # `order` and `orders` both singularize/pascal to `Order`; the mapping must
     # still be valid (unique labels), with the collision flagged.
     result = project_to_mapping(
-        extract_schema_from_ddl(
-            "CREATE TABLE order (id INT PRIMARY KEY); CREATE TABLE orders (id INT PRIMARY KEY);"
-        )
+        extract_schema_from_ddl("CREATE TABLE order (id INT PRIMARY KEY); CREATE TABLE orders (id INT PRIMARY KEY);")
     )
     labels = sorted(n.label for n in result.mapping.nodes)
     assert labels == ["Order", "Order2"]
@@ -239,7 +243,9 @@ def test_projection_junction_to_empty_table_drops_edge_not_crash() -> None:
     )
     assert isinstance(result.mapping, SchemaMapping)
     assert result.mapping.edges == []
-    assert any("junction references a table that is not a node" in reason for _, reason in result.report.dropped_objects)
+    assert any(
+        "junction references a table that is not a node" in reason for _, reason in result.report.dropped_objects
+    )
 
 
 def test_projection_non_ascii_table_name_yields_non_blank_label() -> None:

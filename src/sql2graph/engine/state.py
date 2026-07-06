@@ -1,7 +1,7 @@
 """Loop state and public translation result.
 
 Every piece of mutable state used by the generate-validate-fix loop in
-:class:`sql2graph.translator.SQLTranslator` lives in :class:`TranslationState`.
+:class:`sql2graph.engine.translator.SQLTranslator` lives in :class:`TranslationState`.
 The motivation for a single, explicit Pydantic state model (rather than a
 collection of attributes on the translator object or a free-form dictionary)
 is twofold:
@@ -60,7 +60,7 @@ class TranslationState(BaseModel):
 class TranslationResult(BaseModel):
     """Public, immutable view of a completed translation.
 
-    Returned by :meth:`sql2graph.translator.SQLTranslator.translate`. Contains
+    Returned by :meth:`sql2graph.engine.translator.SQLTranslator.translate`. Contains
     only the fields that callers need to consume the outcome; the chat
     history and iteration counter are deliberately omitted.
 

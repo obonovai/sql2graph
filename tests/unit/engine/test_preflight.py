@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
-from sql2graph.preflight import find_unmapped_columns, find_unmapped_tables
+from sql2graph.engine.preflight import find_unmapped_columns, find_unmapped_tables
 
 
 def test_schema_mapping_source_tables_unions_nodes_and_edges(person_forum_schema: Callable[..., Any]) -> None:
@@ -60,7 +60,9 @@ def test_find_unmapped_columns_absorbs_join_keys_of_node_plus_edge_table() -> No
 def test_find_unmapped_columns_is_case_insensitive_and_sorted(person_forum_schema: Callable[..., Any]) -> None:
     # Covered comparison casefolds both sides; output keeps SQL casing, sorted.
     assert find_unmapped_columns(frozenset({("PERSONS", "Full_Name")}), person_forum_schema()) == []
-    assert find_unmapped_columns(frozenset({("forums", "z_missing"), ("forums", "a_missing")}), person_forum_schema()) == [
+    assert find_unmapped_columns(
+        frozenset({("forums", "z_missing"), ("forums", "a_missing")}), person_forum_schema()
+    ) == [
         "forums.a_missing",
         "forums.z_missing",
     ]

@@ -16,7 +16,7 @@ these dataclasses. A future second source (live-database introspection reading
 The types mirror the style of :class:`sql2graph.sql_features.SqlAnalysis`:
 frozen dataclasses, tuples rather than lists so instances stay hashable and
 obviously immutable, and identifiers stored with their original casing (all
-*comparisons* casefold, mirroring :mod:`sql2graph.preflight`).
+*comparisons* casefold, mirroring :mod:`sql2graph.engine.preflight`).
 """
 
 from __future__ import annotations

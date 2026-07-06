@@ -23,7 +23,7 @@ This module owns the *policy* (what each :class:`PreflightAction` does) and the
 single home for table/column-name normalization (:func:`find_unmapped_tables`,
 :func:`find_unmapped_columns`). The translators own only the plumbing: run
 :func:`evaluate_preflight`, emit the returned event, and on a reject build a
-terminal :class:`~sql2graph.state.TranslationResult`.
+terminal :class:`~sql2graph.engine.state.TranslationResult`.
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from sql2graph.events import ParseFailedEvent, UnmappedColumnsEvent, UnmappedTablesEvent
+from sql2graph.engine.events import ParseFailedEvent, UnmappedColumnsEvent, UnmappedTablesEvent
+from sql2graph.engine.state import TranslationResult
 from sql2graph.mapping import SchemaMapping
 from sql2graph.sql_features import SqlAnalysis
-from sql2graph.state import TranslationResult
 
 # Terminal ``TranslationResult.status`` strings emitted on the reject path.
 PARSE_ERROR_STATUS = "parse_error"

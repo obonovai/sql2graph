@@ -115,9 +115,7 @@ def project_to_mapping(schema: RelationalSchema) -> ProjectionResult:
 
     for t in node_tables:
         for fk in t.foreign_keys:
-            _append_fk_edge(
-                t, fk, schema, junctions, label_for, edges, report, seen_types, seen_edges
-            )
+            _append_fk_edge(t, fk, schema, junctions, label_for, edges, report, seen_types, seen_edges)
 
     for t in schema.tables:
         if t.name.casefold() in junctions:
@@ -255,9 +253,7 @@ def _build_node(
     pk_col, synthesized = choose_primary_key(table)
     if synthesized:
         report.synthesized_keys.append(table.name)
-        report.warnings.append(
-            f"Table '{table.name}' has no primary key; using column '{pk_col}' as the node key"
-        )
+        report.warnings.append(f"Table '{table.name}' has no primary key; using column '{pk_col}' as the node key")
     fk_cols = {c.casefold() for c in table.fk_columns()}
     # Non-FK columns become properties; the chosen key is always included even if
     # it happens to also be a foreign-key column (composite-key tables).
@@ -374,7 +370,10 @@ def _append_fk_edge(
     target_key = target.name.casefold()
     if target_key in junctions or target_key not in label_for:
         report.dropped_objects.append(
-            (f"{table.name}.{fk.columns[0]}", f"foreign key references '{fk.ref_table}', which is modeled as an edge; edge dropped")
+            (
+                f"{table.name}.{fk.columns[0]}",
+                f"foreign key references '{fk.ref_table}', which is modeled as an edge; edge dropped",
+            )
         )
         return
     if len(fk.columns) > 1:
@@ -456,7 +455,9 @@ def _append_junction_edge(
         property_types=_property_types_for(table, properties),
     )
     report.edge_tables.append(table.name)
-    _add_edge(edge, edges, report, seen_edges, f"{source_label} -[{edge_type}]-> {target_label} ({table.name}, junction)")
+    _add_edge(
+        edge, edges, report, seen_edges, f"{source_label} -[{edge_type}]-> {target_label} ({table.name}, junction)"
+    )
 
 
 def _add_edge(

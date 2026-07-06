@@ -11,11 +11,11 @@ import pytest
 from pydantic import ValidationError
 
 from sql2graph import NodeMapping, SchemaMapping, SemanticType
+from sql2graph.engine.prompts import build_system_prompt, format_schema_context
 from sql2graph.mapping_builder import mapping_to_yaml
 from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
 from sql2graph.mapping_builder.refine import refine_mapping
 from sql2graph.mapping_builder.sql_types import semantic_type_for_sql
-from sql2graph.prompts import build_system_prompt, format_schema_context
 from sql2graph.sql_features import SqlFeature
 from sql2graph.targets import make_target
 
@@ -163,7 +163,9 @@ def test_model_dump_json_serialises_types_as_strings(mappings_dir: Path) -> None
     assert post["property_types"]["creationDate"] == "datetime"
 
 
-def test_refine_preserves_property_type(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_preserves_property_type(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     # Renaming a property KEY while keeping {column, type} is allowed; dropping the
     # type is an SQL-side change and must be rejected in favour of the skeleton.
     skeleton = tpch_skeleton()

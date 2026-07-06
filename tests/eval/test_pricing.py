@@ -49,8 +49,6 @@ def test_unknown_model_falls_back_to_provider_rate() -> None:
 def test_cache_tokens_dominate_when_prompt_is_cached() -> None:
     # Guard against a regression to the old behaviour: dropping the cache
     # buckets must change the cost by a large factor, not a rounding error.
-    with_cache = usd_cost(
-        "anthropic", "claude-opus-4-8", OPUS_INPUT, OPUS_OUTPUT, OPUS_CACHE_READ, OPUS_CACHE_CREATE
-    )
+    with_cache = usd_cost("anthropic", "claude-opus-4-8", OPUS_INPUT, OPUS_OUTPUT, OPUS_CACHE_READ, OPUS_CACHE_CREATE)
     without_cache = usd_cost("anthropic", "claude-opus-4-8", OPUS_INPUT, OPUS_OUTPUT, 0, 0)
     assert with_cache > 5 * without_cache

@@ -14,10 +14,14 @@ from sql2graph.mapping_builder.refine import refine_mapping, refine_mapping_asyn
 from tests.unit._doubles import ScriptedLLM
 
 
-def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_applies_valid_rename(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
-    improved_yaml = mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION").replace("label: Lineitem", "label: LineItem")
+    improved_yaml = (
+        mapping_to_yaml(skeleton).replace("HAS_REGION", "IN_REGION").replace("label: Lineitem", "label: LineItem")
+    )
     # Keep every edge that references the renamed label consistent. Lineitem appears
     # as both a source_node and a target_node (its identifying orderkey FK makes the
     # Order->LineItem composition edge point at it), so rename all `node:` references.
@@ -33,7 +37,9 @@ def test_refine_applies_valid_rename(tpch_skeleton: Callable[..., Any], tpch_ddl
     assert "assistant" in roles
 
 
-def test_refine_sums_token_usage_across_repair_and_times_the_pass(tpch_skeleton: Callable[..., Any], tpch_ddl: str) -> None:
+def test_refine_sums_token_usage_across_repair_and_times_the_pass(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str
+) -> None:
     # A rejected first reply triggers one repair round-trip; usage must sum across BOTH
     # chat calls (ScriptedLLM reports 15 tokens/call -> 30) and duration is recorded.
     skeleton = tpch_skeleton()
@@ -47,7 +53,9 @@ def test_refine_sums_token_usage_across_repair_and_times_the_pass(tpch_skeleton:
     assert outcome.duration_seconds >= 0.0
 
 
-def test_refine_strips_code_fences(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_strips_code_fences(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     fenced = "```yaml\n" + mapping_to_yaml(skeleton) + "\n```"
@@ -57,7 +65,9 @@ def test_refine_strips_code_fences(tpch_skeleton: Callable[..., Any], tpch_ddl: 
     assert outcome.mapping == skeleton
 
 
-def test_refine_rejects_hallucinated_column_and_falls_back(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_rejects_hallucinated_column_and_falls_back(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     bad = mapping_to_yaml(skeleton).replace("primary_key: regionkey", "primary_key: not_a_column")
@@ -69,7 +79,9 @@ def test_refine_rejects_hallucinated_column_and_falls_back(tpch_skeleton: Callab
     assert any(m["role"] == "assistant" for m in outcome.messages)
 
 
-def test_refine_rejects_dropped_table_coverage_regression(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_rejects_dropped_table_coverage_regression(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     # Drop the Region node entirely but keep edges valid by also dropping its edge.
@@ -83,7 +95,9 @@ def test_refine_rejects_dropped_table_coverage_regression(tpch_skeleton: Callabl
     assert any("region" in w.lower() for w in outcome.warnings)
 
 
-def test_refine_falls_back_on_malformed_yaml(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_falls_back_on_malformed_yaml(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     outcome = refine_mapping(skeleton, schema, oneshot_llm("this: is: not: valid: mapping"))
@@ -92,7 +106,9 @@ def test_refine_falls_back_on_malformed_yaml(tpch_skeleton: Callable[..., Any], 
     assert outcome.warnings  # explains the fallback
 
 
-def test_refine_falls_back_when_llm_errors(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_falls_back_when_llm_errors(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     outcome = refine_mapping(skeleton, schema, oneshot_llm(error=RuntimeError("boom")))
@@ -103,7 +119,9 @@ def test_refine_falls_back_when_llm_errors(tpch_skeleton: Callable[..., Any], tp
     assert [m["role"] for m in outcome.messages] == ["system", "user"]
 
 
-def test_refine_rejects_swapped_foreign_key_column(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_rejects_swapped_foreign_key_column(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     # The LLM repoints an FK to another column that *exists* on the table. The
     # existence-only guardrail accepted this; the preservation check must reject it.
     skeleton = tpch_skeleton()
@@ -115,7 +133,9 @@ def test_refine_rejects_swapped_foreign_key_column(tpch_skeleton: Callable[..., 
     assert any("SQL side changed" in w for w in outcome.warnings)
 
 
-def test_refine_rejects_swapped_property_column(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_rejects_swapped_property_column(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     # A node property value is repointed from one real column to another real one.
     # (Typed properties serialise long-form, so the column lives on a `column:` line.)
     skeleton = tpch_skeleton()
@@ -126,7 +146,9 @@ def test_refine_rejects_swapped_property_column(tpch_skeleton: Callable[..., Any
     assert outcome.mapping == skeleton
 
 
-def test_refine_rejects_added_edge(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]) -> None:
+def test_refine_rejects_added_edge(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_llm: Callable[..., Any]
+) -> None:
     # A spurious but identifier-valid relationship the LLM invents must be rejected
     # (every column exists, so only the preservation check catches it).
     skeleton = tpch_skeleton()
@@ -202,7 +224,9 @@ def test_validate_against_schema_flags_unknown_table(tpch_ddl: str) -> None:
     assert any("ghost" in v for v in violations)
 
 
-def test_refine_mapping_async_falls_back_when_llm_errors(tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_async_llm: Callable[..., Any]) -> None:
+def test_refine_mapping_async_falls_back_when_llm_errors(
+    tpch_skeleton: Callable[..., Any], tpch_ddl: str, oneshot_async_llm: Callable[..., Any]
+) -> None:
     skeleton = tpch_skeleton()
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     outcome = asyncio.run(refine_mapping_async(skeleton, schema, oneshot_async_llm(error=RuntimeError("boom"))))

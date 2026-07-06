@@ -34,9 +34,7 @@ _IRREGULAR_PLURALS: dict[str, str] = {
 
 # Words that end in ``s`` (or ``ies``) but are already singular: stripping them
 # would mangle the name. Checked before the suffix rules.
-_NON_PLURAL: frozenset[str] = frozenset(
-    {"series", "species", "news", "data", "media"}
-)
+_NON_PLURAL: frozenset[str] = frozenset({"series", "species", "news", "data", "media"})
 
 # Split points for PascalCase: underscores, spaces, other non-alphanumerics, and
 # lowercase→uppercase camelCase boundaries.

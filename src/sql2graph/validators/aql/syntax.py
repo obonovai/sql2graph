@@ -17,9 +17,9 @@ It runs entirely in-process: no ArangoDB, only the pure-Python
 
 from __future__ import annotations
 
-from sql2graph.validators._grammar.errors import parse_errors
 from sql2graph.validators._grammar.generated.aql.AQLLexer import AQLLexer
 from sql2graph.validators._grammar.generated.aql.AQLParser import AQLParser
+from sql2graph.validators._grammar.runtime import parse_errors
 
 # Entry rule of the ported AQL grammar; anchors EOF, so trailing input is reported.
 _START_RULE = "queryStart"

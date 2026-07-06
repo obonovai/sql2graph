@@ -17,4 +17,4 @@ instructions and a quick start. This directory holds the deeper references.
 Related material outside `docs/`:
 
 - [`../eval/README.md`](../eval/README.md) and [`../eval/METRICS.md`](../eval/METRICS.md) - the evaluation harness (how to run) and the metric methodology (how the numbers are computed).
-- Directory READMEs: [`../config/`](../config/README.md), [`../examples/`](../examples/README.md), [`../tests/`](../tests/README.md), and [`../src/sql2graph/validators/grammars/`](../src/sql2graph/validators/grammars/README.md).
+- Directory READMEs: [`../config/`](../config/README.md), [`../examples/`](../examples/README.md), [`../tests/`](../tests/README.md), and [`../src/sql2graph/validators/_grammar/sources/`](../src/sql2graph/validators/_grammar/sources/README.md).

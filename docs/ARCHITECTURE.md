@@ -31,7 +31,7 @@ The framework deliberately optimises for four properties, in this order:
 
 2. **Simplicity over framework ceremony.** The full generate-validate-fix
    loop is implemented as a single `while` loop in
-   `src/sql2graph/translator.py`. Comparable LLM-feedback-loop projects
+   `src/sql2graph/engine/translator.py`. Comparable LLM-feedback-loop projects
    in this space typically reach for LangGraph + LangChain + a tracing
    layer, easily ten heavy dependencies. For one retry edge a plain
    `while` loop with explicit state is shorter, easier to trace through,
@@ -80,10 +80,10 @@ files involved (see the `ScriptedLLM` double in `tests/unit/_doubles.py`).
 |---|---|---|
 | `mapping.py` | Parse and validate the schema mapping YAML. | `SchemaMapping.from_yaml(path) -> SchemaMapping`, `NodeMapping`, `EdgeMapping`, `SemanticType` |
 | `sql_features.py` | Parse the SQL once (sqlglot); detect operation clusters, source tables, and column refs. | `SqlFeature`, `SqlAnalysis`, `analyze_sql`, `detect_features`, `ALL_FEATURES` |
-| `preflight.py` | Input-side gate run before the loop: parse / unmapped-table / unmapped-column policy. | `PreflightAction`, `evaluate_preflight`, `find_unmapped_tables`, `find_unmapped_columns`, `build_rejected_result` |
-| `state.py`   | Loop-internal state + public result. | `TranslationState`, `TranslationResult` |
-| `events.py`  | Typed iteration events emitted by the loop. | `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`, `ParseFailedEvent`, `UnmappedTablesEvent`, `UnmappedColumnsEvent`, `CompletedEvent`, `TranslationEvent`, `EventHandler`, `ConversationCallback` |
-| `prompts.py` | Assemble system/generate/fix/escalation prompts + stall helpers. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `build_escalation_prompt`, `format_schema_context`, `normalize_query`, `error_signature` |
+| `engine/preflight.py` | Input-side gate run before the loop: parse / unmapped-table / unmapped-column policy. | `PreflightAction`, `evaluate_preflight`, `find_unmapped_tables`, `find_unmapped_columns`, `build_rejected_result` |
+| `engine/state.py`   | Loop-internal state + public result. | `TranslationState`, `TranslationResult` |
+| `engine/events.py`  | Typed iteration events emitted by the loop. | `GeneratedEvent`, `ValidatedEvent`, `FixGeneratedEvent`, `StalledEvent`, `MaxIterationsReachedEvent`, `ParseFailedEvent`, `UnmappedTablesEvent`, `UnmappedColumnsEvent`, `CompletedEvent`, `TranslationEvent`, `EventHandler`, `ConversationCallback` |
+| `engine/prompts.py` | Assemble system/generate/fix/escalation prompts + stall helpers. | `build_system_prompt`, `build_generate_prompt`, `build_fix_prompt`, `build_escalation_prompt`, `format_schema_context`, `normalize_query`, `error_signature` |
 | `_env.py` | YAML env-var interpolation helper. | `interpolate_env` (internal) |
 | `llm/__init__.py` | LLM Protocols + discriminated-union config + factories. | `LLMClient`, `AsyncLLMClient`, `StreamCallback`, `ModelConfig`, `VALID_PROVIDERS`, `load_model_config`, `make_llm`, `make_async_llm` |
 | `llm/ollama.py`   | Wrap `ollama.Client` / `ollama.AsyncClient` (handwritten retry/backoff). | `OllamaConfig`, `OllamaLLMClient`, `AsyncOllamaLLMClient` |
@@ -91,16 +91,16 @@ files involved (see the `ScriptedLLM` double in `tests/unit/_doubles.py`).
 | `llm/usage.py` | Backend-agnostic token accounting; the value returned by `chat`. | `TokenUsage`, `ChatReply` |
 | `targets/__init__.py` | Target-language Protocol + factory. | `TargetLanguage`, `make_target`, `VALID_TARGETS` |
 | `targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py` | Per-language prompt sections + query extractor (AQL also supplies a clause-ordering `repair_hint`). | `CypherTarget`, `AqlTarget`, `GremlinTarget` |
-| `targets/_schema.py` | Shared prompt-section scaffolding rendered uniformly for all three targets. | `BaseRules`, `FeatureRule`, `compose_section`, `extract_query` |
+| `targets/_rules.py` | Shared prompt-section scaffolding rendered uniformly for all three targets. | `BaseRules`, `FeatureRule`, `compose_section`, `extract_query` |
 | `validators/__init__.py` | Validator Protocols, factories, mode helpers, `ServerConfig` union. | `QueryValidator`, `AsyncQueryValidator`, `ServerConfig`, `load_server_config`, `make_validator`, `make_async_validator`, `valid_modes_for_target`, `resolve_validation_mode`, `VALID_VALIDATION_MODES`, `TARGET_SERVER_TYPE` |
 | `validators/noop.py` | Pass-through (sync + async). | `NoopValidator`, `AsyncNoopValidator` |
-| `validators/_grammar/` | Shared ANTLR parse routine + committed parsers generated from the vendored grammars in `validators/grammars/`. | `parse_errors` |
+| `validators/_grammar/` | Shared ANTLR parse routine + committed parsers generated from the vendored grammars in `validators/_grammar/sources/`. | `parse_errors` |
 | `validators/cypher/{syntax,server}.py` | Grammar (Neo4j `Cypher25`) + `EXPLAIN` validation (sync + async). | `CypherSyntaxValidator`, `CypherServerValidator`, `Neo4jConfig` |
 | `validators/gremlin/{syntax,server}.py` | Grammar (TinkerPop `Gremlin.g4`) + Gremlin Server script submission (sync + async). | `GremlinSyntaxValidator`, `GremlinServerValidator`, `GremlinConfig` |
 | `validators/aql/{syntax,server}.py` | Grammar (hand-ported ArangoDB) + `db.aql.validate` validation (sync + async). | `AqlSyntaxValidator`, `AqlServerValidator`, `ArangoDBConfig` |
 | `validators/provision/` | Managed (auto-provisioned) validators via `testcontainers`: spin up a throwaway DB, validate, tear down. | `ManagedServerValidator`, `AsyncManagedServerValidator` |
-| `translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
-| `async_translator.py` | Async sibling of `translator.py`. | `AsyncSQLTranslator(...)` |
+| `engine/translator.py` | Orchestrate the loop (sync). | `SQLTranslator(...)` |
+| `engine/async_translator.py` | Async sibling of `engine/translator.py`. | `AsyncSQLTranslator(...)` |
 | `mapping_builder/` | Bootstrap a first-draft `SchemaMapping` from SQL DDL (extract → project → LLM-refine). | `build_mapping`, `build_mapping_async`, `BuildResult`, `CoverageReport`, `RelationalSchema`, `extract_schema_from_ddl`, `project_to_mapping`, `mapping_to_yaml`, `diff_mappings` |
 
 All three targets ship a grammar-based syntax validator: Cypher and Gremlin use
@@ -116,7 +116,7 @@ extension points (adding a target language or LLM provider) are walked through i
 ## Pre-flight gate (input side)
 
 The generate-validate-fix loop validates the LLM's *output*. A separate
-**pre-flight gate** (`src/sql2graph/preflight.py`) validates the *input* before
+**pre-flight gate** (`src/sql2graph/engine/preflight.py`) validates the *input* before
 any LLM call, so a query that cannot translate faithfully is rejected cheaply
 rather than burning a generation. Both translators call `evaluate_preflight`
 identically at the top of `translate()`, before the timer starts.
@@ -171,7 +171,7 @@ the guardrail, and a worked example - is in
 
 ## State lifecycle
 
-All state lives in `TranslationState` (`state.py`). Here is how fields
+All state lives in `TranslationState` (`engine/state.py`). Here is how fields
 mutate through a run.
 
 ### Successful run (no fixes needed)
@@ -206,7 +206,7 @@ without validating it again.
 ## Async path
 
 `AsyncSQLTranslator` lives next to `SQLTranslator` in
-`src/sql2graph/async_translator.py` and exposes the same surface (same
+`src/sql2graph/engine/async_translator.py` and exposes the same surface (same
 constructor parameters, same `translate()` return type, same iteration
 semantics) with `await` at the LLM and validator call sites. Both
 translators co-exist; the sync path stays the default for scripts and
@@ -261,7 +261,7 @@ contaminated by deltas from a discarded prior attempt.
 ## Iteration events
 
 The loop emits a typed event at every milestone. The contract is in
-`src/sql2graph/events.py`:
+`src/sql2graph/engine/events.py`:
 
 ```python
 # Pre-flight (input-side) events -- at most one fires, before generation:
@@ -330,7 +330,7 @@ when consuming events.
 
 **Handler exceptions are isolated.** Both translators wrap each handler
 invocation in `_emit(handler, event)` (defined at the bottom of
-`translator.py` / `async_translator.py`), which catches all exceptions,
+`engine/translator.py` / `engine/async_translator.py`), which catches all exceptions,
 logs them at WARNING, and returns. A misbehaving handler cannot abort a
 user's translation. The trade-off is that handler bugs surface in logs
 rather than as direct exceptions, acceptable for an observer pattern.
@@ -351,7 +351,7 @@ overlay.
 
 ## Prompt strategy
 
-Three distinct prompts, built by separate functions in `prompts.py`:
+Three distinct prompts, built by separate functions in `engine/prompts.py`:
 
 1. **System prompt** (`build_system_prompt`). Establishes the LLM's role,
    embeds the full schema mapping as structured text via
@@ -443,7 +443,7 @@ unparseable query is harmless.
 
 The feature set flows through two layers:
 
-1. **Generic rules in `prompts.py`.** `_GENERIC_FEATURE_RULES` (a small
+1. **Generic rules in `engine/prompts.py`.** `_GENERIC_FEATURE_RULES` (a small
    `dict[SqlFeature, str]` near the top of the module) holds the
    one-line, target-agnostic rules: currently `JOIN` and `AGGREGATION`.
    `build_system_prompt` iterates `SqlFeature` in declaration order and
@@ -469,7 +469,7 @@ The feature set flows through two layers:
    `datetime(...)` constructors).
 
    The shape of a target's section is fixed by the dataclasses in
-   `targets/_schema.py`: a `BaseRules` always-on block with five named
+   `targets/_rules.py`: a `BaseRules` always-on block with five named
    sections (output mandate → `Data model:` → `Core syntax:` →
    `These are NOT valid <lang>:` anti-patterns as `BAD -> GOOD` pairs →
    `Examples:`) rendered uniformly for all three targets, plus the
@@ -573,8 +573,8 @@ implementation.
   a focused Anthropic API client. LangChain pulls in hundreds of packages
   transitively.
 * **The sync loop is easy to read and modify.** It is one screen of
-  Python in `translator.py` with no framework machinery hiding control
-  flow. The async path (`async_translator.py`) is a structural mirror,
+  Python in `engine/translator.py` with no framework machinery hiding control
+  flow. The async path (`engine/async_translator.py`) is a structural mirror,
   not a separate framework: `await` at the same call sites, same
   prompts, same events, same `TranslationResult`. The trade-off is two
   near-identical loop bodies; the upside is that neither path imports

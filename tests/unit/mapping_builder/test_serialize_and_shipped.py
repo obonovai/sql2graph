@@ -83,12 +83,18 @@ def test_bundled_ldbc_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path
     assert triples(generated) == triples(shipped)
 
     def list_sides(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
-        return {(lp.source_table, lp.foreign_key, lp.column) for n in mapping.nodes for lp in n.list_properties.values()}
+        return {
+            (lp.source_table, lp.foreign_key, lp.column) for n in mapping.nodes for lp in n.list_properties.values()
+        }
 
-    assert list_sides(generated) == list_sides(shipped) == {
-        ("person_email", "person_id", "email"),
-        ("person_speaks", "person_id", "language"),
-    }
+    assert (
+        list_sides(generated)
+        == list_sides(shipped)
+        == {
+            ("person_email", "person_id", "email"),
+            ("person_speaks", "person_id", "language"),
+        }
+    )
 
     # The forum-post containment FK carries ON DELETE CASCADE, so the builder emits
     # the LDBC-correct Forum -> Post direction (not the default Post -> Forum).

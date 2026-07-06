@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from sql2graph import CypherTarget, TranslationResult
-from sql2graph.preflight import PreflightAction
+from sql2graph import CypherTarget, PreflightAction, TranslationResult
 
 
-def test_async_translator_returns_result_on_first_try_success(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_returns_result_on_first_try_success(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator
@@ -34,12 +35,14 @@ def test_async_translator_returns_result_on_first_try_success(scripted_async_llm
     assert result.generated_query == "MATCH (p:Person) RETURN p"
 
 
-def test_async_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Callable[..., Any], scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_forwards_dialect_to_analyze_sql(
+    spy_analyze_sql: Callable[..., Any], scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """Async mirror of the sync forwarding test: the constructor ``dialect`` reaches
     ``async_translator.analyze_sql`` (kept in lockstep with the sync path)."""
     import asyncio
 
-    import sql2graph.async_translator as async_translator_mod
+    import sql2graph.engine.async_translator as async_translator_mod
     from sql2graph import AsyncSQLTranslator
     from sql2graph.validators.cypher.syntax import AsyncCypherSyntaxValidator
 
@@ -60,7 +63,9 @@ def test_async_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Calla
     assert seen == ["mysql"]
 
 
-def test_async_translator_runs_fix_loop_on_validation_failure(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_runs_fix_loop_on_validation_failure(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator
@@ -83,7 +88,9 @@ def test_async_translator_runs_fix_loop_on_validation_failure(scripted_async_llm
     assert result.token_usage.total_tokens == 30
 
 
-def test_async_translator_rejects_unmapped_tables_without_calling_llm(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_rejects_unmapped_tables_without_calling_llm(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator, CompletedEvent, TranslationEvent
@@ -111,7 +118,9 @@ def test_async_translator_rejects_unmapped_tables_without_calling_llm(scripted_a
     assert isinstance(events[-1], CompletedEvent)
 
 
-def test_async_translator_unmapped_column_warn_and_reject(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_unmapped_column_warn_and_reject(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator, TranslationEvent, UnmappedColumnsEvent
@@ -135,7 +144,10 @@ def test_async_translator_unmapped_column_warn_and_reject(scripted_async_llm: Ca
         fake = scripted_async_llm(["MATCH (f:Forum) RETURN f"])
         events: list[TranslationEvent] = []
         async with AsyncSQLTranslator(
-            schema_mapping=person_forum_schema(), llm=fake, target=CypherTarget(), validator=AsyncCypherSyntaxValidator()
+            schema_mapping=person_forum_schema(),
+            llm=fake,
+            target=CypherTarget(),
+            validator=AsyncCypherSyntaxValidator(),
         ) as translator:
             result = await translator.translate("SELECT f.title, f.bogus FROM forums f", on_event=events.append)
         return result, fake, events
@@ -153,7 +165,9 @@ def test_async_translator_unmapped_column_warn_and_reject(scripted_async_llm: Ca
     assert [type(e).__name__ for e in revents] == ["UnmappedColumnsEvent", "CompletedEvent"]
 
 
-def test_async_translator_hits_max_iterations(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_hits_max_iterations(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator
@@ -176,7 +190,9 @@ def test_async_translator_hits_max_iterations(scripted_async_llm: Callable[..., 
     assert result.iterations_used == 3
 
 
-def test_async_translator_escalates_and_aborts_when_stalled(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_escalates_and_aborts_when_stalled(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     import asyncio
 
     from sql2graph import AsyncSQLTranslator
@@ -201,7 +217,9 @@ def test_async_translator_escalates_and_aborts_when_stalled(scripted_async_llm: 
     assert fake.temperatures == [None, None, 0.6]
 
 
-def test_async_translator_emits_same_event_sequence_as_sync(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_emits_same_event_sequence_as_sync(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """The async translator emits the same event sequence as the sync one
     for an identical input: events are part of the cross-translator contract."""
     import asyncio
@@ -244,7 +262,9 @@ def test_async_translator_emits_same_event_sequence_as_sync(scripted_async_llm: 
     assert isinstance(events[4], CompletedEvent)
 
 
-def test_async_translator_forwards_stream_to_into_each_llm_call(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_forwards_stream_to_into_each_llm_call(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """The translator must invoke the stream callback for every LLM call:
     once for the initial generate, once per fix iteration."""
     import asyncio
@@ -276,7 +296,9 @@ def test_async_translator_forwards_stream_to_into_each_llm_call(scripted_async_l
     assert fake.stream_calls == 2  # initial generate + 1 fix
 
 
-def test_async_translator_omits_stream_to_by_default(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_omits_stream_to_by_default(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """Without stream_to, the fake LLM records zero stream calls, confirms
     the streaming path is opt-in."""
     import asyncio
@@ -299,7 +321,9 @@ def test_async_translator_omits_stream_to_by_default(scripted_async_llm: Callabl
     assert fake.stream_calls == 0
 
 
-def test_async_translator_exposes_last_messages_conversation(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_exposes_last_messages_conversation(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """The async translator exposes the same last_messages conversation."""
     import asyncio
 
@@ -322,7 +346,9 @@ def test_async_translator_exposes_last_messages_conversation(scripted_async_llm:
     assert messages[-1]["content"] == "MATCH (p:Person) RETURN p"
 
 
-def test_async_translator_on_conversation_streams_snapshots(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_on_conversation_streams_snapshots(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """on_conversation fires growing snapshots, including a partial assistant turn."""
     import asyncio
 
@@ -352,7 +378,9 @@ def test_async_translator_on_conversation_streams_snapshots(scripted_async_llm: 
     assert any(0 < len(p) < len("MATCH (p:Person") for p in partials)
 
 
-def test_async_translator_warms_up_validator_before_validation(scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_async_translator_warms_up_validator_before_validation(
+    scripted_async_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """The async translator awaits the validator's warmup before the first validate."""
     import asyncio
 

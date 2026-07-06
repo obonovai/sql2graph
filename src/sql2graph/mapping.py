@@ -118,9 +118,7 @@ def _split_property_types(data: Any) -> Any:
     return {**data, "properties": flat, "property_types": types}
 
 
-def _check_property_types_subset(
-    properties: dict[str, str], property_types: dict[str, SemanticType]
-) -> None:
+def _check_property_types_subset(properties: dict[str, str], property_types: dict[str, SemanticType]) -> None:
     """Reject a type annotation whose key is not a declared property."""
     orphan = set(property_types) - set(properties)
     if orphan:
@@ -275,7 +273,7 @@ class SchemaMapping(_StrictModel):
         Includes the child tables backing multi-valued list properties, so a SQL
         query reading ``person_email`` is not flagged as unmapped. Coverage
         comparisons against a SQL query are case-insensitive and live in
-        :func:`sql2graph.preflight.find_unmapped_tables`, not here.
+        :func:`sql2graph.engine.preflight.find_unmapped_tables`, not here.
         """
         return (
             {n.source_table for n in self.nodes}

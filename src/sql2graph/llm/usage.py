@@ -2,7 +2,7 @@
 
 This is a leaf module: it imports only :mod:`pydantic` and the standard
 library, so every other module in :mod:`sql2graph.llm` (and
-:mod:`sql2graph.state`) can import it without risking an import cycle.
+:mod:`sql2graph.engine.state`) can import it without risking an import cycle.
 
 Two small value types live here:
 

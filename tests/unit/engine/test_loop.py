@@ -15,14 +15,16 @@ from sql2graph import (
 )
 
 
-def test_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Callable[..., Any], scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_forwards_dialect_to_analyze_sql(
+    spy_analyze_sql: Callable[..., Any], scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """The constructor ``dialect`` reaches the pre-flight ``analyze_sql`` call.
 
     Forwarding the sqlglot dialect is the whole point of the parameter: it lets a
     valid vendor-specific query parse (keeping the unmapped-table/column checks
     live) instead of false-failing under the neutral parser.
     """
-    import sql2graph.translator as translator_mod
+    import sql2graph.engine.translator as translator_mod
 
     seen = spy_analyze_sql(translator_mod)
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -38,10 +40,12 @@ def test_translator_forwards_dialect_to_analyze_sql(spy_analyze_sql: Callable[..
     assert seen == ["postgres"]
 
 
-def test_translator_dialect_defaults_to_none(spy_analyze_sql: Callable[..., Any], scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_dialect_defaults_to_none(
+    spy_analyze_sql: Callable[..., Any], scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """Omitting ``dialect`` keeps the pre-flight parse dialect-neutral (``None``),
     i.e. identical to the behaviour before the parameter existed."""
-    import sql2graph.translator as translator_mod
+    import sql2graph.engine.translator as translator_mod
 
     seen = spy_analyze_sql(translator_mod)
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
@@ -56,7 +60,9 @@ def test_translator_dialect_defaults_to_none(spy_analyze_sql: Callable[..., Any]
     assert seen == [None]
 
 
-def test_translator_returns_result_on_first_try_success(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_returns_result_on_first_try_success(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     fake = scripted_llm(["MATCH (p:Person) RETURN p"])
     with SQLTranslator(
         schema_mapping=person_forum_schema(),
@@ -80,7 +86,9 @@ def test_translator_returns_result_on_first_try_success(scripted_llm: Callable[.
     assert result.token_usage.output_tokens == 5
 
 
-def test_translator_runs_fix_loop_on_validation_failure(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_runs_fix_loop_on_validation_failure(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     # First response: malformed. Second response: valid.
     fake = scripted_llm(
         [
@@ -109,7 +117,9 @@ def test_translator_runs_fix_loop_on_validation_failure(scripted_llm: Callable[.
     assert result.token_usage.output_tokens == 10
 
 
-def test_translator_hits_max_iterations(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_hits_max_iterations(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     fake = scripted_llm(["MATCH (p:Person"] * 3)  # always invalid
     translator = SQLTranslator(
         schema_mapping=person_forum_schema(),
@@ -129,7 +139,9 @@ def test_translator_hits_max_iterations(scripted_llm: Callable[..., Any], person
     assert result.generated_query == "MATCH (p:Person"
 
 
-def test_translator_escalates_on_stall_then_recovers(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_escalates_on_stall_then_recovers(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """A repeated (stalled) candidate triggers one fresh-context, hot retry that recovers."""
     from sql2graph import StalledEvent, TranslationEvent
 
@@ -158,7 +170,9 @@ def test_translator_escalates_on_stall_then_recovers(scripted_llm: Callable[...,
     assert fake.calls[2][0]["role"] == "system"
 
 
-def test_translator_aborts_early_when_stalled_instead_of_burning_iterations(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_aborts_early_when_stalled_instead_of_burning_iterations(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """When even the escalation makes no progress, abort as 'stalled', not 10 identical tries."""
     from sql2graph import StalledEvent, TranslationEvent
 
@@ -181,7 +195,9 @@ def test_translator_aborts_early_when_stalled_instead_of_burning_iterations(scri
     assert sum(isinstance(e, StalledEvent) for e in events) == 1
 
 
-def test_translator_context_manager_closes_components(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_context_manager_closes_components(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     fake = scripted_llm(["MATCH (p) RETURN p"])
     validator = CypherSyntaxValidator()
     with SQLTranslator(
@@ -194,7 +210,9 @@ def test_translator_context_manager_closes_components(scripted_llm: Callable[...
     assert fake.closed is True
 
 
-def test_translator_returns_result_for_gremlin_target(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_returns_result_for_gremlin_target(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     fake = scripted_llm(["```gremlin\ng.V().hasLabel('Person').valueMap()\n```"])
     with SQLTranslator(
         schema_mapping=person_forum_schema(),
@@ -212,7 +230,9 @@ def test_translator_returns_result_for_gremlin_target(scripted_llm: Callable[...
     assert result.generated_query == "g.V().hasLabel('Person').valueMap()"
 
 
-def test_translator_exposes_last_messages_conversation(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_exposes_last_messages_conversation(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """last_messages captures the full system↔model exchange (incl. a fix loop)."""
     fake = scripted_llm(["MATCH (p:Person", "MATCH (p:Person) RETURN p"])  # fail, then fix
     with SQLTranslator(
@@ -229,7 +249,9 @@ def test_translator_exposes_last_messages_conversation(scripted_llm: Callable[..
     assert all(set(m) == {"role", "content"} for m in translator.last_messages)
 
 
-def test_translator_warms_up_validator_before_validation(scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]) -> None:
+def test_translator_warms_up_validator_before_validation(
+    scripted_llm: Callable[..., Any], person_forum_schema: Callable[..., Any]
+) -> None:
     """A validator exposing warmup() is warmed up exactly once, before the first validate."""
     calls: list[str] = []
 

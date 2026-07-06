@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from sql2graph import AqlTarget, CypherTarget, GremlinTarget
-from sql2graph.prompts import (
+from sql2graph.engine.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
     build_generate_prompt,

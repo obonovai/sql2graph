@@ -8,7 +8,7 @@ touching anything else.
 
 The guardrail has two parts. :func:`validate_against_schema` checks the mapping only
 references columns that really *exist* in the extracted schema (the inverse of
-:func:`sql2graph.preflight.find_unmapped_columns`, which checks a *query* against a
+:func:`sql2graph.engine.preflight.find_unmapped_columns`, which checks a *query* against a
 mapping). On top of that, :func:`_preservation_violations` checks the SQL side was
 *preserved*: every ``source_table``, key, foreign key, and property column value must
 be identical to the deterministic skeleton, and no node or edge may be added or
@@ -28,7 +28,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from sql2graph.events import ConversationCallback
+from sql2graph.engine.events import ConversationCallback
 from sql2graph.llm import AsyncLLMClient, LLMClient, StreamCallback, TokenUsage
 from sql2graph.mapping import SchemaMapping, SemanticType
 from sql2graph.mapping_builder.relational import RelationalSchema
@@ -91,8 +91,12 @@ def refine_mapping(
         # Closes over the reassigned `usage` (read at call time) and the in-place
         # `messages`/`warnings`, so every return path reports the accumulated totals.
         return RefinementResult(
-            mapping=mapping, accepted=accepted, messages=messages, warnings=warnings,
-            token_usage=usage, duration_seconds=perf_counter() - start,
+            mapping=mapping,
+            accepted=accepted,
+            messages=messages,
+            warnings=warnings,
+            token_usage=usage,
+            duration_seconds=perf_counter() - start,
         )
 
     for attempt in range(max_repair_attempts + 1):
@@ -146,8 +150,12 @@ async def refine_mapping_async(
     def _result(mapping: SchemaMapping, accepted: bool) -> RefinementResult:
         # Closes over the reassigned `usage` and the in-place `messages`/`warnings`.
         return RefinementResult(
-            mapping=mapping, accepted=accepted, messages=messages, warnings=warnings,
-            token_usage=usage, duration_seconds=perf_counter() - start,
+            mapping=mapping,
+            accepted=accepted,
+            messages=messages,
+            warnings=warnings,
+            token_usage=usage,
+            duration_seconds=perf_counter() - start,
         )
 
     for attempt in range(max_repair_attempts + 1):
@@ -211,9 +219,11 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
     Checks only the SQL side - ``source_table``, ``primary_key``,
     ``source_foreign_key``, ``target_primary_key`` and every property *value* -
     never labels/types/property *keys*, which the LLM is allowed to rewrite.
-    Comparisons casefold, mirroring :mod:`sql2graph.preflight`.
+    Comparisons casefold, mirroring :mod:`sql2graph.engine.preflight`.
     """
-    columns_by_table: dict[str, set[str]] = {t.name.casefold(): {c.casefold() for c in t.column_names()} for t in schema.tables}
+    columns_by_table: dict[str, set[str]] = {
+        t.name.casefold(): {c.casefold() for c in t.column_names()} for t in schema.tables
+    }
     table_for_label = {n.label: n.source_table for n in mapping.nodes}
     violations: list[str] = []
 
@@ -223,19 +233,29 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
             violations.append(f"node '{node.label}': source_table '{node.source_table}' is not a table in the schema")
             continue
         if node.primary_key.casefold() not in cols:
-            violations.append(f"node '{node.label}': primary_key '{node.primary_key}' is not a column of '{node.source_table}'")
+            violations.append(
+                f"node '{node.label}': primary_key '{node.primary_key}' is not a column of '{node.source_table}'"
+            )
         for prop, column in node.properties.items():
             if column.casefold() not in cols:
-                violations.append(f"node '{node.label}': property '{prop}' maps to missing column '{node.source_table}.{column}'")
+                violations.append(
+                    f"node '{node.label}': property '{prop}' maps to missing column '{node.source_table}.{column}'"
+                )
         for prop, lp in node.list_properties.items():
             lp_cols = columns_by_table.get(lp.source_table.casefold())
             if lp_cols is None:
-                violations.append(f"node '{node.label}': list property '{prop}' source_table '{lp.source_table}' is not a table in the schema")
+                violations.append(
+                    f"node '{node.label}': list property '{prop}' source_table '{lp.source_table}' is not a table in the schema"
+                )
                 continue
             if lp.foreign_key.casefold() not in lp_cols:
-                violations.append(f"node '{node.label}': list property '{prop}' foreign_key '{lp.foreign_key}' is not a column of '{lp.source_table}'")
+                violations.append(
+                    f"node '{node.label}': list property '{prop}' foreign_key '{lp.foreign_key}' is not a column of '{lp.source_table}'"
+                )
             if lp.column.casefold() not in lp_cols:
-                violations.append(f"node '{node.label}': list property '{prop}' column '{lp.column}' is not a column of '{lp.source_table}'")
+                violations.append(
+                    f"node '{node.label}': list property '{prop}' column '{lp.column}' is not a column of '{lp.source_table}'"
+                )
 
     for edge in mapping.edges:
         cols = columns_by_table.get(edge.source_table.casefold())
@@ -243,19 +263,27 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
             violations.append(f"edge '{edge.type}': source_table '{edge.source_table}' is not a table in the schema")
             continue
         if edge.source_foreign_key.casefold() not in cols:
-            violations.append(f"edge '{edge.type}': source_foreign_key '{edge.source_foreign_key}' is not a column of '{edge.source_table}'")
+            violations.append(
+                f"edge '{edge.type}': source_foreign_key '{edge.source_foreign_key}' is not a column of '{edge.source_table}'"
+            )
         for prop, column in edge.properties.items():
             if column.casefold() not in cols:
-                violations.append(f"edge '{edge.type}': property '{prop}' maps to missing column '{edge.source_table}.{column}'")
+                violations.append(
+                    f"edge '{edge.type}': property '{prop}' maps to missing column '{edge.source_table}.{column}'"
+                )
         target_table = table_for_label.get(edge.target_node)
         target_cols = columns_by_table.get(target_table.casefold()) if target_table else None
         if target_cols is not None and edge.target_primary_key.casefold() not in target_cols:
-            violations.append(f"edge '{edge.type}': target_primary_key '{edge.target_primary_key}' is not a column of '{target_table}'")
+            violations.append(
+                f"edge '{edge.type}': target_primary_key '{edge.target_primary_key}' is not a column of '{target_table}'"
+            )
 
     return violations
 
 
-def _parse_and_validate(text: str, skeleton: SchemaMapping, schema: RelationalSchema) -> tuple[SchemaMapping | None, list[str]]:
+def _parse_and_validate(
+    text: str, skeleton: SchemaMapping, schema: RelationalSchema
+) -> tuple[SchemaMapping | None, list[str]]:
     """Parse the LLM's YAML and run every guardrail; return (mapping, violations)."""
     try:
         candidate = SchemaMapping.from_yaml_string(_strip_code_fences(text))
@@ -270,9 +298,7 @@ def _parse_and_validate(text: str, skeleton: SchemaMapping, schema: RelationalSc
     return candidate, []
 
 
-def _typed_columns(
-    properties: dict[str, str], property_types: dict[str, SemanticType]
-) -> set[tuple[str, str | None]]:
+def _typed_columns(properties: dict[str, str], property_types: dict[str, SemanticType]) -> set[tuple[str, str | None]]:
     """The set of ``(column, type)`` pairs a mapping maps, independent of property keys.
 
     Keying the type by the SQL column - the identifier the LLM may not rename -
@@ -302,7 +328,12 @@ def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozens
             n.primary_key.casefold(),
             frozenset(_typed_columns(n.properties, n.property_types)),
             frozenset(
-                (lp.source_table.casefold(), lp.foreign_key.casefold(), lp.column.casefold(), lp.type.value if lp.type else None)
+                (
+                    lp.source_table.casefold(),
+                    lp.foreign_key.casefold(),
+                    lp.column.casefold(),
+                    lp.type.value if lp.type else None,
+                )
                 for lp in n.list_properties.values()
             ),
         )
@@ -350,8 +381,14 @@ def _coverage_regressions(skeleton: SchemaMapping, candidate: SchemaMapping) -> 
     """Flag node tables the candidate dropped or introduced relative to the skeleton."""
     skel = {n.source_table.casefold(): n.source_table for n in skeleton.nodes}
     cand = {n.source_table.casefold() for n in candidate.nodes}
-    out = [f"dropped node for table '{name}' present in the deterministic mapping" for key, name in skel.items() if key not in cand]
-    out += [f"introduced a node for table '{t}' that is not in the deterministic mapping" for t in sorted(cand - set(skel))]
+    out = [
+        f"dropped node for table '{name}' present in the deterministic mapping"
+        for key, name in skel.items()
+        if key not in cand
+    ]
+    out += [
+        f"introduced a node for table '{t}' that is not in the deterministic mapping" for t in sorted(cand - set(skel))
+    ]
     return out
 
 

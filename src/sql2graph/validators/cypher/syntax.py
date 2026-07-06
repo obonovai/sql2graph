@@ -19,9 +19,9 @@ job of the server validator
 
 from __future__ import annotations
 
-from sql2graph.validators._grammar.errors import parse_errors
 from sql2graph.validators._grammar.generated.cypher.Cypher25Lexer import Cypher25Lexer
 from sql2graph.validators._grammar.generated.cypher.Cypher25Parser import Cypher25Parser
+from sql2graph.validators._grammar.runtime import parse_errors
 
 # Entry rule of Neo4j's Cypher grammar; anchors EOF, so trailing input is reported.
 _START_RULE = "statements"

@@ -43,8 +43,8 @@ A minimal end-to-end usage::
         print(result.generated_query)
 """
 
-from sql2graph.async_translator import AsyncSQLTranslator
-from sql2graph.events import (
+from sql2graph.engine.async_translator import AsyncSQLTranslator
+from sql2graph.engine.events import (
     CompletedEvent,
     ConversationCallback,
     EventHandler,
@@ -58,6 +58,9 @@ from sql2graph.events import (
     UnmappedTablesEvent,
     ValidatedEvent,
 )
+from sql2graph.engine.preflight import PreflightAction, find_unmapped_columns, find_unmapped_tables
+from sql2graph.engine.state import TranslationResult
+from sql2graph.engine.translator import SQLTranslator
 from sql2graph.llm import (
     VALID_PROVIDERS,
     AnthropicConfig,
@@ -91,9 +94,7 @@ from sql2graph.mapping_builder import (
     mapping_to_yaml,
     project_to_mapping,
 )
-from sql2graph.preflight import PreflightAction
 from sql2graph.sql_features import SqlAnalysis, analyze_sql
-from sql2graph.state import TranslationResult
 from sql2graph.targets import (
     VALID_TARGETS,
     AqlTarget,
@@ -102,7 +103,6 @@ from sql2graph.targets import (
     TargetLanguage,
     make_target,
 )
-from sql2graph.translator import SQLTranslator
 from sql2graph.validators import (
     TARGET_SERVER_TYPE,
     VALID_VALIDATION_MODES,
@@ -211,6 +211,8 @@ __all__ = [
     "build_mapping_async",
     "diff_mappings",
     "extract_schema_from_ddl",
+    "find_unmapped_columns",
+    "find_unmapped_tables",
     "load_model_config",
     "load_server_config",
     "make_async_llm",

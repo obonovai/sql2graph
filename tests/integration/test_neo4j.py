@@ -130,9 +130,7 @@ def test_provisioned_neo4j_reports_and_suppresses_label_hallucination() -> None:
     container, managed_config = neo4j_provision.start()  # notifications OFF
     try:
         reporting_config = managed_config.model_copy(update={"notifications_min_severity": None})
-        driver = GraphDatabase.driver(
-            reporting_config.uri, auth=(reporting_config.username, reporting_config.password)
-        )
+        driver = GraphDatabase.driver(reporting_config.uri, auth=(reporting_config.username, reporting_config.password))
         try:
             with driver.session(database=reporting_config.database) as s:
                 s.run("MERGE (p:Person {id: -1}) SET p.name = 'seed'").consume()

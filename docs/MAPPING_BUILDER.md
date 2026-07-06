@@ -174,7 +174,7 @@ guardrail has three checks, all run in `_parse_and_validate`:
    `target_primary_key`, and every property *value*) that actually *exist* in the
    extracted schema. It never inspects labels, edge types, or property *keys*, which
    the LLM is allowed to rewrite. (This is the inverse of
-   `sql2graph.preflight.find_unmapped_columns`, which checks a *query* against a
+   `sql2graph.engine.preflight.find_unmapped_columns`, which checks a *query* against a
    mapping.)
 2. **Preservation check** (`_preservation_violations`) - proves the SQL side was not
    merely *valid* but *preserved*. It compares a SQL-facing signature of the skeleton

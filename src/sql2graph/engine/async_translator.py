@@ -1,6 +1,6 @@
 """Async generate-validate-fix orchestrator.
 
-Mirror of :mod:`sql2graph.translator` for callers that want non-blocking
+Mirror of :mod:`sql2graph.engine.translator` for callers that want non-blocking
 translation, e.g. a Streamlit UI that should stay responsive during long
 LLM calls, or a service that needs to handle several concurrent
 translations on a single event loop.
@@ -10,7 +10,7 @@ validate/fix rounds, terminate on success or max-iterations. Only the calls
 to the LLM and validator change from blocking to ``await`` ones. Iteration
 numbering, event emission, the final :class:`TranslationResult`: all
 identical to the sync path, by design. Code that observes events
-(:mod:`sql2graph.events`) does not need to know which translator produced
+(:mod:`sql2graph.engine.events`) does not need to know which translator produced
 them.
 """
 
@@ -21,7 +21,8 @@ from time import perf_counter
 from types import TracebackType
 from typing import Any, Self
 
-from sql2graph.events import (
+from sql2graph.engine._loop import build_result, emit_event, snapshot_messages, to_message
+from sql2graph.engine.events import (
     CompletedEvent,
     ConversationCallback,
     EventHandler,
@@ -29,17 +30,14 @@ from sql2graph.events import (
     GeneratedEvent,
     MaxIterationsReachedEvent,
     StalledEvent,
-    TranslationEvent,
     ValidatedEvent,
 )
-from sql2graph.llm import AsyncLLMClient, StreamCallback
-from sql2graph.mapping import SchemaMapping
-from sql2graph.preflight import (
+from sql2graph.engine.preflight import (
     PreflightAction,
     build_rejected_result,
     evaluate_preflight,
 )
-from sql2graph.prompts import (
+from sql2graph.engine.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
     build_generate_prompt,
@@ -47,8 +45,10 @@ from sql2graph.prompts import (
     error_signature,
     normalize_query,
 )
+from sql2graph.engine.state import TranslationResult, TranslationState
+from sql2graph.llm import AsyncLLMClient, StreamCallback
+from sql2graph.mapping import SchemaMapping
 from sql2graph.sql_features import analyze_sql
-from sql2graph.state import TranslationResult, TranslationState
 from sql2graph.targets import TargetLanguage
 from sql2graph.validators import AsyncQueryValidator
 
@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncSQLTranslator:
-    """Async sibling of :class:`sql2graph.translator.SQLTranslator`.
+    """Async sibling of :class:`sql2graph.engine.translator.SQLTranslator`.
 
     Construct with already-instantiated async components. Call
     :meth:`translate` one or more times (each call is awaitable); the same
@@ -118,7 +118,7 @@ class AsyncSQLTranslator:
         """Translate a SQL query through the full feedback loop.
 
         Awaitable counterpart of
-        :meth:`sql2graph.translator.SQLTranslator.translate`. Same return
+        :meth:`sql2graph.engine.translator.SQLTranslator.translate`. Same return
         type, same event semantics, same iteration numbering. Handler
         exceptions are caught and logged; they do not abort the loop.
 
@@ -152,12 +152,12 @@ class AsyncSQLTranslator:
             self._unmapped_columns_action,
         )
         if outcome is not None:
-            _emit(on_event, outcome.event)
+            emit_event(on_event, outcome.event)
             if outcome.is_reject:
                 logger.info("Pre-flight rejected translation: %s", outcome.message)
                 self.last_messages = []
                 result = build_rejected_result(sql_query, target_name, outcome)
-                _emit(on_event, CompletedEvent(result=result))
+                emit_event(on_event, CompletedEvent(result=result))
                 return result
 
         # Provision the validator (e.g. boot a managed throwaway database) before
@@ -176,11 +176,11 @@ class AsyncSQLTranslator:
         features = analysis.features
         logger.info("Detected SQL features: %s", sorted(f.value for f in features))
         system_prompt = build_system_prompt(self._schema_mapping, self._target, features)
-        state.messages.append(_msg("system", system_prompt))
+        state.messages.append(to_message("system", system_prompt))
         _emit_conversation(on_conversation, state.messages)
 
         user_msg = build_generate_prompt(sql_query)
-        state.messages.append(_msg("user", user_msg))
+        state.messages.append(to_message("user", user_msg))
         _emit_conversation(on_conversation, state.messages)
 
         reply = await self._llm.chat(
@@ -188,12 +188,12 @@ class AsyncSQLTranslator:
         )
         state.token_usage = state.token_usage + reply.usage
         raw_content = reply.text
-        state.messages.append(_msg("assistant", raw_content))
+        state.messages.append(to_message("assistant", raw_content))
         _emit_conversation(on_conversation, state.messages)
         state.generated_query = self._target.extract_query(raw_content)
 
         logger.info("Initial query generated:\n%s", state.generated_query)
-        _emit(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
+        emit_event(on_event, GeneratedEvent(iteration=1, query=state.generated_query or ""))
 
         # See SQLTranslator.translate: same stall-detection/escalation logic.
         previous_signature: frozenset[str] | None = None
@@ -209,7 +209,7 @@ class AsyncSQLTranslator:
                 state.validation_passed = True
                 state.final_status = "success"
                 logger.info("Validation passed on iteration %d", state.validation_iteration)
-                _emit(
+                emit_event(
                     on_event,
                     ValidatedEvent(
                         iteration=state.validation_iteration,
@@ -226,7 +226,7 @@ class AsyncSQLTranslator:
                 len(errors),
                 errors,
             )
-            _emit(
+            emit_event(
                 on_event,
                 ValidatedEvent(
                     iteration=state.validation_iteration,
@@ -243,7 +243,7 @@ class AsyncSQLTranslator:
                     self._max_iterations,
                     errors,
                 )
-                _emit(
+                emit_event(
                     on_event,
                     MaxIterationsReachedEvent(
                         iteration=state.validation_iteration,
@@ -277,7 +277,7 @@ class AsyncSQLTranslator:
                     "No progress on iteration %d: escalating with a fresh context",
                     state.validation_iteration,
                 )
-                _emit(
+                emit_event(
                     on_event,
                     StalledEvent(
                         iteration=state.validation_iteration,
@@ -291,13 +291,13 @@ class AsyncSQLTranslator:
                     errors=errors,
                     repair_hint=repair_hint,
                 )
-                state.messages.append(_msg("user", escalation_msg))
+                state.messages.append(to_message("user", escalation_msg))
                 _emit_conversation(on_conversation, state.messages)
                 # Re-ask from a CLEAN context (system turn + this one) so the
                 # repetition-poisoned history doesn't pin the model to its
                 # previous answer; the record still keeps the turn.
                 reply = await self._llm.chat(
-                    [state.messages[0], _msg("user", escalation_msg)],
+                    [state.messages[0], to_message("user", escalation_msg)],
                     stream_to=_stream_with_conversation(state, on_conversation, stream_to),
                     temperature=self._escalation_temperature,
                 )
@@ -308,7 +308,7 @@ class AsyncSQLTranslator:
                     errors=errors,
                     repair_hint=repair_hint,
                 )
-                state.messages.append(_msg("user", fix_msg))
+                state.messages.append(to_message("user", fix_msg))
                 _emit_conversation(on_conversation, state.messages)
                 reply = await self._llm.chat(
                     state.messages,
@@ -318,12 +318,12 @@ class AsyncSQLTranslator:
 
             state.token_usage = state.token_usage + reply.usage
             raw_content = reply.text
-            state.messages.append(_msg("assistant", raw_content))
+            state.messages.append(to_message("assistant", raw_content))
             _emit_conversation(on_conversation, state.messages)
             state.generated_query = self._target.extract_query(raw_content)
 
             logger.info("Fix iteration %d produced:\n%s", state.validation_iteration, state.generated_query)
-            _emit(
+            emit_event(
                 on_event,
                 FixGeneratedEvent(
                     iteration=state.validation_iteration,
@@ -333,24 +333,10 @@ class AsyncSQLTranslator:
 
         state.iterations_used = state.validation_iteration
         state.duration_seconds = perf_counter() - start_time
-        self.last_messages = [{"role": str(m["role"]), "content": str(m["content"])} for m in state.messages]
+        self.last_messages = snapshot_messages(state.messages)
 
-        result = TranslationResult(
-            sql_query=state.sql_query,
-            generated_query=state.generated_query,
-            target_language=state.target_language,
-            validation_passed=state.validation_passed,
-            validation_errors=state.validation_errors,
-            iterations_used=state.iterations_used,
-            status=state.final_status,
-            # A surviving ``outcome`` here is a WARN (a reject returned earlier),
-            # so the result stays self-describing about what the pre-flight flagged.
-            unmapped_tables=list(outcome.tables) if outcome is not None else [],
-            unmapped_columns=list(outcome.columns) if outcome is not None else [],
-            duration_seconds=state.duration_seconds,
-            token_usage=state.token_usage,
-        )
-        _emit(on_event, CompletedEvent(result=result))
+        result = build_result(state, outcome)
+        emit_event(on_event, CompletedEvent(result=result))
         return result
 
     async def close(self) -> None:
@@ -365,23 +351,16 @@ class AsyncSQLTranslator:
             await self._llm.close()
 
 
-def _msg(role: str, content: str) -> dict[str, Any]:
-    return {"role": role, "content": content}
-
-
-def _snapshot(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
-    return [{"role": str(m["role"]), "content": str(m["content"])} for m in messages]
-
-
 def _emit_conversation(handler: ConversationCallback | None, messages: list[dict[str, Any]]) -> None:
     """Invoke an ``on_conversation`` handler with a message snapshot, isolating its errors.
 
-    Mirrors :func:`_emit`: a misbehaving handler must not abort the translation.
+    Mirrors :func:`sql2graph.engine._loop.emit_event`: a misbehaving handler
+    must not abort the translation.
     """
     if handler is None:
         return
     try:
-        handler(_snapshot(messages))
+        handler(snapshot_messages(messages))
     except Exception:  # noqa: BLE001 (the whole point is to swallow user errors)
         logger.warning("Conversation handler raised", exc_info=True)
 
@@ -408,23 +387,6 @@ def _stream_with_conversation(
         parts.append(delta)
         if stream_to is not None:
             stream_to(delta)
-        _emit_conversation(on_conversation, [*state.messages, _msg("assistant", "".join(parts))])
+        _emit_conversation(on_conversation, [*state.messages, to_message("assistant", "".join(parts))])
 
     return _cb
-
-
-def _emit(handler: EventHandler | None, event: TranslationEvent) -> None:
-    """Invoke an event handler, isolating its exceptions from the loop.
-
-    Sync helper even though the translator is async: event handlers in this
-    codebase are sync (matching the sync translator's signature), so this
-    function intentionally does not ``await`` anything. If a future caller
-    wants async handlers, the Protocol and this helper would change
-    together.
-    """
-    if handler is None:
-        return
-    try:
-        handler(event)
-    except Exception:  # noqa: BLE001
-        logger.warning("Event handler raised on %s", type(event).__name__, exc_info=True)

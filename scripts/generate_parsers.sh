@@ -21,7 +21,7 @@ set -euo pipefail
 
 ANTLR_VERSION="${ANTLR_VERSION:-4.13.2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GRAMMARS="$HERE/src/sql2graph/validators/grammars"
+GRAMMARS="$HERE/src/sql2graph/validators/_grammar/sources"
 OUT="$HERE/src/sql2graph/validators/_grammar/generated"
 
 JAVA_BIN="${JAVA:-java}"

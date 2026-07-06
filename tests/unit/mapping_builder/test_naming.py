@@ -43,7 +43,9 @@ def test_table_to_label_non_ascii_falls_back_to_identifier() -> None:
 def test_edge_type_for_fk() -> None:
     assert edge_type_for_fk(ForeignKey(("regionkey",), "region"), target_label="Region") == "HAS_REGION"
     assert edge_type_for_fk(ForeignKey(("moderator_person_id",), "person"), target_label="Person") == "MODERATOR_PERSON"
-    assert edge_type_for_fk(ForeignKey(("reply_of_comment_id",), "comment"), target_label="Comment") == "REPLY_OF_COMMENT"
+    assert (
+        edge_type_for_fk(ForeignKey(("reply_of_comment_id",), "comment"), target_label="Comment") == "REPLY_OF_COMMENT"
+    )
     assert edge_type_for_fk(ForeignKey(("id",), "person"), target_label="Person") == "HAS_PERSON"
 
 

@@ -454,7 +454,7 @@ and `DdlParseError`.
 ### Pre-flight and unmapped-input handling
 
 Before any LLM call, both translators run an input-side pre-flight gate
-(`src/sql2graph/preflight.py`): it checks that the SQL parses, that every table
+(`src/sql2graph/engine/preflight.py`): it checks that the SQL parses, that every table
 it reads is in the mapping, and that every column it names on a mapped table is
 exposed. See [Pre-flight gate](ARCHITECTURE.md#pre-flight-gate-input-side) for
 the design and defaults.
@@ -488,6 +488,18 @@ class SqlAnalysis:
     parse_ok: bool
     column_refs: frozenset[tuple[str, str]]  # (table, column) pairs, where attributable
 ```
+
+To run the coverage checks directly (e.g. to preview unmapped input in a UI
+without invoking a translator), two helpers are exported:
+
+```python
+def find_unmapped_tables(sql_tables: frozenset[str], mapping: SchemaMapping) -> list[str]
+def find_unmapped_columns(column_refs: frozenset[tuple[str, str]], mapping: SchemaMapping) -> list[str]
+```
+
+Both take an `analyze_sql(...)` result's `source_tables` / `column_refs` and
+return the offending names (case-insensitive comparison, sorted) — the same
+checks the pre-flight gate applies, decoupled from its `PreflightAction` policy.
 
 ### Constants and helpers
 

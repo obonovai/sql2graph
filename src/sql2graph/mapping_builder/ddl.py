@@ -101,7 +101,11 @@ def _handle_create(
         name = _create_object_name(stmt)
         label = kind or type(stmt).__name__.lower()
         skipped.append(
-            SkippedObject(name=name, kind=label, reason=f"{label or 'object'} is not a base table; only CREATE TABLE becomes a node")
+            SkippedObject(
+                name=name,
+                kind=label,
+                reason=f"{label or 'object'} is not a base table; only CREATE TABLE becomes a node",
+            )
         )
         return
     table = _table_from_create(stmt)
@@ -169,7 +173,13 @@ def _merge_alter_constraints(
     for table_name, pk_cols in alter_pks:
         i = index.get(table_name.casefold())
         if i is None:
-            skipped.append(SkippedObject(name=table_name, kind="constraint", reason="ALTER TABLE adds a primary key to a table not defined in this DDL; constraint skipped"))
+            skipped.append(
+                SkippedObject(
+                    name=table_name,
+                    kind="constraint",
+                    reason="ALTER TABLE adds a primary key to a table not defined in this DDL; constraint skipped",
+                )
+            )
             continue
         # First primary-key declaration wins, mirroring _set_primary_key.
         if not tables[i].primary_key:
@@ -177,7 +187,13 @@ def _merge_alter_constraints(
     for table_name, fk in alter_fks:
         i = index.get(table_name.casefold())
         if i is None:
-            skipped.append(SkippedObject(name=table_name, kind="constraint", reason="ALTER TABLE adds a foreign key to a table not defined in this DDL; constraint skipped"))
+            skipped.append(
+                SkippedObject(
+                    name=table_name,
+                    kind="constraint",
+                    reason="ALTER TABLE adds a foreign key to a table not defined in this DDL; constraint skipped",
+                )
+            )
             continue
         tables[i] = replace(tables[i], foreign_keys=tables[i].foreign_keys + (fk,))
 
@@ -294,7 +310,9 @@ def _foreign_key_from_node(fk_node: Any, *, name: str | None = None) -> ForeignK
     return _foreign_key_from_reference(reference, local_columns=local, name=name)
 
 
-def _foreign_key_from_reference(reference: Any, *, local_columns: list[str], name: str | None = None) -> ForeignKey | None:
+def _foreign_key_from_reference(
+    reference: Any, *, local_columns: list[str], name: str | None = None
+) -> ForeignKey | None:
     """Build a :class:`ForeignKey` from an ``exp.Reference`` plus its local columns.
 
     The reference target lives under ``reference.this``: usually an

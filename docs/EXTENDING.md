@@ -31,7 +31,7 @@ class TargetLanguage(Protocol):
     def repair_hint(self, errors: list[str]) -> str | None: ...
 ```
 
-Reuse the shared scaffolding in `src/sql2graph/targets/_schema.py`
+Reuse the shared scaffolding in `src/sql2graph/targets/_rules.py`
 (`BaseRules`, `FeatureRule`, `compose_section`, `extract_query`) exactly as
 `CypherTarget`, `AqlTarget`, and `GremlinTarget` do - it gives you the uniform
 five-section base block and a query extractor for free. Return `None` from
@@ -57,7 +57,7 @@ branch to `make_target`.
 
 Add `"sparql"` to the `Literal["cypher", "aql", "gremlin"]` on
 `TranslationState.target_language` **and** `TranslationResult.target_language`
-(`src/sql2graph/state.py`). This is the one non-Protocol-friendly step - a
+(`src/sql2graph/engine/state.py`). This is the one non-Protocol-friendly step - a
 deliberate trade-off documented under "Known limitations" in
 [ARCHITECTURE.md](ARCHITECTURE.md#known-limitations).
 
@@ -68,7 +68,7 @@ reproducible recipe in
 [SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md#5-implementation-steps-reproducible-recipe):
 
 - **Syntax (deployment-free):** vendor the engine's ANTLR grammar under
-  `src/sql2graph/validators/grammars/` (record provenance in that directory's
+  `src/sql2graph/validators/_grammar/sources/` (record provenance in that directory's
   README), regenerate parsers with `scripts/generate_parsers.sh`, then write
   `validators/sparql/syntax.py` delegating to `parse_errors` with an
   EOF-anchored start rule. Add sync and async classes.
@@ -135,7 +135,7 @@ under `tests/unit/llm/` (mock the provider SDK). Run the check suite.
 ---
 
 Adding either extension touches no code inside the translator loop
-(`translator.py` / `async_translator.py`): the loop consumes the Protocols, so a
+(`engine/translator.py` / `engine/async_translator.py`): the loop consumes the Protocols, so a
 conforming implementation drops in. The only exceptions are the two `Literal`
 widenings in step 4 of the target walkthrough, which exist to keep typed access
 to `state.target_language` precise.

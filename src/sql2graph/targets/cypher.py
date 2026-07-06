@@ -6,9 +6,9 @@ response. The extractor accepts code-fenced (```` ```cypher ... ``` ````) and
 keyword-led (``MATCH ... RETURN ...``) responses, in that order of preference.
 
 The prompt section is built from the shared schema in
-:mod:`sql2graph.targets._schema`: a :class:`~sql2graph.targets._schema.BaseRules`
+:mod:`sql2graph.targets._rules`: a :class:`~sql2graph.targets._rules.BaseRules`
 block (always emitted) plus a dictionary of per-:class:`~sql2graph.sql_features.SqlFeature`
-:class:`~sql2graph.targets._schema.FeatureRule` chunks; only the chunks matching
+:class:`~sql2graph.targets._rules.FeatureRule` chunks; only the chunks matching
 features detected in the input SQL are appended. The same five-section base
 skeleton and the shared worked-example inputs are used by every target, so the
 three stay structurally aligned.
@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 
 from sql2graph.sql_features import SqlFeature
-from sql2graph.targets._schema import (
+from sql2graph.targets._rules import (
     EX_GROUPED_COUNT_SQL,
     EX_JOIN_FILTER_SQL,
     EX_POINT_LOOKUP_SQL,
@@ -345,7 +345,7 @@ class CypherTarget:
 
         The base block is always emitted; the per-feature rule chunks are
         appended in :class:`~sql2graph.sql_features.SqlFeature` declaration
-        order (see :func:`~sql2graph.targets._schema.compose_section`).
+        order (see :func:`~sql2graph.targets._rules.compose_section`).
         """
         return compose_section(_BASE_RULES, _FEATURE_RULES, features)
 
