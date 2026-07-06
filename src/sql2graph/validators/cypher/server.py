@@ -3,10 +3,21 @@
 The validator submits each candidate query as ``EXPLAIN <query>`` against a
 live Neo4j instance. ``EXPLAIN`` parses and plans the query without
 executing it, so the check is safe to run for arbitrary statements
-(including writes and deletes) and catches the entire class of errors
-the syntax validator misses (non-existent labels, non-existent
-relationship types, non-existent properties) that the LLM is most prone
-to hallucinate.
+(including writes and deletes).
+
+Two classes of fault are surfaced. Plan-time errors (syntax, unknown
+functions, and the like) are *raised* by the driver and returned as error
+strings. Schema hallucinations -- a reference to a label, relationship
+type, or property that does not exist -- are *not* raised: Neo4j reports
+them as advisory notifications on the result summary. The validator reads
+those notifications (:func:`_unrecognized_notifications`) and surfaces the
+``UNRECOGNIZED`` class as errors, so the class the LLM is most prone to
+hallucinate is caught against a populated database.
+
+That reporting is governed by :attr:`Neo4jConfig.notifications_min_severity`:
+left at its default the server sends notifications and they are reported;
+managed validation sets it to ``"OFF"`` so its *empty* throwaway database --
+where every label would look unknown -- stays silent.
 
 The :class:`Neo4jConfig` Pydantic model is colocated with the validator
 that consumes it, rather than living in a shared config module. This
@@ -19,10 +30,34 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from neo4j import AsyncGraphDatabase, GraphDatabase
+from neo4j import (
+    AsyncGraphDatabase,
+    GraphDatabase,
+    NotificationClassification,
+    ResultSummary,
+)
 from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+def _unrecognized_notifications(summary: ResultSummary) -> list[str]:
+    """Extract schema-hallucination notifications from an ``EXPLAIN`` summary.
+
+    Neo4j attaches a reference to a non-existent label, relationship type, or
+    property to the result summary as an advisory notification with GQL
+    classification ``UNRECOGNIZED``, rather than raising it. This returns one
+    formatted error string per such notification and nothing for the other
+    classes (performance, deprecation, ...), which must not fail an otherwise
+    valid query. The list is empty when the server sent no notifications -- as
+    in managed mode, which sets ``notifications_min_severity="OFF"`` so its
+    empty database does not flag every label as unknown.
+    """
+    return [
+        f"Schema error [{obj.gql_status}]: {obj.status_description}"
+        for obj in summary.gql_status_objects
+        if obj.is_notification and obj.classification == NotificationClassification.UNRECOGNIZED
+    ]
 
 
 class Neo4jConfig(BaseModel):
@@ -70,10 +105,12 @@ class CypherServerValidator:
         errors: list[str] = []
         try:
             with self._driver.session(database=self._database) as session:
-                session.run(f"EXPLAIN {query}").consume()
+                summary = session.run(f"EXPLAIN {query}").consume()
         except Exception as e:
             logger.info("Cypher validation error: %s", e)
             errors.append(str(e))
+            return errors
+        errors.extend(_unrecognized_notifications(summary))
         return errors
 
     def close(self) -> None:
@@ -104,10 +141,12 @@ class AsyncCypherServerValidator:
         try:
             async with self._driver.session(database=self._database) as session:
                 result = await session.run(f"EXPLAIN {query}")
-                await result.consume()
+                summary = await result.consume()
         except Exception as e:
             logger.info("Cypher validation error: %s", e)
             errors.append(str(e))
+            return errors
+        errors.extend(_unrecognized_notifications(summary))
         return errors
 
     async def close(self) -> None:

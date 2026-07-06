@@ -8,6 +8,7 @@ See ``tests/README.md`` for the full env-var list and a docker-compose recipe.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -45,6 +46,35 @@ def neo4j_config() -> Neo4jConfig:
         password=password,
         database=os.environ.get("NEO4J_DATABASE", "neo4j"),
     )
+
+
+@pytest.fixture
+def seeded_neo4j_config(neo4j_config: Neo4jConfig) -> Iterator[Neo4jConfig]:
+    """``neo4j_config`` with the ``small_schema`` labels/type/property keys present.
+
+    Server validation now reports unknown-label/property notifications, so the
+    end-to-end loop only converges when the mapping's schema actually exists in
+    the database. This seeds one node per label (which registers the label and
+    property-key tokens) plus a ``MEMBER_OF`` edge, yields the same config, and
+    removes the seed nodes on teardown. Uses ``id = -1`` so it never collides
+    with real data.
+    """
+    from neo4j import GraphDatabase
+
+    driver = GraphDatabase.driver(neo4j_config.uri, auth=(neo4j_config.username, neo4j_config.password))
+    seed = (
+        "MERGE (p:Person {id: -1}) SET p.name = 'seed' "
+        "MERGE (f:Forum {id: -1}) SET f.title = 'seed' "
+        "MERGE (p)-[:MEMBER_OF]->(f)"
+    )
+    try:
+        with driver.session(database=neo4j_config.database) as s:
+            s.run(seed).consume()
+        yield neo4j_config
+    finally:
+        with driver.session(database=neo4j_config.database) as s:
+            s.run("MATCH (n) WHERE (n:Person OR n:Forum) AND n.id = -1 DETACH DELETE n").consume()
+        driver.close()
 
 
 @pytest.fixture

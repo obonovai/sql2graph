@@ -19,10 +19,15 @@ loop: it inspects a candidate query and returns a list of error strings
   :class:`~sql2graph.validators.gremlin.server.GremlinServerValidator`):
   delegate validation to a live graph database via its
   parse-without-executing endpoint (Neo4j ``EXPLAIN``, ArangoDB
-  ``db.aql.validate``, Gremlin Server script submission). Catches
-  label/collection/property hallucinations on schema-aware backends
-  (Neo4j, ArangoDB, JanusGraph); on schemaless TinkerGraph the Gremlin
-  server validator only catches parse / step-compatibility errors.
+  ``db.aql.validate``, Gremlin Server script submission). Against a
+  *populated* server they also report schema hallucinations -- a
+  label/relationship-type/property (Neo4j, from ``EXPLAIN``'s
+  ``UNRECOGNIZED`` notifications) or collection (ArangoDB, by cross-checking
+  the catalogue) that the query names but the database lacks. Managed
+  validation provisions an *empty* database and suppresses that reporting
+  (every name would look unknown), so its reach is the parse/plan check
+  alone; schemaless TinkerGraph likewise catches only parse /
+  step-compatibility errors.
 * **No-op** (:class:`~sql2graph.validators.noop.NoopValidator`): always
   reports success, so the loop exits after the first iteration. Used when
   measuring raw single-shot LLM quality.

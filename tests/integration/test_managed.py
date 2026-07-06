@@ -44,6 +44,30 @@ def test_managed_aql_validator_accepts_and_rejects() -> None:
 
 
 @pytest.mark.usefixtures("docker_available")
+def test_managed_cypher_suppresses_label_hallucination() -> None:
+    """Managed Cypher must not flag an unknown label: its empty DB sets
+    notifications_min_severity='OFF', so every label would otherwise look unknown."""
+    validator = ManagedServerValidator("cypher")
+    try:
+        errors = validator.validate("MATCH (n:Zzz_NoSuchLabel_9f3a) RETURN n")
+    finally:
+        validator.close()
+    assert errors == [], f"managed mode should suppress label hallucinations, got: {errors}"
+
+
+@pytest.mark.usefixtures("docker_available")
+def test_managed_aql_suppresses_collection_hallucination() -> None:
+    """Managed AQL must not flag an unknown collection: provisioning sets
+    check_collections=False so the empty catalogue is not treated as hallucinated."""
+    validator = ManagedServerValidator("aql")
+    try:
+        errors = validator.validate("FOR x IN zzz_no_such_collection RETURN x")
+    finally:
+        validator.close()
+    assert errors == [], f"managed mode should suppress collection hallucinations, got: {errors}"
+
+
+@pytest.mark.usefixtures("docker_available")
 def test_aql_offline_syntax_agrees_with_server() -> None:
     """The offline (hand-ported) AQL grammar should agree with ArangoDB's own parser.
 

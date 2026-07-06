@@ -28,5 +28,9 @@ def start() -> tuple[Any, ArangoDBConfig]:
         username="root",
         password=_PASSWORD,
         database="_system",
+        # The managed DB is empty, so every referenced collection would look
+        # like a hallucination; skip the catalogue cross-check. This mirrors the
+        # Neo4j provisioner's notifications_min_severity="OFF".
+        check_collections=False,
     )
     return container, config
