@@ -1,9 +1,12 @@
 # SQL -> AQL evaluation: results and analysis
 
-Run of 2026-07-03. 15 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
-gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
-temperature 0, max 3 generate-validate-fix iterations with offline syntax validation against
-a hand-ported ArangoDB grammar (Flex+Bison, 3.11 branch, best-effort). Execution accuracy
+Run of 2026-07-07. 15 LDBC gold queries x 5 models (llama3.2:latest, qwen3-coder:30b,
+gemma4:26b via Ollama; claude-opus-4-8 and claude-opus-4-8-thinking, the same Opus model with
+extended thinking on, via the Anthropic API), serial model-by-model, temperature 0, max 3
+generate-validate-fix iterations with offline syntax validation against a hand-ported ArangoDB
+grammar (Flex+Bison, 3.11 branch, best-effort). The base four-model run is from 2026-07-03; the
+claude-opus-4-8-thinking variant was added 2026-07-06 and all metrics were recomputed
+2026-07-07. Execution accuracy
 measured against the Postgres oracle on graphonauts's ArangoDB (database `graphonauts`, LDBC
 SNB SF1, camelCase attributes, ISO-8601 string dates, unified SCREAMING_SNAKE edge collections
 built by `scripts/build_arango_unified_edges.py`). Optional text (image-post content) comes
@@ -14,42 +17,47 @@ aql`, 15/15).
 
 ## Headline
 
-| model           | validity | pass@1 | component F1 | exec accuracy | result F1 |
-|-----------------|----------|--------|--------------|---------------|-----------|
-| claude-opus-4-8 | 1.00     | 1.00   | 0.88         | **0.93**      | 0.93      |
-| gemma4:26b      | 1.00     | 0.93   | 0.88         | **0.93**      | 0.93      |
-| qwen3-coder:30b | 1.00     | 1.00   | 0.82         | 0.47          | 0.47      |
-| llama3.2:latest | 0.80     | 0.47   | 0.55         | 0.00          | 0.00      |
+| model                    | validity | pass@1 | component F1 | exec accuracy | result F1 |
+|--------------------------|----------|--------|--------------|---------------|-----------|
+| claude-opus-4-8          | 1.00     | 1.00   | 0.88         | **0.93**      | 0.93      |
+| claude-opus-4-8-thinking | 1.00     | 1.00   | 0.90         | **0.93**      | 0.93      |
+| gemma4:26b               | 1.00     | 0.93   | 0.88         | **0.93**      | 0.93      |
+| qwen3-coder:30b          | 1.00     | 1.00   | 0.82         | 0.47          | 0.47      |
+| llama3.2:latest          | 0.80     | 0.47   | 0.55         | 0.00          | 0.00      |
 
-For contrast, on the same 15 queries Cypher reached execution accuracy 1.00 for both opus and
-gemma (qwen 0.53, llama 0.20), and Gremlin only 0.53 (opus) and 0.67 (gemma). AQL sits between
-them: both strong models are near-perfect but lose *exactly one* query - q12 - and it lands on
+For contrast, on the same 15 queries Cypher reached execution accuracy 1.00 for opus,
+opus-thinking and gemma (qwen 0.53, llama 0.20), and Gremlin only 0.53 (opus) and 0.67 (gemma),
+though opus in extended-thinking mode recovers to 0.87 there. AQL sits between them: opus,
+opus-thinking and gemma are all near-perfect but lose *exactly one* query - q12 - and it lands on
 the one place AQL forces an imperative result-shaping decision, which is the failure class that
-dominates Gremlin. The same models, the same SQL, the same schema mapping: only the target
-language changed.
+dominates Gremlin. Extended thinking does not rescue it: opus-thinking fails q12 too, and is
+otherwise query-for-query identical to terse opus here. The same models, the same SQL, the same
+schema mapping: only the target language changed.
 
 ## Per-query execution accuracy
 
-| query | opus | gemma | qwen | llama | note |
-|-------|------|-------|------|-------|------|
-| q01 point lookup        | 1 | 1 | 1 | 0 | llama emits the placeholder `LabelA` |
-| q02 date range          | 1 | 1 | 1 | 0 | |
-| q03 filter by name      | 1 | 1 | 1 | 0 | |
-| q04 top-10 by count     | 1 | 1 | 0 | 0 | qwen: `COLLECT ... INTO` miscount |
-| q05 tag usage           | 1 | 1 | 0 | 0 | opus correct but ~123s; qwen wrong direction |
-| q06 friends + edge prop | 1 | 1 | 1 | 0 | |
-| q07 3-way join          | 1 | 1 | 0 | 0 | qwen invents a `HAS_TYPE` hop |
-| q08 friends-of-friends  | 1 | 1 | 0 | 0 | qwen over-counts, 21,084 vs 2,805 |
-| q09 reply chain         | 1 | 1 | 0 | 0 | qwen: `replyOfPostId` property, not `REPLY_OF` |
-| q10 LEFT JOIN count     | 1 | 1 | 1 | 0 | |
-| q11 HAVING              | 1 | 1 | 1 | 0 | |
-| q12 UNION               | 0 | 0 | 0 | 0 | everyone: `RETURN UNION_DISTINCT(...)` array |
-| q13 NOT EXISTS          | 1 | 1 | 1 | 0 | |
-| q14 group by country    | 1 | 1 | 0 | 0 | qwen: `IS_SUBCLASS_OF` hallucination |
-| q15 recursive ancestors | 1 | 1 | 0 | 0 | llama: placeholder ids + bad syntax; qwen: `1..` skips start, reads absent `.level` |
+The `think` column is claude-opus-4-8-thinking; on AQL it matches opus exactly (both lose only q12).
 
-q12 is the only query all four fail, opus and gemma included. No query is passed by all four,
-because llama fails every one.
+| query | opus | think | gemma | qwen | llama | note |
+|-------|------|-------|-------|------|-------|------|
+| q01 point lookup        | 1 | 1 | 1 | 1 | 0 | llama emits the placeholder `LabelA` |
+| q02 date range          | 1 | 1 | 1 | 1 | 0 | |
+| q03 filter by name      | 1 | 1 | 1 | 1 | 0 | |
+| q04 top-10 by count     | 1 | 1 | 1 | 0 | 0 | qwen: `COLLECT ... INTO` miscount |
+| q05 tag usage           | 1 | 1 | 1 | 0 | 0 | opus correct but ~123s; qwen wrong direction |
+| q06 friends + edge prop | 1 | 1 | 1 | 1 | 0 | |
+| q07 3-way join          | 1 | 1 | 1 | 0 | 0 | qwen invents a `HAS_TYPE` hop |
+| q08 friends-of-friends  | 1 | 1 | 1 | 0 | 0 | qwen over-counts, 21,084 vs 2,805 |
+| q09 reply chain         | 1 | 1 | 1 | 0 | 0 | qwen: `replyOfPostId` property, not `REPLY_OF` |
+| q10 LEFT JOIN count     | 1 | 1 | 1 | 1 | 0 | |
+| q11 HAVING              | 1 | 1 | 1 | 1 | 0 | |
+| q12 UNION               | 0 | 0 | 0 | 0 | 0 | everyone: `RETURN UNION_DISTINCT(...)` array |
+| q13 NOT EXISTS          | 1 | 1 | 1 | 1 | 0 | |
+| q14 group by country    | 1 | 1 | 1 | 0 | 0 | qwen: `IS_SUBCLASS_OF` hallucination |
+| q15 recursive ancestors | 1 | 1 | 1 | 0 | 0 | llama: placeholder ids + bad syntax; qwen: `1..` skips start, reads absent `.level` |
+
+q12 is the only query all five fail, opus, opus-thinking and gemma included. No query is passed
+by all five, because llama fails every one.
 
 ## Anatomy of the failures (reconstructed from the records and the row cache)
 
@@ -85,7 +93,7 @@ is the single point in the language where the otherwise clause-by-clause mapping
 down: a collection-returning function has to be re-unfolded into rows with a `FOR`, an
 imperative step that has no counterpart in the SQL the model is translating.
 
-### 2. Everything else, the strong models get right (14/15)
+### 2. Everything else, the strong models get right (opus, opus-thinking, gemma: 14/15)
 
 Opus and gemma each pass the other 14. Their AQL is idiomatic throughout:
 `LET member_count = LENGTH(FOR ... RETURN 1)` for junction-table aggregations,
@@ -94,6 +102,12 @@ filter the unified `HAS_TAG` collection, and `0..100 OUTBOUND ... IS_PART_OF` wi
 `LENGTH(path.edges)` as depth for the new q15 transitive-hierarchy walk. The only wrinkle is
 opus's q05, which is a *correct* translation with a performance problem (see caveats), not a
 translation error.
+
+opus-thinking makes it three: it passes the identical 14, misses the identical q12, and adds
+nothing an execution test can see (component F1 nudges from 0.88 to 0.90, execution unchanged at
+0.93). It engaged extended thinking on all 15 queries and still produced no shape or endpoint
+change, because on a declarative target there is none to make. That inertness is the point - the
+same reasoning budget that recovers 34 points on Gremlin has no purchase here.
 
 ### 3. llama3.2: it cannot produce the dialect, and it says so (0/15)
 
@@ -172,6 +186,13 @@ structural canonicaliser scores differently from Cypher's `(:Person)`. Both mode
    models, and qwen's 0.822 structure sits far above its 0.467 execution. Only execution against
    the oracle separates fluent-but-wrong from correct.
 
+5. **Reasoning changes nothing on a declarative target.** opus-thinking is query-for-query
+   identical to terse opus here - same 14 passes, same q12 miss - even though it engaged thinking
+   on all 15 queries. AQL's single imperative seam (q12's `UNION_DISTINCT` re-unfolding) is an
+   idiom the model does not reach for, not a search-depth problem, so a reasoning budget does not
+   close it. The payoff of extended thinking is confined to imperative Gremlin (0.53 -> 0.87; see
+   `gremlin_results.md`).
+
 ## Caveats
 
 - 15 queries, one run, temperature 0: sub-2-query differences are noise. The robust signals are
@@ -190,3 +211,7 @@ structural canonicaliser scores differently from Cypher's `(:Person)`. Both mode
   are reconciled by the comparator.
 - llama's q09, q12 and q15 never pass static validation (57/60 AQL translations validate).
   Validity is not correctness: here even the 12 that validate execute at 0.
+- Extended thinking is query-for-query identical to terse opus on AQL (same 14 passes, same q12
+  miss), at higher cost ($0.591 vs $0.512) and latency (78 s vs 46 s); it engaged thinking on all
+  15 queries yet still did not supply q12's `UNION_DISTINCT` re-unfold. Reasoning's payoff is on
+  Gremlin, not here.

@@ -1,9 +1,11 @@
 # SQL -> Cypher evaluation: results and analysis
 
-Run of 2026-07-03. 15 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
-gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
-temperature 0, max 3 generate-validate-fix iterations with offline ANTLR (Neo4j Cypher
-grammar) validation. Execution accuracy measured against the Postgres oracle on
+Run of 2026-07-07. 15 LDBC gold queries x 5 models (llama3.2:latest, qwen3-coder:30b,
+gemma4:26b via Ollama; claude-opus-4-8 and claude-opus-4-8-thinking, the same Opus model
+with extended thinking on, via the Anthropic API), serial model-by-model, temperature 0,
+max 3 generate-validate-fix iterations with offline ANTLR (Neo4j Cypher grammar) validation.
+The base four-model run is from 2026-07-03; the claude-opus-4-8-thinking variant was added
+2026-07-06 and all metrics were recomputed 2026-07-07. Execution accuracy measured against the Postgres oracle on
 graphonauts's Neo4j (LDBC SNB SF1, camelCase properties, unified SCREAMING_SNAKE
 relationship types, native temporal dates so `datetime('...')` predicates match directly).
 The gold Cypher set itself was validated first: all 15 gold queries return exactly the same
@@ -11,41 +13,47 @@ rows as their gold SQL (`scripts/validate_gold.py --target cypher`, 15/15).
 
 ## Headline
 
-| model           | validity | pass@1 | component F1 | exec accuracy | result F1 |
-|-----------------|----------|--------|--------------|---------------|-----------|
-| claude-opus-4-8 | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
-| gemma4:26b      | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
-| qwen3-coder:30b | 1.00     | 1.00   | 0.93         | 0.53          | 0.56      |
-| llama3.2:latest | 1.00     | 0.87   | 0.82         | 0.20          | 0.21      |
+| model                    | validity | pass@1 | component F1 | exec accuracy | result F1 |
+|--------------------------|----------|--------|--------------|---------------|-----------|
+| claude-opus-4-8          | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
+| claude-opus-4-8-thinking | 1.00     | 1.00   | 0.97         | **1.00**      | 1.00      |
+| gemma4:26b               | 1.00     | 1.00   | 0.98         | **1.00**      | 1.00      |
+| qwen3-coder:30b          | 1.00     | 1.00   | 0.93         | 0.53          | 0.56      |
+| llama3.2:latest          | 1.00     | 0.87   | 0.82         | 0.20          | 0.21      |
 
-For contrast, on the same 15 queries the AQL target reached execution accuracy 0.93 for
-both opus and gemma (qwen 0.47, llama 0.00), and Gremlin only 0.53 (opus) and 0.67 (gemma).
-Cypher is the one target where both strong models are flawless - 30 for 30 - so every bit of
-variance here lives in the two small local models. The same models, the same SQL, the same
-schema mapping: only the target language changed.
+For contrast, on the same 15 queries the AQL target reached execution accuracy 0.93 for opus,
+opus-thinking and gemma (qwen 0.47, llama 0.00), and Gremlin only 0.53 (opus) and 0.67 (gemma),
+though opus in extended-thinking mode recovers to 0.87 there. Cypher is the one target where the
+strong models are flawless - opus, opus-thinking and gemma all execute 15 for 15 - so every bit
+of variance here lives in the two small local models, and extended thinking has no room to help:
+it matches non-thinking opus query-for-query. The same models, the same SQL, the same schema
+mapping: only the target language changed.
 
 ## Per-query execution accuracy
 
-| query | opus | gemma | qwen | llama | note |
-|-------|------|-------|------|-------|------|
-| q01 point lookup        | 1 | 1 | 1 | 1 | |
-| q02 date range          | 1 | 1 | 1 | 0 | llama: `WITH` drops `p` from scope |
-| q03 filter by name      | 1 | 1 | 1 | 0 | llama invents a `KNOWS` hop |
-| q04 top-10 by count     | 1 | 1 | 1 | 1 | |
-| q05 tag usage           | 1 | 1 | 0 | 0 | qwen: cartesian double `OPTIONAL MATCH`, timed out |
-| q06 friends + edge prop | 1 | 1 | 0 | 0 | qwen projects the anchor's date, not the edge's |
-| q07 3-way join          | 1 | 1 | 1 | 0 | |
-| q08 friends-of-friends  | 1 | 1 | 1 | 0 | |
-| q09 reply chain         | 1 | 1 | 0 | 0 | qwen: property filter, not `REPLY_OF` |
-| q10 LEFT JOIN count     | 1 | 1 | 0 | 0 | both locals: all forums, zero counts |
-| q11 HAVING              | 1 | 1 | 1 | 0 | |
-| q12 UNION               | 1 | 1 | 0 | 0 | |
-| q13 NOT EXISTS          | 1 | 1 | 1 | 1 | |
-| q14 group by country    | 1 | 1 | 0 | 0 | qwen: `IS_SUBCLASS_OF` hallucination |
-| q15 recursive ancestors | 1 | 1 | 0 | 0 | llama: single `IS_PART_OF` hop, not `*`; qwen: constant `depth`, drops start row |
+The `think` column is claude-opus-4-8-thinking; on Cypher it matches opus exactly (all 15 pass).
 
-The two strong models pass all 15; q01, q04 and q13 are passed by everyone; no query defeats
-all four. The interesting content is entirely in why the two local models fail.
+| query | opus | think | gemma | qwen | llama | note |
+|-------|------|-------|-------|------|-------|------|
+| q01 point lookup        | 1 | 1 | 1 | 1 | 1 | |
+| q02 date range          | 1 | 1 | 1 | 1 | 0 | llama: `WITH` drops `p` from scope |
+| q03 filter by name      | 1 | 1 | 1 | 1 | 0 | llama invents a `KNOWS` hop |
+| q04 top-10 by count     | 1 | 1 | 1 | 1 | 1 | |
+| q05 tag usage           | 1 | 1 | 1 | 0 | 0 | qwen: cartesian double `OPTIONAL MATCH`, timed out |
+| q06 friends + edge prop | 1 | 1 | 1 | 0 | 0 | qwen projects the anchor's date, not the edge's |
+| q07 3-way join          | 1 | 1 | 1 | 1 | 0 | |
+| q08 friends-of-friends  | 1 | 1 | 1 | 1 | 0 | |
+| q09 reply chain         | 1 | 1 | 1 | 0 | 0 | qwen: property filter, not `REPLY_OF` |
+| q10 LEFT JOIN count     | 1 | 1 | 1 | 0 | 0 | both locals: all forums, zero counts |
+| q11 HAVING              | 1 | 1 | 1 | 1 | 0 | |
+| q12 UNION               | 1 | 1 | 1 | 0 | 0 | |
+| q13 NOT EXISTS          | 1 | 1 | 1 | 1 | 1 | |
+| q14 group by country    | 1 | 1 | 1 | 0 | 0 | qwen: `IS_SUBCLASS_OF` hallucination |
+| q15 recursive ancestors | 1 | 1 | 1 | 0 | 0 | llama: single `IS_PART_OF` hop, not `*`; qwen: constant `depth`, drops start row |
+
+All three of opus, opus-thinking and gemma pass all 15; q01, q04 and q13 are passed by everyone;
+no query defeats all five. The interesting content is entirely in why the two local models fail
+(and, at the end, in what extended thinking does not add here).
 
 ## Anatomy of the failures (reconstructed from the records and the row cache)
 
@@ -54,7 +62,7 @@ Every failure below was read off the recorded translation (`generated_query` vs
 metrics. There were no strong-model failures to dissect - opus and gemma execute all 15
 correctly - so this is a study of the two local models.
 
-### 1. The declarative target is nearly free for a capable model (opus, gemma: 30/30)
+### 1. The declarative target is nearly free for a capable model (opus, opus-thinking, gemma: 45/45)
 
 A SQL join maps to a Cypher `MATCH` pattern almost clause-by-clause, and `RETURN a.x, a.y`
 lines up one-to-one with the SELECT list. There is simply no result-shape space to get lost
@@ -72,6 +80,13 @@ Worth noting: opus and gemma are frequently *not* an exact string match to the g
 on) yet execute correctly every time. For these two models validity, structure and execution
 all sit at ~1.00 - the validity-to-correctness gap is zero, versus 47 points for opus on
 Gremlin.
+
+Extended thinking has nothing to add on this target. opus-thinking executes all 15 correctly,
+exactly as terse opus does, with identical per-query outcomes; tellingly, the model itself
+mostly declined to think here - thinking engaged on only 7 of 15 queries, against 13 of 15 on
+Gremlin - spending reasoning where correctness is in doubt and skipping it where the
+clause-by-clause translation is already right. Its component F1 even dips a hair (0.97 vs 0.98)
+from harmless phrasing changes, with no effect on execution.
 
 ### 2. llama3.2: relationship tables become nodes (3/15)
 
@@ -157,6 +172,13 @@ compare against the oracle catches it.
    separates fluent-but-wrong from correct. Even for opus and gemma the weakest structural axis
    is edge direction (0.883), but on Cypher it never actually costs them a result.
 
+5. **Reasoning is inert where the language is already shape-faithful.** The extended-thinking
+   variant of opus matches non-thinking opus query-for-query (15/15, identical outcomes), and
+   the model declines to engage thinking on more than half the queries (7 of 15). On the target
+   that taxes a reasoning budget the least, it also *benefits* from one the least; the payoff
+   shows up only on imperative Gremlin, where opus-thinking recovers 34 points (see
+   `gremlin_results.md`).
+
 ## Caveats
 
 - 15 queries, one run, temperature 0: differences under ~2 queries are noise. The robust
@@ -172,3 +194,7 @@ compare against the oracle catches it.
   similarity, is the primary metric.
 - Vacuous matches (both stores return 0 rows -> accuracy 1.0) do not arise here: every gold
   result is non-empty (minimum 1 row, at q01).
+- Extended thinking makes no difference on Cypher: opus-thinking executes all 15 correctly,
+  identically to terse opus, at higher cost ($0.445 vs $0.396) and latency (62 s vs 44 s), with
+  thinking engaged on only 7 of 15 queries. This is the target where reasoning is least needed
+  and least helpful; its payoff is on Gremlin.

@@ -1,9 +1,12 @@
 # SQL -> Gremlin evaluation: results and analysis
 
-Run of 2026-07-03. 15 LDBC gold queries x 4 models (llama3.2:latest, qwen3-coder:30b,
-gemma4:26b via Ollama; claude-opus-4-8 via the Anthropic API), serial model-by-model,
-temperature 0, max 3 generate-validate-fix iterations with offline ANTLR (TinkerPop
-grammar) validation. Execution accuracy measured against the Postgres oracle on
+Run of 2026-07-07. 15 LDBC gold queries x 5 models (llama3.2:latest, qwen3-coder:30b,
+gemma4:26b via Ollama; claude-opus-4-8 and claude-opus-4-8-thinking, the same Opus model
+with extended thinking on, via the Anthropic API), serial model-by-model, temperature 0,
+max 3 generate-validate-fix iterations with offline ANTLR (TinkerPop grammar) validation.
+The base four-model run is from 2026-07-03; the claude-opus-4-8-thinking variant was added
+2026-07-06 and all metrics were recomputed 2026-07-07. Throughout, a bare "opus" means the
+non-thinking claude-opus-4-8 and "opus-thinking" the extended-thinking variant. Execution accuracy measured against the Postgres oracle on
 graphonauts's in-memory TinkerGraph (Gremlin Server 3.8.1, LDBC SNB SF1, unified
 SCREAMING_SNAKE edge labels, ISO-8601 string dates). The gold Gremlin set itself was
 validated first: all 15 gold queries return exactly the same rows as their gold SQL
@@ -11,39 +14,46 @@ validated first: all 15 gold queries return exactly the same rows as their gold 
 
 ## Headline
 
-| model           | validity | pass@1 | component F1 | exec accuracy | result F1 |
-|-----------------|----------|--------|--------------|---------------|-----------|
-| gemma4:26b      | 1.00     | 0.93   | 0.91         | **0.67**      | 0.77      |
-| claude-opus-4-8 | 1.00     | 1.00   | 0.91         | 0.53          | 0.56      |
-| qwen3-coder:30b | 0.73     | 0.67   | 0.83         | 0.20          | 0.22      |
-| llama3.2:latest | 0.20     | 0.20   | 0.65         | 0.00          | 0.00      |
+| model                    | validity | pass@1 | component F1 | exec accuracy | result F1 |
+|--------------------------|----------|--------|--------------|---------------|-----------|
+| claude-opus-4-8-thinking | 1.00     | 1.00   | 0.91         | **0.87**      | 0.89      |
+| gemma4:26b               | 1.00     | 0.93   | 0.91         | 0.67          | 0.77      |
+| claude-opus-4-8          | 1.00     | 1.00   | 0.91         | 0.53          | 0.56      |
+| qwen3-coder:30b          | 0.73     | 0.67   | 0.83         | 0.20          | 0.22      |
+| llama3.2:latest          | 0.20     | 0.20   | 0.65         | 0.00          | 0.00      |
 
-For contrast, on the same 15 queries the Cypher target reached execution accuracy 1.00
-for both opus and gemma (qwen 0.53, llama 0.20), and AQL reached 0.93 for both (qwen 0.47,
-llama 0.00). Gremlin cut the two strongest models to 0.53 and 0.67 and crushed the weaker
-two. That gap is the headline
-finding: the *same* models, the *same* SQL, the *same* schema mapping - only the target
-language changed.
+For contrast, on the same 15 queries the Cypher target reached execution accuracy 1.00 for
+opus, opus-thinking and gemma alike (qwen 0.53, llama 0.20), and AQL reached 0.93 for the
+same three (qwen 0.47, llama 0.00); on both of those targets extended thinking bought
+nothing. Gremlin is the one target where it matters. Non-thinking opus falls to 0.53 and
+gemma to 0.67, while the *same* opus model with extended thinking on climbs to 0.87 - the
+only configuration that recovers most of the gap. Two effects stack here: the *same* models,
+SQL and schema mapping collapse from 1.00 to ~0.6 when only the target *language* changes to
+Gremlin, and then the *same* opus recovers 34 of those points (0.53 -> 0.87) when only its
+*reasoning budget* changes. Gremlin is where both the language and the thinking decide the
+outcome.
 
 ## Per-query execution accuracy
 
-| query | opus | gemma | qwen | llama | note |
-|-------|------|-------|------|-------|------|
-| q01 point lookup        | 1 | 1 | 1 | 0 | |
-| q02 date range          | 0 | 0 | 0 | 0 | nobody survives the nullable column |
-| q03 filter by name      | 1 | 1 | 1 | 0 | |
-| q04 top-10 by count     | 1 | 1 | 0 | 0 | |
-| q05 tag usage           | 0 | 0 | 0 | 0 | nobody filters the unified edge |
-| q06 friends + edge prop | 0 | 1 | 0 | 0 | |
-| q07 3-way join          | 1 | 1 | 0 | 0 | |
-| q08 friends-of-friends  | 0 | 0 | 0 | 0 | hardest; see below |
-| q09 reply chain         | 0 | 1 | 0 | 0 | |
-| q10 LEFT JOIN count     | 1 | 1 | 0 | 0 | |
-| q11 HAVING              | 1 | 1 | 0 | 0 | |
-| q12 UNION               | 1 | 0 | 0 | 0 | gemma off by exactly 1 row |
-| q13 NOT EXISTS          | 1 | 1 | 1 | 0 | |
-| q14 group by country    | 0 | 1 | 0 | 0 | |
-| q15 recursive ancestors | 0 | 0 | 0 | 0 | nobody passes; opus `tree()` KeyError, qwen 2nd generation_hang |
+The `think` column is claude-opus-4-8-thinking (extended-thinking variant of the same model).
+
+| query | opus | think | gemma | qwen | llama | note |
+|-------|------|-------|-------|------|-------|------|
+| q01 point lookup        | 1 | 1 | 1 | 1 | 0 | |
+| q02 date range          | 0 | 0 | 0 | 0 | 0 | nobody survives the nullable column, thinking included |
+| q03 filter by name      | 1 | 1 | 1 | 1 | 0 | |
+| q04 top-10 by count     | 1 | 1 | 1 | 0 | 0 | |
+| q05 tag usage           | 0 | 1 | 0 | 0 | 0 | only opus-thinking filters the unified edge |
+| q06 friends + edge prop | 0 | 1 | 1 | 0 | 0 | thinking swaps duplicate `select` for `project` |
+| q07 3-way join          | 1 | 1 | 1 | 0 | 0 | |
+| q08 friends-of-friends  | 0 | 1 | 0 | 0 | 0 | hardest; thinking recovers 382 dropped rows |
+| q09 reply chain         | 0 | 1 | 1 | 0 | 0 | |
+| q10 LEFT JOIN count     | 1 | 1 | 1 | 0 | 0 | |
+| q11 HAVING              | 1 | 1 | 1 | 0 | 0 | |
+| q12 UNION               | 1 | 1 | 0 | 0 | 0 | gemma off by exactly 1 row |
+| q13 NOT EXISTS          | 1 | 1 | 1 | 1 | 0 | |
+| q14 group by country    | 0 | 0 | 1 | 0 | 0 | thinking still returns one grouped map |
+| q15 recursive ancestors | 0 | 1 | 0 | 0 | 0 | only opus-thinking passes; opus `tree()` KeyError, qwen 2nd generation_hang |
 
 ## Anatomy of the failures (verified against the live graph)
 
@@ -76,7 +86,10 @@ of unfolded rows and which every model, opus and gemma included, got wrong; see
 result-shaping idioms (`project`, `select`, `valueMap`, `group`), each with different
 row semantics, and only one of them matches a SQL result set without extra steps.
 
-### 2. Absent properties silently shorten rows (q02: every model failed identically)
+Extended thinking rewrites exactly these `select()`/nested shapes into `project()` and
+recovers q06, q08 and q09; only q14's missing `unfold()` survives it (section 7).
+
+### 2. Absent properties silently shorten rows (q02: every model failed identically, opus-thinking included)
 
 The graph stores SQL NULLs as *absent* properties (the Neo4j-style convention).
 `project(...).by('content')` on a post without content does not return null and does
@@ -95,7 +108,7 @@ either annotate nullable properties in the mapping, or always include the
 absent-property rule for Gremlin, whose projection semantics (unlike Cypher's
 `p.content -> null`) are unforgiving.
 
-### 3. Unified edge labels demand endpoint discipline (q05: every model failed)
+### 3. Unified edge labels demand endpoint discipline (q05: every base model failed; only opus-thinking applied the filter, section 7)
 
 The graph uses one `HAS_TAG` label for Forum->Tag, Post->Tag and Comment->Tag edges,
 mirroring the Neo4j convention. The SQL counts tag usage across posts and comments
@@ -131,10 +144,11 @@ tutorials, so the training prior actively fights the strict grammar. On q08 qwen
 into a deterministic degenerate loop (`.select('final1')...as('final2')...` forever at
 temperature 0) and its record is an explicit `generation_hang` failure.
 
-### 6. q15: the recursive hierarchy walk breaks all four, four different ways
+### 6. q15: the recursive hierarchy walk breaks all four base models, four different ways
 
-q15 climbs the Place hierarchy transitively (`repeat(out('IS_PART_OF'))`), and it is the run's
-fourth all-fail query - no model produces a passing traversal, each for a different reason:
+q15 climbs the Place hierarchy transitively (`repeat(out('IS_PART_OF'))`). Among the four base
+models it is an all-fail query - each fails for a different reason - and only opus-thinking, added
+later, produces a passing traversal (section 7):
 
 - **opus: a `tree()` result shape.** `...repeat(__.out('IS_PART_OF')).emit().tree()` is a valid
   traversal, but `tree()` returns a nested tree instead of rows and the result reader cannot
@@ -152,6 +166,43 @@ fourth all-fail query - no model produces a passing traversal, each for a differ
 
 Once again the strong models fail on *shape* (opus's tree, gemma's missing start row) while the
 small models fail on *dialect* - the same split as the rest of the target.
+
+### 7. Extended thinking closes most of the gap (opus 0.53 -> opus-thinking 0.87)
+
+The same Opus model, given an extended-thinking budget, fixes five of the seven queries
+non-thinking opus loses (q05, q06, q08, q09, q15) and lands at 0.87 - above gemma's 0.67 and 34
+points above its own terse configuration. Every fix is a *shape* or *endpoint* correction of
+exactly the kind sections 1-3 diagnose, and each was inspected by hand:
+
+- **q06, q08: duplicate-label `select()` -> `project()`.** Terse opus wrote
+  `select('p2', 'p2', 'p2', 'k')` (q06) and `select('p3', 'p3', 'p3', 't')` (q08); thinking
+  rewrote both as `project('id', 'first_name', 'last_name', ...)` with distinct keys and
+  `by(__.select('k').values('creationDate'))` for the edge property. q08 is the sharper case:
+  terse opus also ordered `.out('KNOWS').out('KNOWS').where(P.neq('p1')).as('p3')`, binding `p3`
+  *after* the self-exclusion so it dropped 382 of 2,805 rows; thinking moved the `as('p3')`
+  before the `where` and returned all 2,805 (`translated_rows` 2,423 -> 2,805).
+- **q05: the unified-edge filter, finally applied.** Thinking added the
+  `where(__.in('HAS_TAG').hasLabel('Post', 'Comment'))` guard (and the matching count filter)
+  that section 3 shows every terse model dropped, excluding the 309,766 forum edges and matching
+  the top-20 exactly.
+- **q09: vertex filter and scoped ordering.** Thinking corrected
+  `hasLabel('Post').has('id', ...)` to the single-vertex `has('Post', 'id', ...)` and moved
+  `order()` after the `as('c')` binding so the sort key resolves against the aliased row.
+- **q15: the all-fail query, broken open.** This is the one that made section 6's
+  four-different-ways point - no base model passed it. Thinking is the exception. Instead of
+  opus's unsupported `tree()` (the `KeyError: <DataType.tree: 43>`), it accumulates depth in a
+  sack - `withSack(0)...emit().repeat(__.out('IS_PART_OF').sack(sum).by(__.constant(1)))
+  .order().by(__.sack(), asc).project(..., 'depth').by(__.sack())` - and returns the correct 3
+  rows, start vertex included. It is now the only model, of five, that passes q15.
+
+The two it does *not* fix are as telling as the five it does. On q02 and q14 thinking produced
+output byte-identical to terse opus (`project(...).by('content')` and
+`group().by('name').by(__.count())` with no `unfold()`), and failed the same way. q14 is a
+genuine reasoning miss: the missing `unfold()` on a grouped map escaped even the thinking pass.
+q02 is not: the coalesce rule that fixes absent-property projection is prompt-gated on NULL
+syntax and was never injected (section 2), so the model was reasoning without the one fact it
+needed. Reasoning recovers shape and endpoint errors; it cannot recover information the prompt
+withheld.
 
 ## Why these results, in my opinion
 
@@ -186,16 +237,25 @@ small models fail on *dialect* - the same split as the rest of the target.
    apparently not enough; the models need the *implication* (filter when traversing a
    shared label) stated as a rule.
 
-5. **On gemma beating opus (0.67 vs 0.53):** with n = 15 this is a 2-query difference,
-   so it should not be over-read. That said, the pattern is consistent: gemma used
-   `project()` with distinct keys everywhere (perfect shape discipline) while opus
-   drifted into `select()`-based shapes on exactly the queries it lost, and gemma's
-   long reasoning phase (thousands of thinking tokens per query, at 10 to 40 times
-   opus's latency and roughly 60 seconds per query) appears to buy real shape checking.
-   Opus optimizes for terse first-shot answers (all 15 in one iteration, about 3 s and
-   80 output tokens each); on a language where the last three steps of the chain decide
-   correctness, that economy is a liability. A fix-loop that validated *shapes* (not
-   just syntax) would likely close most of opus's gap.
+5. **Terseness, not capability, was the ceiling - and reasoning proves it.** The old puzzle
+   was gemma edging non-thinking opus (0.67 vs 0.53, a 2-query difference on n = 15). The
+   mechanism was never that a 26B local model out-knew the frontier one: gemma used `project()`
+   with distinct keys everywhere (clean shape discipline) and spent a long reasoning phase per
+   query, while terse opus drifted into `select()`-based shapes on exactly the queries it lost,
+   answering all 15 in one iteration at about 3 s and 80 output tokens each. On a language where
+   the last three steps of the chain decide correctness, that economy is the liability. Extended
+   thinking is the direct test: give the *same* opus model a reasoning budget and it does the
+   shape checking gemma does, jumping to 0.87 - above gemma and 34 points above its terse self.
+   The frontier model was never behind; its default was just too terse for an imperative target,
+   and reasoning removes the ceiling.
+
+6. **Reasoning pays off exactly where the shape is hard to get right.** The gain is
+   language-shaped, not uniform: +34 points on imperative Gremlin, and zero on declarative
+   Cypher and AQL, where opus-thinking is query-for-query identical to terse opus (see the
+   companion reports). Reasoning buys nothing when the clause-by-clause answer is already
+   correct; it buys almost everything when correctness lives in the last few traversal steps.
+   That is the cleanest single-run evidence that the Gremlin difficulty is real and addressable,
+   not a modeling artefact.
 
 ## Caveats
 
@@ -212,4 +272,12 @@ small models fail on *dialect* - the same split as the rest of the target.
 - The structural metrics (component F1, TED) now use a real Gremlin canonicaliser
   (method-chain tree, as-label alpha-renaming), but they measure *surface* similarity:
   opus's 0.91 component F1 against 0.53 execution accuracy quantifies exactly how
-  misleading surface similarity is for this language.
+  misleading surface similarity is for this language. Note opus-thinking scores the same
+  0.91 component F1 as terse opus while executing at 0.87 rather than 0.53 - structure did
+  not move, only correctness did.
+- Extended thinking is not free: on Gremlin it cost $0.564 vs $0.411 and 111 s vs 41 s total
+  across the 15 queries (roughly 1.4x cost and 2.7x latency) for its +34-point gain, and it
+  engaged on 13 of 15 queries (skipping only the trivial point-lookups q01 and q03). On Cypher
+  and AQL the same budget bought no execution improvement at all - on Cypher the model mostly
+  declined to think (7 of 15). Reasoning is worth spending on the imperative target and largely
+  wasted on the declarative ones.
