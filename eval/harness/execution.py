@@ -1,11 +1,12 @@
 """Execution-based comparison engine: oracle rows vs translated-query rows.
 
-The shared implementation behind notebook 05 (execution metrics) and
+The shared *primitives* behind notebook 05 (execution metrics) and
 ``eval/scripts/validate_gold.py`` (gold-set validation): DB connection config,
-the date-reconciling multiset comparator, one query executor per backend, and
-the per-target record-execution loop. Extracted from notebook 05, which had
-the proven superset of the comparator semantics (the validator scripts used
-to carry drifted copies).
+the date-reconciling multiset comparator, and one query executor per backend.
+Notebook 05 builds its per-record execute-and-compare loop on top of these, so
+that flow reads in the notebook; this module keeps only the reusable pieces
+(the proven superset of the comparator semantics, since the validator scripts
+used to carry drifted copies).
 
 Comparator semantics: the Postgres oracle defines which output columns are
 dates; those reconcile to epoch-millis on all sides so Postgres timestamps,
@@ -16,14 +17,13 @@ Gremlin projects NULLs via ``coalesce(values(x), constant(''))``, both meaning
 Postgres NULL.
 
 Import-light by design: DB drivers load lazily inside the runners (passwords
-asserted on first use per target), and pandas inside :func:`execute_records`,
-so importing this module needs nothing running and nothing optional installed.
+asserted on first use per target), so importing this module needs nothing
+running and nothing optional installed.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import os
 import queue as _queue
 import threading as _threading
@@ -317,80 +317,3 @@ def close_clients() -> None:
         _arango_client.close()
         _arango_client = None
         _arango_db = None
-
-
-# --- per-target execution loop (notebook 05's engine) ---
-def execute_records(records: list[dict], target: str, cache: dict, cache_path: Path):
-    """Execute every runnable record of one target; returns the metric rows as a DataFrame.
-
-    The Postgres oracle rows are cached in ``cache`` (persisted to ``cache_path`` keyed by
-    ``dataset:query_id``), so re-runs and other targets touch nothing but their graph DB.
-    Records that failed validation (or errored) score 0 without touching the backend.
-    """
-    import pandas as pd
-
-    runnable = [r for r in records if r["dataset"] in POSTGRES_DATASETS and r["target"] == target]
-    print(f"{target}: {len(runnable)} executable record(s).")
-    rows_out = []
-    for idx, rec in enumerate(runnable, start=1):
-        qid = rec["query_id"]
-        ckey = f"{rec['dataset']}:{qid}"
-        print(f"[{idx:3d}/{len(runnable)}] {qid} ({rec['target']})", end=" ", flush=True)
-        if ckey in cache:
-            ref_rows = [tuple(r) for r in cache[ckey]["rows"]]
-            ref_runtime = cache[ckey]["runtime"]
-            ref_error = cache[ckey].get("error")
-            dcols = set(cache[ckey].get("date_cols", []))
-        else:
-            ref_rows, ref_runtime, ref_error = run_postgres(rec["sql"])
-            dcols = sorted(date_columns(ref_rows))
-            cache[ckey] = {
-                "rows": [list(r) for r in ref_rows],
-                "runtime": ref_runtime,
-                "error": ref_error,
-                "date_cols": dcols,
-            }
-            cache_path.write_text(json.dumps(cache, default=str))
-            dcols = set(dcols)
-        out = {
-            "dataset": rec["dataset"],
-            "target": rec["target"],
-            "model": rec["model"],
-            "query_id": qid,
-            "difficulty": rec["difficulty"],
-            "validation_passed": rec["validation_passed"],
-            "reference_runtime_s": ref_runtime,
-            "reference_error": ref_error,
-            "translated_runtime_s": None,
-            "execution_error": None,
-            "execution_accuracy": 0.0,
-            "result_precision": 0.0,
-            "result_recall": 0.0,
-            "result_f1": 0.0,
-            "result_jaccard_dist": 1.0,
-            "reference_rows": len(ref_rows),
-            "translated_rows": 0,
-        }
-        if ref_error is not None:
-            print(f"REF ERROR ({ref_error})")
-            rows_out.append(out)
-            continue
-        if not rec["validation_passed"] or not rec.get("generated_query"):
-            print("skip (translation invalid)")
-            rows_out.append(out)
-            continue
-        trans_rows, trans_runtime, trans_error = RUNNERS[target](rec["generated_query"])
-        out["translated_runtime_s"] = trans_runtime
-        out["execution_error"] = trans_error
-        if trans_error is not None:
-            print(f"EXEC ERROR ({trans_error[:60]})")
-            rows_out.append(out)
-            continue
-        out.update(compare_rowsets(ref_rows, trans_rows, dcols, empty_as_null=target in EMPTY_AS_NULL_TARGETS))
-        marker = "ok" if out["execution_accuracy"] == 1.0 else "ne"
-        print(
-            f"{marker} EX={out['execution_accuracy']:.0f} F1={out['result_f1']:.2f} "
-            f"ref={out['reference_rows']} trans={out['translated_rows']}"
-        )
-        rows_out.append(out)
-    return pd.DataFrame(rows_out)

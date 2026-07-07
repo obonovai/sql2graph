@@ -19,6 +19,8 @@ from __future__ import annotations
 from .config import (
     CACHE_DIR,
     DEFAULT_VALIDATION_MODE,
+    DISPLAY_NAME,
+    DISPLAY_ORDER,
     EVAL_DIR,
     EXECUTION_CACHE_PATH,
     FIGURES_DIR,
@@ -30,6 +32,7 @@ from .config import (
     METRICS_DISTANCE_CSV,
     METRICS_EXECUTION_CSV,
     METRICS_STRUCTURAL_CSV,
+    MODEL_ORDER,
     OUTPUTS_DIR,
     RECORDS_DIR,
     RECORDS_GLOB,
@@ -43,6 +46,7 @@ from .config import (
     ValidationMode,
     default_validation_mode,
     model_slug,
+    order_models,
     records_filename,
 )
 from .datasets import (
@@ -66,7 +70,10 @@ from .runner import (
     AttemptRecord,
     make_llm_for,
     make_translator_for,
+    records_path,
     run_translation,
+    translate_one,
+    write_records,
 )
 
 __all__ = [
@@ -92,6 +99,10 @@ __all__ = [
     # config: the matrix
     "RUN_MATRIX",
     "THINKING_LABELS",
+    "MODEL_ORDER",
+    "DISPLAY_NAME",
+    "DISPLAY_ORDER",
+    "order_models",
     "RunConfig",
     "Provider",
     "Target",
@@ -117,6 +128,9 @@ __all__ = [
     # runner
     "AttemptRecord",
     "run_translation",
+    "translate_one",
+    "records_path",
+    "write_records",
     "make_llm_for",
     "make_translator_for",
 ]

@@ -271,8 +271,9 @@ generated query scores 1.0.
 
 This family is the semantic ground truth: it *runs* the generated query on the target
 graph DB and the gold SQL on Postgres (the oracle), then compares the two result sets.
-All of it lives in `eval/harness/execution.py`; the driver is `execute_records`, and
-the comparison core is `compare_rowsets`.
+The reusable pieces, the per-backend executors and the comparison core `compare_rowsets`,
+live in `eval/harness/execution.py`; notebook 05 builds its per-record execute-and-compare
+loop (`execute_records`) on top of them, so that flow is visible in the notebook.
 
 **The oracle and the executors.** For each runnable record, `run_postgres` executes
 the gold SQL (its rows are cached per query in `execution_rows_cache.json`, so only

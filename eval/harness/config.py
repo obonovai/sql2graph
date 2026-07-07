@@ -127,9 +127,50 @@ def records_filename(rc: RunConfig) -> str:
 # Stratification labels for reasoning variants (adaptive thinking + effort). A row with
 # label="claude-opus-4-8-thinking" still calls the real claude-opus-4-8 on the API, but
 # records/metrics/plots stratify on the label, so the thinking run is its own series. The
-# notebooks import this to keep the thinking variant *out* of the shared 4-model comparison
-# views and show it in a dedicated section instead. Extend it if you add more variants.
+# notebooks import this to give the thinking variant its own per-model subsection (shown last)
+# rather than folding it silently into the base opus rows. Extend it if you add more variants.
 THINKING_LABELS: tuple[str, ...] = ("claude-opus-4-8-thinking",)
+
+
+# The one canonical model order used by every table, groupby, and figure in the notebooks
+# and every per-model column in the thesis: ascending capability, with the frontier model's
+# extended-thinking variant last. These are the *stratification labels* (record["model"] =
+# rc.label or rc.model), so the thinking variant appears under its label, not "claude-opus-4-8".
+MODEL_ORDER: tuple[str, ...] = (
+    "llama3.2:latest",
+    "qwen3-coder:30b",
+    "gemma4:26b",
+    "claude-opus-4-8",
+    "claude-opus-4-8-thinking",
+)
+
+# The name shown to a reader (notebook tables/figures, thesis) is the functional id itself: models
+# are displayed exactly as their run-matrix id, tags and all. DISPLAY_NAME is kept as an identity
+# map so the notebooks' relabelling step (``DISPLAY_NAME.get(m, m)``) stays a no-op and
+# _MODEL_RANK / order_models keep recognising the same strings.
+DISPLAY_NAME: dict[str, str] = {m: m for m in MODEL_ORDER}
+DISPLAY_ORDER: tuple[str, ...] = tuple(DISPLAY_NAME[m] for m in MODEL_ORDER)
+
+# One rank per model keyed by BOTH its functional id and its short tag, so order_models orders
+# a frame correctly whether it still carries functional ids or has been relabelled for display.
+_MODEL_RANK: dict[str, int] = {}
+for _i, _func in enumerate(MODEL_ORDER):
+    _MODEL_RANK[_func] = _i
+    _MODEL_RANK[DISPLAY_NAME[_func]] = _i
+
+
+def order_models(models) -> list[str]:
+    """``models`` in canonical order, recognising both functional ids and short display tags;
+    unknown names are appended, sorted.
+
+    The single source of model ordering: ``plots.model_axis`` calls it, and the notebooks
+    build their ordered categorical from it, so no view ever falls back to alphabetical
+    (which would put ``claude-*`` first and split the two opus rows from the local trio).
+    """
+    present = list(dict.fromkeys(models))
+    known = sorted((m for m in present if m in _MODEL_RANK), key=lambda m: _MODEL_RANK[m])
+    extra = sorted(m for m in present if m not in _MODEL_RANK)
+    return known + extra
 
 
 # The evaluation matrix: LDBC x {cypher, aql, gremlin} x 4 models. Extend by
@@ -141,12 +182,18 @@ RUN_MATRIX: list[RunConfig] = [
     RunConfig(dataset="ldbc", target="cypher", model="qwen3-coder:30b", provider="ollama"),
     RunConfig(dataset="ldbc", target="cypher", model="gemma4:26b", provider="ollama"),
     RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic"),
+    RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic",
+              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
+              max_output_tokens=16000),
     # AQL rows -- default validation_mode="syntax" (offline grammar; no server needed at
     # generation time). Execution accuracy runs against the mapping-aligned ArangoDB in 05.
     RunConfig(dataset="ldbc", target="aql", model="llama3.2:latest", provider="ollama"),
     RunConfig(dataset="ldbc", target="aql", model="qwen3-coder:30b", provider="ollama"),
     RunConfig(dataset="ldbc", target="aql", model="gemma4:26b", provider="ollama"),
     RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic"),
+    RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic",
+              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
+              max_output_tokens=16000),
     # Gremlin rows -- default validation_mode="syntax" (offline TinkerPop grammar).
     # Execution accuracy runs against graphonauts's in-memory TinkerGraph in 05
     # (bring it up with Neo4j/ArangoDB stopped; reload after container restarts).
@@ -159,12 +206,6 @@ RUN_MATRIX: list[RunConfig] = [
     # `label` stratifies it separately from the plain opus-4-8 rows above (own records
     # file, own series in every metric/plot); the real model sent to the API is still
     # claude-opus-4-8. max_output_tokens is raised so thinking has room to breathe.
-    RunConfig(dataset="ldbc", target="cypher", model="claude-opus-4-8", provider="anthropic",
-              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
-              max_output_tokens=16000),
-    RunConfig(dataset="ldbc", target="aql", model="claude-opus-4-8", provider="anthropic",
-              label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
-              max_output_tokens=16000),
     RunConfig(dataset="ldbc", target="gremlin", model="claude-opus-4-8", provider="anthropic",
               label="claude-opus-4-8-thinking", thinking="adaptive", effort="xhigh",
               max_output_tokens=16000),

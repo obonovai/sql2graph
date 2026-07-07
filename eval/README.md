@@ -4,16 +4,20 @@
 DB-free structural metrics plus execution accuracy against a live database.**
 
 Measures how well `sql2graph`'s LLM-driven SQL -> graph translator performs, across a
-matrix of **dataset x target language x model**. The reusable run/record/metric logic
-lives in the `harness` package; the notebooks are the analysis surface. See
-[`METRICS.md`](METRICS.md) for how each metric (Component F1, tree-edit distance,
-execution accuracy, ...) is defined and computed.
+matrix of **dataset x target language x model**. The `harness` package holds only reusable
+primitives: the metric functions, cost accounting, the row comparator, the per-backend DB
+drivers, and chart primitives. The larger orchestration (the resumable translation loop, the
+per-record execution loop, and which figures to draw) lives at the top of each notebook, so a
+notebook reads top-to-bottom without descending into the package. The notebooks are the
+analysis surface. See [`METRICS.md`](METRICS.md) for how each metric (Component F1, tree-edit
+distance, execution accuracy, ...) is defined and computed.
 
 The DB-free metrics (notebooks 01-04, 06) run with no databases: Pass@k (via offline syntax
 validation), structural (Exact Match / Component F1), and distance (Levenshtein / Jaccard /
 normalised tree-edit), plus a report. The matrix currently covers **LDBC x {Cypher, AQL,
-Gremlin} x 4 models** (12 cells: `llama3.2:latest`, `qwen3-coder:30b`, `gemma4:26b` on
-Ollama + `claude-opus-4-8` on Anthropic). Results are reported per target and never mixed.
+Gremlin} x 5 model configs** (15 cells: `llama3.2:latest`, `qwen3-coder:30b`, `gemma4:26b` on
+Ollama, plus `claude-opus-4-8` and its extended-thinking configuration
+`claude-opus-4-8-thinking` on Anthropic). Results are reported per target and never mixed.
 Execution-accuracy metrics (notebook 05) run the generated query on a real graph DB and
 need the graphonauts databases (see below); `EVAL_EXECUTION_TARGETS` selects which
 targets execute per pass.
@@ -28,20 +32,19 @@ eval/
 │   ├── config.py      ← RunConfig, RUN_MATRIX, paths + the notebook filename contract
 │   ├── datasets.py    ← gold-set loading + work-item construction
 │   ├── records.py     ← load_records / records_frame (reading side)
-│   ├── runner.py      ← run_translation, AttemptRecord (the only LLM caller)
+│   ├── runner.py      ← translate_one (single-query primitive) + AttemptRecord (the only LLM caller)
 │   ├── canonical.py   ← tokeniser + canonicaliser (shared by 03/04)
 │   ├── components.py  ← clause components + Component F1 (notebook 03)
 │   ├── distances.py   ← Levenshtein / Jaccard / normalised TED (notebook 04)
-│   ├── execution.py   ← comparator + DB executors (notebook 05 + validate_gold.py)
+│   ├── execution.py   ← comparator + per-backend DB drivers (notebook 05 builds its loop on these + validate_gold.py)
 │   ├── pricing.py     ← USD cost + billed-token accounting
-│   └── plots.py       ← matplotlib figures + render_target / FIGURE_SETS
+│   └── plots.py       ← matplotlib chart primitives (notebooks select + render them)
 ├── notebooks/
-│   ├── 00_setup.ipynb                ← Ollama liveness (hard) + DB checks (warn) + gold summary
-│   ├── 01_translation_run.ipynb      ← drive the matrix, write records_<dataset>_<target>_<model>.json
+│   ├── 01_translation_run.ipynb      ← Ollama liveness + gold catalogue; drive the matrix, write records_<dataset>_<target>_<model>.json
 │   ├── 02_behavioural_metrics.ipynb  ← Pass@1/k, iterations, duration, tokens, cost
 │   ├── 03_structural_metrics.ipynb   ← Exact Match, Component F1
 │   ├── 04_distance_metrics.ipynb     ← Levenshtein, Jaccard, normalised TED
-│   ├── 05_execution_metrics.ipynb    ← result-set metrics vs Postgres + graph DBs
+│   ├── 05_execution_metrics.ipynb    ← DB liveness checks; result-set metrics vs Postgres + graph DBs
 │   └── 06_report.ipynb               ← join + stratify + final markdown report (per-target sections)
 ├── outputs/                  
 │   ├── records/  ← records_<dataset>_<target>_<model>.json, one per matrix cell
@@ -78,8 +81,9 @@ library's runtime deps.
 
 ## The run matrix
 
-Everything is driven by `RUN_MATRIX` in `harness/config.py`. It holds 12 cells
-(LDBC x {cypher, aql, gremlin} x 4 models), e.g.:
+Everything is driven by `RUN_MATRIX` in `harness/config.py`. It holds 15 cells
+(LDBC x {cypher, aql, gremlin} x 5 model configs, i.e. the 4 base models plus the frontier
+model's extended-thinking variant), e.g.:
 
 ```python
 RUN_MATRIX = [
@@ -111,16 +115,18 @@ Smoke-test one query first by setting `SUBSET = ("ldbc_q01",)` in
 
 ```bash
 export MPLBACKEND=Agg
-uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/00_setup.ipynb
 uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/01_translation_run.ipynb
 uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/0{2,3,4,6}_*.ipynb
 ```
 
 or interactively: `uv run jupyter lab eval/notebooks/`.
 
-`01` is the only notebook that calls the LLM; it writes `records_*.json` incrementally and
-resumes (query ids already on disk are skipped). `02`-`04` and `06` are DB-free and consume
-those records. Notebook `05` needs the databases below and is excluded from this DB-free pass.
+`01` is the only notebook that calls the LLM; it checks Ollama liveness, prints the gold query
+catalogue, then writes `records_*.json` incrementally and resumes (query ids already on disk
+are skipped, unless `FORCE_RERUN = True`). `02`-`04` and `06` are DB-free and consume those
+records. Notebook `05` runs its own DB liveness checks and needs the databases below, so it is
+excluded from this DB-free pass. (There is no separate setup notebook: each notebook checks its
+own prerequisites.)
 
 ## Outputs
 
@@ -163,7 +169,7 @@ set before trusting any model numbers:
 uv run python eval/scripts/build_arango_unified_edges.py
 
 # 2. Prove the gold AQL matches the Postgres oracle (SQL vs AQL multiset compare). Expect
-#    14 genuine matches, 0 MISMATCH/error before running any model.
+#    15 genuine matches, 0 MISMATCH/error before running any model.
 uv run python eval/scripts/validate_gold.py --target aql
 
 # 3. Run notebook 05 (both targets -> Neo4j + ArangoDB + Postgres must be up).
@@ -174,8 +180,8 @@ Credentials default from `config/servers/*.yaml` (`neo4j.yaml`, `arangodb.yaml`)
 passwords need exporting for a standard local run; set `NEO4J_PASSWORD` / `ARANGO_PASSWORD` /
 `POSTGRES_*` only to override. Each backend connects lazily on first use, so a Cypher-only or
 AQL-only subset only needs that backend up; the gold Cypher proof is the same command with
-`--target cypher`. The per-query ceiling is `EVAL_QUERY_TIMEOUT` (default 60 s; the recorded
-run used 180 s so correct-but-slow translations are not scored as failures).
+`--target cypher`. The per-query ceiling is `EVAL_QUERY_TIMEOUT` (default 180 s, matching the recorded
+run, so correct-but-slow translations are not scored as failures).
 
 **Gremlin** runs on the graphonauts Gremlin Server (in-memory TinkerGraph,
 `ws://localhost:8182/gremlin`). TinkerGraph holds the whole graph on the JVM heap, so bring
@@ -188,7 +194,7 @@ docker compose -f $GRAPHONAUTS_DIR/docker/gremlin.compose.yml up -d
 (cd $GRAPHONAUTS_DIR && uv run graphonauts load gremlin && uv run graphonauts verify gremlin)
 
 # Prove the gold Gremlin matches the Postgres oracle (SQL vs Gremlin multiset compare).
-# Expect 14 genuine matches, 0 MISMATCH/error before running any model.
+# Expect 15 genuine matches, 0 MISMATCH/error before running any model.
 uv run python eval/scripts/validate_gold.py --target gremlin
 ```
 
@@ -213,7 +219,7 @@ before trusting execution results.
 ## Gold set notes
 
 `gold/ldbc.yaml` is a curated mix of hand-authored translation-difficulty queries and
-the graphonauts project's validated set, aligned to `examples/mappings/ldbc.yaml`. Each of the 14
+the graphonauts project's validated set, aligned to `examples/mappings/ldbc.yaml`. Each of the 15
 queries carries `sql` plus gold `expected_cypher` / `expected_aql` / `expected_gremlin`,
 a difficulty bucket, and `sql_features` tags. Conventions:
 

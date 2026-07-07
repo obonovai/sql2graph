@@ -122,24 +122,74 @@ def make_translator_for(rc: RunConfig, mapping) -> Iterator[SQLTranslator]:
         yield translator
 
 
-def _records_path(rc: RunConfig) -> Path:
+def records_path(rc: RunConfig) -> Path:
+    """The per-cell records file for ``rc`` (``records_<dataset>_<target>_<model>.json``)."""
     return rc.records_dir / records_filename(rc)
 
 
-def _write_records(path: Path, records: list[dict]) -> None:
+def write_records(path: Path, records: list[dict]) -> None:
+    """Write ``records`` to ``path`` as indented JSON (called after every item, crash-safe)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(records, indent=2, default=str))
+
+
+def translate_one(rc: RunConfig, item, mapping) -> dict:
+    """Translate one work item and return its :class:`AttemptRecord` as a dict.
+
+    The single-query primitive: it calls the LLM once (a fresh translator per item, for
+    chat-history isolation), captures the exact ``token_usage``, and never touches disk.
+    Both :func:`run_translation` and notebook 01's resume loop build on it, so the "run the
+    matrix" flow is visible in the notebook while the per-query mechanics live here.
+    """
+    error_message: str | None = None
+    result = None
+    try:
+        with make_translator_for(rc, mapping) as translator:
+            result = translator.translate(item.sql)
+    except Exception as exc:  # backend unreachable, model missing, etc.
+        error_message = f"{type(exc).__name__}: {exc}"
+
+    usage = result.token_usage if result else None
+    record = AttemptRecord(
+        dataset=rc.dataset,
+        query_id=item.query_id,
+        target=rc.target,
+        # Stratify on the label when set (e.g. the thinking variant) so it reads
+        # as its own model across every metric notebook; falls back to rc.model.
+        model=rc.label or rc.model,
+        provider=rc.provider,
+        difficulty=item.difficulty,
+        sql_features=item.sql_features,
+        sql=item.sql,
+        expected_query=item.expected_query,
+        generated_query=result.generated_query if result else None,
+        validation_passed=bool(result and result.validation_passed),
+        validation_errors=result.validation_errors if result else [],
+        iterations_used=result.iterations_used if result else 0,
+        status=result.status if result else "error",
+        duration_seconds=result.duration_seconds if result else 0.0,
+        unmapped_tables=result.unmapped_tables if result else [],
+        unmapped_columns=result.unmapped_columns if result else [],
+        input_tokens=usage.input_tokens if usage else 0,
+        output_tokens=usage.output_tokens if usage else 0,
+        cache_read_tokens=usage.cache_read_tokens if usage else 0,
+        cache_creation_tokens=usage.cache_creation_tokens if usage else 0,
+        total_tokens=usage.total_tokens if usage else 0,
+        thinking_used=usage.thinking_used if usage else False,
+        error=error_message,
+    )
+    return asdict(record)
 
 
 def run_translation(rc: RunConfig) -> list[dict]:
     """Run every work item for ``rc`` and return all records for this cell.
 
-    Resumes from ``records_<...>.json`` when ``rc.resume`` is set: query ids
-    already on disk are skipped (the filename already pins dataset/target/model,
-    so query_id is a sufficient key within the file).
+    Resumes from ``records_<...>.json`` when ``rc.resume`` is set: query ids already on disk
+    are skipped (the filename already pins dataset/target/model, so query_id is a sufficient
+    key within the file). Notebook 01 spells this same resume/force-rerun loop out inline via
+    :func:`translate_one`; this function is the script-friendly one-call equivalent.
     """
-    rc.records_dir.mkdir(parents=True, exist_ok=True)
-    path = _records_path(rc)
-
+    path = records_path(rc)
     existing: list[dict] = []
     done: set[str] = set()
     if rc.resume and path.exists():
@@ -152,62 +202,23 @@ def run_translation(rc: RunConfig) -> list[dict]:
 
     mapping = mapping_for(rc.dataset)
     records: list[dict] = list(existing)
-
     for idx, item in enumerate(work, start=1):
         print(f"[{idx:3d}/{len(work)}] {item.query_id} -> {rc.target}", end=" ", flush=True)
-        error_message: str | None = None
-        result = None
-        try:
-            with make_translator_for(rc, mapping) as translator:
-                result = translator.translate(item.sql)
-        except Exception as exc:  # backend unreachable, model missing, etc.
-            error_message = f"{type(exc).__name__}: {exc}"
-            print(f"ERROR ({error_message})")
-
-        usage = result.token_usage if result else None
-        record = AttemptRecord(
-            dataset=rc.dataset,
-            query_id=item.query_id,
-            target=rc.target,
-            # Stratify on the label when set (e.g. the thinking variant) so it reads
-            # as its own model across every metric notebook; falls back to rc.model.
-            model=rc.label or rc.model,
-            provider=rc.provider,
-            difficulty=item.difficulty,
-            sql_features=item.sql_features,
-            sql=item.sql,
-            expected_query=item.expected_query,
-            generated_query=result.generated_query if result else None,
-            validation_passed=bool(result and result.validation_passed),
-            validation_errors=result.validation_errors if result else [],
-            iterations_used=result.iterations_used if result else 0,
-            status=result.status if result else "error",
-            duration_seconds=result.duration_seconds if result else 0.0,
-            unmapped_tables=result.unmapped_tables if result else [],
-            unmapped_columns=result.unmapped_columns if result else [],
-            input_tokens=usage.input_tokens if usage else 0,
-            output_tokens=usage.output_tokens if usage else 0,
-            cache_read_tokens=usage.cache_read_tokens if usage else 0,
-            cache_creation_tokens=usage.cache_creation_tokens if usage else 0,
-            total_tokens=usage.total_tokens if usage else 0,
-            thinking_used=usage.thinking_used if usage else False,
-            error=error_message,
+        rec = translate_one(rc, item, mapping)
+        records.append(rec)
+        write_records(path, records)
+        if rec["error"] is not None:
+            print(f"ERROR ({rec['error']})")
+            continue
+        marker = "ok" if rec["validation_passed"] else "x "
+        # Billed input = uncached input + both Anthropic cache buckets, so the log
+        # matches the reports (and platform.claude.com "tokens in").
+        billed_in = billed_input_tokens(rec["input_tokens"], rec["cache_read_tokens"], rec["cache_creation_tokens"])
+        print(
+            f"{marker} iters={rec['iterations_used']} "
+            f"tokens=({billed_in:>6},{rec['output_tokens']:>4}) "
+            f"{rec['duration_seconds']:5.1f}s status={rec['status']}"
         )
-        records.append(asdict(record))
-        _write_records(path, records)
-
-        if error_message is None:
-            marker = "ok" if record.validation_passed else "x "
-            # Billed input = uncached input + both Anthropic cache buckets, so
-            # the log matches the reports (and platform.claude.com "tokens in").
-            billed_in = billed_input_tokens(
-                record.input_tokens, record.cache_read_tokens, record.cache_creation_tokens
-            )
-            print(
-                f"{marker} iters={record.iterations_used} "
-                f"tokens=({billed_in:>6},{record.output_tokens:>4}) "
-                f"{record.duration_seconds:5.1f}s status={record.status}"
-            )
 
     print(f"Done: {len(records)} record(s) in {path}")
     return records
