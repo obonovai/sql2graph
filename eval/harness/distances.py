@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from apted import APTED, Config
 
-from .canonical import _IDENT, _paren_map, canonicalize, clause_heads_for
+from .canonical import _IDENT, _paren_map, canonicalize, clause_heads_for, match_clause_head
 
 
 def _levenshtein_tokens(a: list[str], b: list[str]) -> int:
@@ -62,17 +62,6 @@ class ClauseNode:
         return 1 + sum(c.size() for c in self.children)
 
 
-def _match_clause_head(tokens: list[str], i: int, heads: tuple[str, ...]) -> tuple[str, int] | None:
-    # Multi-word heads ("OPTIONAL MATCH", "ORDER BY") must beat single-word heads.
-    for h in sorted(heads, key=lambda x: -len(x.split())):
-        parts = h.split()
-        if i + len(parts) > len(tokens):
-            continue
-        if all(tokens[i + k].upper() == parts[k] for k in range(len(parts))):
-            return h, len(parts)
-    return None
-
-
 def _gremlin_chain_tree(query: str) -> ClauseNode:
     """Method-chain tree: one node per step call (label = step name), children =
     that call's arguments, where nested calls (anonymous ``__.`` traversals,
@@ -114,7 +103,7 @@ def parse_to_clause_tree(query: str, target: str) -> ClauseNode:
     current: ClauseNode | None = None
     i = 0
     while i < len(tokens):
-        m = _match_clause_head(tokens, i, heads)
+        m = match_clause_head(tokens, i, heads)
         if m is not None:
             label, consumed = m
             current = ClauseNode(label=label)

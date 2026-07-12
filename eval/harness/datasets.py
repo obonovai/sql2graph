@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import functools
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import yaml
 
@@ -47,7 +46,6 @@ class WorkItem:
     sql: str
     target: str
     expected_query: str
-    mapping_path: Path
 
 
 def expected_key(target: str) -> str:
@@ -84,10 +82,6 @@ def mapping_for(dataset: str) -> SchemaMapping:
     return SchemaMapping.from_yaml(MAPPINGS_DIR / f"{dataset}.yaml")
 
 
-def mapping_path_for(dataset: str) -> Path:
-    return MAPPINGS_DIR / f"{dataset}.yaml"
-
-
 def build_work_items(rc: RunConfig) -> list[WorkItem]:
     """One :class:`WorkItem` per gold query for ``rc.target``.
 
@@ -96,7 +90,6 @@ def build_work_items(rc: RunConfig) -> list[WorkItem]:
     Cypher-only dataset entry is skipped on an AQL run).
     """
     items: list[WorkItem] = []
-    mapping_path = mapping_path_for(rc.dataset)
     for q in load_dataset(rc.dataset):
         if rc.subset is not None and q.id not in rc.subset:
             continue
@@ -112,7 +105,6 @@ def build_work_items(rc: RunConfig) -> list[WorkItem]:
                 sql=q.sql,
                 target=rc.target,
                 expected_query=expected,
-                mapping_path=mapping_path,
             )
         )
     return items

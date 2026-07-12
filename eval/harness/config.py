@@ -124,18 +124,12 @@ def records_filename(rc: RunConfig) -> str:
     return f"records_{rc.dataset}_{rc.target}_{model_slug(rc.label or rc.model)}.json"
 
 
-# Stratification labels for reasoning variants (adaptive thinking + effort). A row with
-# label="claude-opus-4-8-thinking" still calls the real claude-opus-4-8 on the API, but
-# records/metrics/plots stratify on the label, so the thinking run is its own series. The
-# notebooks import this to give the thinking variant its own per-model subsection (shown last)
-# rather than folding it silently into the base opus rows. Extend it if you add more variants.
-THINKING_LABELS: tuple[str, ...] = ("claude-opus-4-8-thinking",)
-
-
 # The one canonical model order used by every table, groupby, and figure in the notebooks
 # and every per-model column in the thesis: ascending capability, with the frontier model's
 # extended-thinking variant last. These are the *stratification labels* (record["model"] =
 # rc.label or rc.model), so the thinking variant appears under its label, not "claude-opus-4-8".
+# Models are shown to a reader exactly as their run-matrix id (tags and all); there is no
+# separate display-name mapping.
 MODEL_ORDER: tuple[str, ...] = (
     "llama3.2:latest",
     "qwen3-coder:30b",
@@ -144,24 +138,12 @@ MODEL_ORDER: tuple[str, ...] = (
     "claude-opus-4-8-thinking",
 )
 
-# The name shown to a reader (notebook tables/figures, thesis) is the functional id itself: models
-# are displayed exactly as their run-matrix id, tags and all. DISPLAY_NAME is kept as an identity
-# map so the notebooks' relabelling step (``DISPLAY_NAME.get(m, m)``) stays a no-op and
-# _MODEL_RANK / order_models keep recognising the same strings.
-DISPLAY_NAME: dict[str, str] = {m: m for m in MODEL_ORDER}
-DISPLAY_ORDER: tuple[str, ...] = tuple(DISPLAY_NAME[m] for m in MODEL_ORDER)
-
-# One rank per model keyed by BOTH its functional id and its short tag, so order_models orders
-# a frame correctly whether it still carries functional ids or has been relabelled for display.
-_MODEL_RANK: dict[str, int] = {}
-for _i, _func in enumerate(MODEL_ORDER):
-    _MODEL_RANK[_func] = _i
-    _MODEL_RANK[DISPLAY_NAME[_func]] = _i
+# One rank per model, so order_models can sort a frame's models into canonical order.
+_MODEL_RANK: dict[str, int] = {m: i for i, m in enumerate(MODEL_ORDER)}
 
 
 def order_models(models) -> list[str]:
-    """``models`` in canonical order, recognising both functional ids and short display tags;
-    unknown names are appended, sorted.
+    """``models`` in canonical order; unknown names are appended, sorted.
 
     The single source of model ordering: ``plots.model_axis`` calls it, and the notebooks
     build their ordered categorical from it, so no view ever falls back to alphabetical
@@ -171,6 +153,24 @@ def order_models(models) -> list[str]:
     known = sorted((m for m in present if m in _MODEL_RANK), key=lambda m: _MODEL_RANK[m])
     extra = sorted(m for m in present if m not in _MODEL_RANK)
     return known + extra
+
+
+# Difficulty axis order (the gold sets use exactly these three buckets); the single source for
+# every difficulty groupby/reindex in plots.py and the metric notebooks.
+DIFF_ORDER: list[str] = ["easy", "medium", "hard"]
+
+# The 8 per-clause structural F1 columns, in a stable display order; single-sourced here so the
+# figures (plots.py), the report (report.py), and notebook 03 all name them the same way.
+COMPONENT_F1_COLS: list[str] = [
+    "f1_node_labels",
+    "f1_edge_types",
+    "f1_directions",
+    "f1_where",
+    "f1_return",
+    "f1_order",
+    "f1_limit",
+    "f1_aggregations",
+]
 
 
 # The evaluation matrix: LDBC x {cypher, aql, gremlin} x 4 models. Extend by

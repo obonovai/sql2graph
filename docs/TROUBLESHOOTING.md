@@ -105,13 +105,13 @@ stronger model.
 
 ### AQL execution metrics error or return nothing
 
-Before running execution metrics (or `validate_gold.py --target aql`), you must
-build the mapping-aligned unified edge collections **after every ArangoDB
-(re)load** - this is mandatory, not optional:
-
-```bash
-uv run python eval/scripts/build_arango_unified_edges.py
-```
+No ArangoDB setup step is required: the eval harness rewrites the gold and
+candidate AQL's unified SCREAMING_SNAKE edge names (`KNOWS`, `HAS_CREATOR`,
+`HAS_TAG`, ...) to graphonauts's split snake_case collections at query time
+(`eval/harness/arango_edges.expand_unified_edges`, applied in `run_aql`), so the
+database is never modified. If the traversals still return nothing, confirm LDBC
+SF1 is actually loaded into ArangoDB database `graphonauts` (graphonauts's split
+edge collections such as `knows`, `post_has_creator`, `forum_has_tag`).
 
 See [`eval/README.md`](../eval/README.md) for the full execution-metrics setup
 and [`eval/METRICS.md`](../eval/METRICS.md) for what each metric measures.

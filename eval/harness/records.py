@@ -31,10 +31,3 @@ def load_records(
     if model is not None:
         records = [r for r in records if r.get("model") == model]
     return records
-
-
-def records_frame(records_dir: Path, **filt):
-    """Load records (optionally filtered) into a pandas DataFrame."""
-    import pandas as pd
-
-    return pd.DataFrame(load_records(records_dir, **filt))

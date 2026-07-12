@@ -22,6 +22,7 @@ from .canonical import (
     alpha_rename,
     canonicalize,
     clause_heads_for,
+    match_clause_head,
     strip_comments,
     tokenize,
 )
@@ -58,16 +59,10 @@ def _clause_body(tokens: list[str], heads: tuple[str, ...], labels: tuple[str, .
     i = 0
     in_target = False
     while i < len(tokens):
-        matched_head: str | None = None
-        consumed = 0
-        for h in sorted(heads, key=lambda x: -len(x.split())):
-            parts = h.split()
-            if i + len(parts) <= len(tokens) and all(tokens[i + k].upper() == parts[k] for k in range(len(parts))):
-                matched_head = h
-                consumed = len(parts)
-                break
-        if matched_head is not None:
-            in_target = matched_head in labels
+        match = match_clause_head(tokens, i, heads)
+        if match is not None:
+            head, consumed = match
+            in_target = head in labels
             i += consumed
             continue
         if in_target:
@@ -214,26 +209,19 @@ def components_of(query: str, target: str) -> Components:
     raise ValueError(f"Unknown target language: {target!r}")
 
 
-def _set_f1(a: set[str], b: set[str]) -> float:
-    if not a and not b:
-        return 1.0
-    if not a or not b:
-        return 0.0
-    tp = len(a & b)
-    if tp == 0:
-        return 0.0
-    p, r = tp / len(a), tp / len(b)
-    return 2 * p * r / (p + r)
+def _overlap_f1(a, b) -> float:
+    """F1 of the multiset overlap of ``a`` against ``b`` (precision over ``a``, recall over ``b``).
 
-
-def _list_f1(a: list[str], b: list[str]) -> float:
-    if not a and not b:
-        return 1.0
-    if not a or not b:
-        return 0.0
+    Works for both the set-valued components (each element counted once) and the
+    ordered/repeated ``directions`` component (multiplicities matter): a ``set`` is just a
+    multiset whose counts are all 1. Empty-vs-empty scores 1.0; empty-vs-nonempty (or zero
+    overlap) scores 0.0.
+    """
     ac, bc = Counter(a), Counter(b)
+    if not ac and not bc:
+        return 1.0
     overlap = sum((ac & bc).values())
-    if overlap == 0:
+    if not overlap:
         return 0.0
     p, r = overlap / sum(ac.values()), overlap / sum(bc.values())
     return 2 * p * r / (p + r)
@@ -243,14 +231,14 @@ def component_f1(translated: str, expected: str, target: str) -> dict[str, float
     t = components_of(translated, target)
     e = components_of(expected, target)
     scores = {
-        "node_labels": _set_f1(t.node_labels, e.node_labels),
-        "edge_types": _set_f1(t.edge_types, e.edge_types),
-        "directions": _list_f1(t.directions, e.directions),
-        "where": _set_f1(t.where_tokens, e.where_tokens),
-        "return": _set_f1(t.return_tokens, e.return_tokens),
-        "order": _set_f1(t.order_tokens, e.order_tokens),
+        "node_labels": _overlap_f1(t.node_labels, e.node_labels),
+        "edge_types": _overlap_f1(t.edge_types, e.edge_types),
+        "directions": _overlap_f1(t.directions, e.directions),
+        "where": _overlap_f1(t.where_tokens, e.where_tokens),
+        "return": _overlap_f1(t.return_tokens, e.return_tokens),
+        "order": _overlap_f1(t.order_tokens, e.order_tokens),
         "limit": 1.0 if t.limit_value == e.limit_value else 0.0,
-        "aggregations": _set_f1(t.aggregations, e.aggregations),
+        "aggregations": _overlap_f1(t.aggregations, e.aggregations),
     }
     scores["overall"] = sum(scores.values()) / len(scores)
     return scores

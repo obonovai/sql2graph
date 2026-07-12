@@ -26,22 +26,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .config import order_models
-
-# Difficulty axis order (the gold sets use exactly these three buckets).
-DIFF_ORDER = ["easy", "medium", "hard"]
-
-# The 8 per-clause structural F1 columns, in a stable display order.
-COMPONENT_F1_COLS = [
-    "f1_node_labels",
-    "f1_edge_types",
-    "f1_directions",
-    "f1_where",
-    "f1_return",
-    "f1_order",
-    "f1_limit",
-    "f1_aggregations",
-]
+# DIFF_ORDER and COMPONENT_F1_COLS live in config (single source); kept importable as
+# plots.DIFF_ORDER / plots.COMPONENT_F1_COLS, their historical home.
+from .config import COMPONENT_F1_COLS, DIFF_ORDER, order_models
 
 # Discrete pass/fail palette (fail red, pass green); NaN cells are painted grey.
 _PASS_CMAP = matplotlib.colors.ListedColormap(["#d62728", "#2ca02c"]).with_extremes(bad="lightgrey")

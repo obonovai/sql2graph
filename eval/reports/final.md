@@ -1,6 +1,6 @@
 # sql2graph evaluation report
 
-Generated: 2026-07-07T22:48:26
+Generated: 2026-07-12T11:12:53
 
 Models under evaluation: **llama3.2:latest, qwen3-coder:30b, gemma4:26b, claude-opus-4-8, claude-opus-4-8-thinking**
 

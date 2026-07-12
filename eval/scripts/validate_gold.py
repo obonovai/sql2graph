@@ -14,9 +14,10 @@ exported passwords, though NEO4J_PASSWORD / ARANGO_PASSWORD / POSTGRES_* still o
 
 Per-target prerequisites:
   cypher   Neo4j up with LDBC SF1 loaded.
-  aql      ArangoDB up (db `graphonauts`) with the unified SCREAMING_SNAKE edge
-           collections from examples/mappings/<dataset>.yaml built first:
-               uv run python eval/scripts/build_arango_unified_edges.py
+  aql      ArangoDB up (db `graphonauts`) with LDBC SF1 loaded (graphonauts's split
+           snake_case edge collections). No setup step: harness.execution.run_aql expands
+           the gold's unified SCREAMING_SNAKE edge names to those split collections at
+           query time (harness.arango_edges), so the database is never modified.
   gremlin  Gremlin Server up and LOADED (in-memory TinkerGraph; reload after any
            container restart, with Neo4j/ArangoDB stopped - the Docker VM is
            memory-tight). From graphonauts:
@@ -43,7 +44,6 @@ from harness.execution import (
     RUNNERS,
     close_clients,
     compare_rowsets,
-    date_columns,
     run_postgres,
 )
 
@@ -66,9 +66,7 @@ def main() -> None:
                 continue
             sql_rows, _, sql_err = run_postgres(q.sql)
             trans_rows, _, trans_err = RUNNERS[target](gold)
-            cmp = compare_rowsets(
-                sql_rows, trans_rows, date_columns(sql_rows), empty_as_null=target in EMPTY_AS_NULL_TARGETS
-            )
+            cmp = compare_rowsets(sql_rows, trans_rows, empty_as_null=target in EMPTY_AS_NULL_TARGETS)
             match = cmp["execution_accuracy"] == 1.0
             err = sql_err or trans_err
             if err:

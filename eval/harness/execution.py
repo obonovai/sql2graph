@@ -8,9 +8,10 @@ that flow reads in the notebook; this module keeps only the reusable pieces
 (the proven superset of the comparator semantics, since the validator scripts
 used to carry drifted copies).
 
-Comparator semantics: the Postgres oracle defines which output columns are
-dates; those reconcile to epoch-millis on all sides so Postgres timestamps,
-Neo4j native temporals, and ArangoDB/Gremlin ISO-8601 strings compare equal.
+Comparator semantics: temporal cells fold per value to epoch-millis, so Postgres
+timestamps, Neo4j native temporals, and ArangoDB/Gremlin ISO-8601 strings compare
+equal regardless of engine. Any cell that is a native/driver temporal or matches
+an ISO date/datetime reconciles; genuine integers and free text pass through.
 ``empty_as_null=True`` (the AQL/Gremlin paths, see EMPTY_AS_NULL_TARGETS) also
 maps '' -> None: ArangoDB stores absent optional text as '' and the gold
 Gremlin projects NULLs via ``coalesce(values(x), constant(''))``, both meaning
@@ -33,6 +34,9 @@ from time import perf_counter
 
 from neo4j.time import Date as Neo4jDate
 from neo4j.time import DateTime as Neo4jDateTime
+
+# Pure-stdlib (re only), so importing it keeps this module's import-light contract.
+from .arango_edges import expand_unified_edges
 
 # --- connection config (graphonauts backends; see eval/README.md) ---
 # Postgres is the source oracle, not a config/servers/ target, so its DSN keeps its own
@@ -107,54 +111,41 @@ def to_epoch_ms(v):
     return v
 
 
-def date_columns(rows) -> set[int]:
-    """Column positions the oracle (Postgres) returns as date/datetime."""
-    cols = set()
-    for r in rows:
-        vals = list(r.values()) if isinstance(r, dict) else list(r)
-        for j, v in enumerate(vals):
-            if isinstance(v, (_dt.date, _dt.datetime)):
-                cols.add(j)
-    return cols
-
-
 def norm_value(v, empty_as_null: bool = False):
+    # Temporals (native, Neo4j driver, or ISO string) fold to epoch-millis so every
+    # engine's representation of an instant compares equal; genuine ints and free text
+    # pass through. bool is checked before int (bool is an int subclass).
     if v is None:
         return None
     if empty_as_null and v == "":
         return None
     if isinstance(v, bool):
         return "True" if v else "False"
-    if isinstance(v, (Neo4jDate, Neo4jDateTime)):
-        return v.iso_format().split("+")[0].split("[")[0]
-    if isinstance(v, _dt.datetime):
-        return v.replace(tzinfo=None).isoformat(timespec="seconds")
-    if isinstance(v, _dt.date):
-        return v.isoformat()
+    if isinstance(v, (Neo4jDate, Neo4jDateTime, _dt.datetime, _dt.date)):
+        return str(to_epoch_ms(v))
     if isinstance(v, int):
         return str(v)
     if isinstance(v, float):
         as_int = int(v)
         return str(as_int) if abs(v - as_int) < 1e-9 else f"{v:.6f}"
-    s = str(v)
-    if len(s) >= 19 and s[4] == "-" and s[7] == "-" and (s[10] == "T" or s[10] == " "):
-        return s.replace(" ", "T")[:19]
-    return s
+    if isinstance(v, str):
+        parsed = parse_iso(v)
+        if parsed is not None:
+            return str(to_epoch_ms(parsed))
+        return v
+    return str(v)
 
 
-def norm_row(row, date_cols=frozenset(), empty_as_null: bool = False) -> tuple:
+def norm_row(row, empty_as_null: bool = False) -> tuple:
     vals = list(row.values()) if isinstance(row, dict) else list(row)
-    return tuple(
-        str(to_epoch_ms(v)) if (j in date_cols and v is not None) else norm_value(v, empty_as_null)
-        for j, v in enumerate(vals)
-    )
+    return tuple(norm_value(v, empty_as_null) for v in vals)
 
 
 # --- multiset comparison ---
-def compare_rowsets(ref_rows, trans_rows, date_cols=frozenset(), empty_as_null: bool = False) -> dict:
+def compare_rowsets(ref_rows, trans_rows, empty_as_null: bool = False) -> dict:
     """Compare oracle rows against translated-query rows as normalised multisets."""
-    ref = Counter(norm_row(r, date_cols, empty_as_null) for r in ref_rows)
-    trans = Counter(norm_row(r, date_cols, empty_as_null) for r in trans_rows)
+    ref = Counter(norm_row(r, empty_as_null) for r in ref_rows)
+    trans = Counter(norm_row(r, empty_as_null) for r in trans_rows)
     overlap = sum((ref & trans).values())
     n_ref = sum(ref.values())
     n_trans = sum(trans.values())
@@ -171,6 +162,55 @@ def compare_rowsets(ref_rows, trans_rows, date_cols=frozenset(), empty_as_null: 
         "reference_rows": n_ref,
         "translated_rows": n_trans,
     }
+
+
+# --- driver noise suppression ---
+_noise_silenced = False
+
+
+def silence_driver_noise() -> None:
+    """Quiet the graph drivers' non-fatal chatter so notebook 05 shows only its per-query
+    status lines. Idempotent.
+
+    Suppresses three unrelated sources that otherwise bury the status prints when a
+    translated query is wrong or times out: Neo4j server notifications (unknown
+    property/label warnings), gremlinpython's ERROR dump of a server error (already
+    surfaced as a caught execution_error), and the aiohttp/asyncio "unclosed session" +
+    transport ``__del__`` tracebacks that fire when a Gremlin client is garbage-collected
+    after its worker thread's event loop has closed.
+    """
+    global _noise_silenced
+    if _noise_silenced:
+        return
+    import logging
+    import sys
+
+    logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+    logging.getLogger("gremlinpython").setLevel(logging.CRITICAL)
+    logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+
+    _prev_hook = sys.unraisablehook
+
+    def _hook(unraisable):
+        # Drop the known-noisy finalizer errors from gremlinpython's aiohttp transport
+        # (a Client GC'd after its worker-thread loop closed); delegate anything else.
+        obj = repr(getattr(unraisable, "object", ""))
+        exc = unraisable.exc_value
+        if (
+            "AiohttpTransport" in obj
+            or "ClientResponse" in obj
+            or "ClientSession" in obj
+            or (
+                isinstance(exc, RuntimeError)
+                and str(exc)
+                in ("Event loop is closed", "Cannot run the event loop while another loop is running")
+            )
+        ):
+            return
+        _prev_hook(unraisable)
+
+    sys.unraisablehook = _hook
+    _noise_silenced = True
 
 
 # --- query executors: each returns (rows, runtime_seconds, error_or_None) ---
@@ -213,6 +253,7 @@ def _neo4j_database() -> str:
 def run_cypher(query: str):
     from neo4j import Query
 
+    silence_driver_noise()
     t0 = perf_counter()
     try:
         with _neo4j().session(database=_neo4j_database()) as session:
@@ -251,6 +292,11 @@ def _arango():
 def run_aql(query: str):
     # AQL RETURN {...} yields dicts, same shape as run_cypher's r.data(); the comparator
     # reads them positionally (RETURN key order must match the SQL SELECT order).
+    silence_driver_noise()
+    # graphonauts loads split snake_case edge collections; the gold/candidate AQL names the
+    # unified SCREAMING_SNAKE edges. Rewrite unified -> split at query time so no ArangoDB
+    # collection has to be materialised (see harness.arango_edges). No-op for edge-free queries.
+    query = expand_unified_edges(query)
     t0 = perf_counter()
     try:
         cursor = _arango().aql.execute(query, max_runtime=float(TIMEOUT_S))
@@ -275,6 +321,7 @@ def run_gremlin(query: str):
     #    forever (observed: server and kernel both idle mid-run). The daemon thread plus a
     #    client-side timeout turns any wedge into a recorded execution_error, and an
     #    abandoned daemon thread cannot block interpreter shutdown.
+    silence_driver_noise()
     t0 = perf_counter()
     outcome = _queue.Queue()
     # Resolve config on this (main) thread; the worker thread only touches the driver.
@@ -283,16 +330,24 @@ def run_gremlin(query: str):
     traversal_source = os.environ.get("GREMLIN_TRAVERSAL_SOURCE", gcfg.traversal_source)
 
     def _work():
+        client = None
         try:
             from gremlin_python.driver.client import Client
 
             client = Client(url, traversal_source)  # unauthenticated (TinkerGraph)
             result_set = client.submit(query, request_options={"evaluationTimeout": TIMEOUT_S * 1000})
             rows = [_shape_gremlin_row(r) for r in result_set.all().result(timeout=TIMEOUT_S + 30)]
-            client.close()
             outcome.put(("ok", rows))
         except Exception as exc:
             outcome.put(("err", f"{type(exc).__name__}: {exc}"))
+        finally:
+            # Close on the worker thread (no running loop) in every path; the transport's
+            # close() is idempotent, so this prevents the __del__ noise at the source.
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
 
     _threading.Thread(target=_work, daemon=True).start()
     try:

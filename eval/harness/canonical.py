@@ -127,6 +127,23 @@ def clause_heads_for(target: str) -> tuple[str, ...]:
     raise ValueError(f"Unknown target language: {target!r}")
 
 
+def match_clause_head(tokens: list[str], i: int, heads: tuple[str, ...]) -> tuple[str, int] | None:
+    """If a clause head starts at ``tokens[i]``, return ``(head, token count)`` else ``None``.
+
+    Multi-word heads ("OPTIONAL MATCH", "ORDER BY") are tried longest-first so they beat
+    the single-word head that shares their first token. Shared by the clause-tree parser
+    (:mod:`harness.distances`) and the clause-component extractor (:mod:`harness.components`),
+    so both segment a query into clauses the same way.
+    """
+    for h in sorted(heads, key=lambda x: -len(x.split())):
+        parts = h.split()
+        if i + len(parts) > len(tokens):
+            continue
+        if all(tokens[i + k].upper() == parts[k] for k in range(len(parts))):
+            return h, len(parts)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Canonicalisation
 # ---------------------------------------------------------------------------

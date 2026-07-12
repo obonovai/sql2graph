@@ -4,13 +4,15 @@
 DB-free structural metrics plus execution accuracy against a live database.**
 
 Measures how well `sql2graph`'s LLM-driven SQL -> graph translator performs, across a
-matrix of **dataset x target language x model**. The `harness` package holds only reusable
+matrix of **dataset x target language x model**. The `harness` package holds reusable
 primitives: the metric functions, cost accounting, the row comparator, the per-backend DB
-drivers, and chart primitives. The larger orchestration (the resumable translation loop, the
-per-record execution loop, and which figures to draw) lives at the top of each notebook, so a
-notebook reads top-to-bottom without descending into the package. The notebooks are the
-analysis surface. See [`METRICS.md`](METRICS.md) for how each metric (Component F1, tree-edit
-distance, execution accuracy, ...) is defined and computed.
+drivers, chart primitives, and the shared metric-frame / report helpers the result notebooks
+build on. The orchestration that is unique to one notebook (the resumable translation loop in
+01, the per-record execution loop in 05, and which figures to draw) still lives at the top of
+that notebook, so it reads top-to-bottom without descending into the package; each result
+notebook keeps its per-model / per-figure cells and calls the harness for the shared plumbing.
+The notebooks are the analysis surface. See [`METRICS.md`](METRICS.md) for how each metric
+(Component F1, tree-edit distance, execution accuracy, ...) is defined and computed.
 
 The DB-free metrics (notebooks 01-04, 06) run with no databases: Pass@k (via offline syntax
 validation), structural (Exact Match / Component F1), and distance (Levenshtein / Jaccard /
@@ -31,13 +33,15 @@ eval/
 ├── harness/           ← reusable package the notebooks import
 │   ├── config.py      ← RunConfig, RUN_MATRIX, paths + the notebook filename contract
 │   ├── datasets.py    ← gold-set loading + work-item construction
-│   ├── records.py     ← load_records / records_frame (reading side)
+│   ├── records.py     ← load_records (reading side)
 │   ├── runner.py      ← translate_one (single-query primitive) + AttemptRecord (the only LLM caller)
 │   ├── canonical.py   ← tokeniser + canonicaliser (shared by 03/04)
 │   ├── components.py  ← clause components + Component F1 (notebook 03)
 │   ├── distances.py   ← Levenshtein / Jaccard / normalised TED (notebook 04)
 │   ├── execution.py   ← comparator + per-backend DB drivers (notebook 05 builds its loop on these + validate_gold.py)
 │   ├── pricing.py     ← USD cost + billed-token accounting
+│   ├── frames.py      ← shared metric-frame / table helpers (notebooks 02-05 import these)
+│   ├── report.py      ← final-report assembly: CSV join + per-target markdown (notebook 06)
 │   └── plots.py       ← matplotlib chart primitives (notebooks select + render them)
 ├── notebooks/
 │   ├── 01_translation_run.ipynb      ← Ollama liveness + gold catalogue; drive the matrix, write records_<dataset>_<target>_<model>.json
@@ -59,16 +63,18 @@ eval/
 │   ├── ldbc_gremlin_qwen3-coder_30b_q08.txt  ← committed evidence the writeups cite
 │   └── ldbc_gremlin_qwen3-coder_30b_q15.txt  ← committed evidence the writeups cite
 ├── scripts/
-│   ├── validate_gold.py               ← prove gold SQL == gold {cypher,aql,gremlin} (--target)
-│   └── build_arango_unified_edges.py  ← one-time ArangoDB setup: unified AQL edge collections
+│   └── validate_gold.py               ← prove gold SQL == gold {cypher,aql,gremlin} (--target)
 ├── README.md
 └── METRICS.md            ← how each metric (F1, TED, execution accuracy, ...) is defined
 ```
 
-`scripts/` separates two roles: `build_arango_unified_edges.py` is **setup** (run once
-after each ArangoDB load), `validate_gold.py` is **validation** (prove the gold set
-against the Postgres oracle, per target). `outputs/` and `reports/` are generated but
-committed: they are the thesis evidence, refreshed by re-running the notebooks.
+`scripts/validate_gold.py` is **validation** (prove the gold set against the Postgres oracle,
+per target). ArangoDB needs no setup step: `harness/arango_edges.py` rewrites the gold and
+candidate AQL's unified SCREAMING_SNAKE edge names (`KNOWS`, `HAS_CREATOR`, `HAS_TAG`, ...) to
+graphonauts's split snake_case collections (`knows`, `post_has_creator, comment_has_creator`,
+...) at query time, so no ArangoDB collection is materialised and the shared benchmark data is
+never modified. `outputs/` and `reports/` are generated but committed: they are the thesis
+evidence, refreshed by re-running the notebooks.
 
 ## Install
 
@@ -160,19 +166,17 @@ docker compose -f $GRAPHONAUTS_DIR/docker/arangodb.compose.yml up -d
 ```
 
 Load LDBC SF=1 into each (see the graphonauts repo's `notes/commands.md`; the ArangoDB loader
-populates db `graphonauts`), then wire the AQL execution collections and validate the gold
-set before trusting any model numbers:
+populates db `graphonauts`), then validate the gold set before trusting any model numbers. No
+ArangoDB setup step is needed: the harness expands the unified edge names to graphonauts's
+split collections at query time (`harness/arango_edges.expand_unified_edges`, applied in
+`run_aql`), so the database is never modified.
 
 ```bash
-# 1. Build the mapping-aligned unified edge collections the gold + generated AQL reference
-#    (KNOWS, HAS_CREATOR, HAS_TAG, ...). Re-run after every ArangoDB (re)load -- mandatory.
-uv run python eval/scripts/build_arango_unified_edges.py
-
-# 2. Prove the gold AQL matches the Postgres oracle (SQL vs AQL multiset compare). Expect
+# 1. Prove the gold AQL matches the Postgres oracle (SQL vs AQL multiset compare). Expect
 #    15 genuine matches, 0 MISMATCH/error before running any model.
 uv run python eval/scripts/validate_gold.py --target aql
 
-# 3. Run notebook 05 (both targets -> Neo4j + ArangoDB + Postgres must be up).
+# 2. Run notebook 05 (both targets -> Neo4j + ArangoDB + Postgres must be up).
 uv run jupyter nbconvert --to notebook --execute --inplace eval/notebooks/05_execution_metrics.ipynb
 ```
 
@@ -211,10 +215,10 @@ EVAL_EXECUTION_TARGETS=gremlin EVAL_QUERY_TIMEOUT=180 \
 
 **Datetime storage:** graphonauts loads `creationDate`/`birthday`/`joinDate` into Neo4j as
 native temporal types (`DateTime`/`Date`) and into ArangoDB as ISO-8601 strings
-(`DATE_ISO8601`-compatible). The comparator canonicalises the columns the Postgres oracle
-reports as dates to epoch-millis on all sides, so gold `datetime(...)` (Cypher) and string
-`>= '2010-06-01'` (AQL) predicates both match. Reload the graph DB after any loader change
-before trusting execution results.
+(`DATE_ISO8601`-compatible). The comparator canonicalises any temporal cell (a native or
+driver temporal, or a string matching a full ISO date/datetime) to epoch-millis on all
+sides, so gold `datetime(...)` (Cypher) and string `>= '2010-06-01'` (AQL) predicates both
+match. Reload the graph DB after any loader change before trusting execution results.
 
 ## Gold set notes
 

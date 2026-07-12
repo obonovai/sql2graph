@@ -5,12 +5,14 @@ The notebooks under ``eval/notebooks/`` import from here. The run logic lives in
 loading in :mod:`harness.datasets`, and the string canonicalisation /
 structural-component / distance primitives (shared by notebooks 03 and 04) in
 :mod:`harness.canonical`, :mod:`harness.components`, and :mod:`harness.distances`.
+The shared DataFrame/metric helpers the result notebooks build on live in
+:mod:`harness.frames`, and the final-report assembly in :mod:`harness.report`.
 
 Import pattern from a notebook (after the repo-root walk)::
 
     import sys
     sys.path.insert(0, str(REPO_ROOT / "eval"))
-    from harness import RUN_MATRIX, run_translation, load_records
+    from harness import RUN_MATRIX, translate_one, load_records
     from harness.canonical import canonicalize, exact_match
 """
 
@@ -19,8 +21,6 @@ from __future__ import annotations
 from .config import (
     CACHE_DIR,
     DEFAULT_VALIDATION_MODE,
-    DISPLAY_NAME,
-    DISPLAY_ORDER,
     EVAL_DIR,
     EXECUTION_CACHE_PATH,
     FIGURES_DIR,
@@ -39,13 +39,11 @@ from .config import (
     REPO_ROOT,
     REPORTS_DIR,
     RUN_MATRIX,
-    THINKING_LABELS,
     Provider,
     RunConfig,
     Target,
     ValidationMode,
     default_validation_mode,
-    model_slug,
     order_models,
     records_filename,
 )
@@ -53,7 +51,6 @@ from .datasets import (
     GoldQuery,
     WorkItem,
     build_work_items,
-    expected_key,
     load_dataset,
     mapping_for,
 )
@@ -64,14 +61,10 @@ from .pricing import (
 )
 from .records import (
     load_records,
-    records_frame,
 )
 from .runner import (
     AttemptRecord,
-    make_llm_for,
-    make_translator_for,
     records_path,
-    run_translation,
     translate_one,
     write_records,
 )
@@ -98,10 +91,7 @@ __all__ = [
     "EXECUTION_CACHE_PATH",
     # config: the matrix
     "RUN_MATRIX",
-    "THINKING_LABELS",
     "MODEL_ORDER",
-    "DISPLAY_NAME",
-    "DISPLAY_ORDER",
     "order_models",
     "RunConfig",
     "Provider",
@@ -109,7 +99,6 @@ __all__ = [
     "ValidationMode",
     "DEFAULT_VALIDATION_MODE",
     "default_validation_mode",
-    "model_slug",
     "records_filename",
     # datasets
     "GoldQuery",
@@ -117,20 +106,15 @@ __all__ = [
     "load_dataset",
     "mapping_for",
     "build_work_items",
-    "expected_key",
     # pricing
     "usd_cost",
     "billed_input_tokens",
     "rate_for",
     # records
     "load_records",
-    "records_frame",
     # runner
     "AttemptRecord",
-    "run_translation",
     "translate_one",
     "records_path",
     "write_records",
-    "make_llm_for",
-    "make_translator_for",
 ]

@@ -307,30 +307,32 @@ rows. Two properties of the multiset comparison matter:
   generated projections must list columns in the same order (the gold set aligns
   `RETURN` column order to the SQL `SELECT` order).
 
-**How it's computed here.** `compare_rowsets(ref_rows, trans_rows, date_cols, empty_as_null)`
+**How it's computed here.** `compare_rowsets(ref_rows, trans_rows, empty_as_null)`
 returns `execution_accuracy = 1.0 if ref == trans else 0.0` over the two `Counter`s of
 `norm_row` tuples.
 
 #### Row normalisation and the date-reconciling comparator
 
-Before comparison every row passes through `norm_row` → `norm_value` / `to_epoch_ms`,
-which reconcile the very different value representations each backend returns:
+Before comparison every row passes through `norm_row` → `norm_value`, which reconciles
+the very different value representations each backend returns:
 
-- **Dates.** `date_columns` scans the *oracle* rows and records which column positions
-  Postgres returns as `date`/`datetime`. For those columns, `to_epoch_ms` canonicalises
-  the value to epoch-milliseconds on *all* sides - Postgres timestamps, Neo4j native
-  temporals (`neo4j.time.Date`/`DateTime` → stdlib via `to_native`), and ArangoDB/
-  Gremlin ISO-8601 strings (parsed by `parse_iso`, tz-naive treated as UTC). This is
-  what lets a Cypher `datetime(...)` predicate and an AQL string `>= '2010-06-01'`
-  compare equal to the same Postgres date.
+- **Dates.** Temporal cells fold *per value* to epoch-milliseconds via `to_epoch_ms`, so
+  every backend's representation of an instant compares equal: Postgres timestamps, Neo4j
+  native temporals (`neo4j.time.Date`/`DateTime` → stdlib via `to_native`), and ArangoDB/
+  Gremlin ISO-8601 strings (parsed by `parse_iso`, tz-naive treated as UTC). Any cell
+  that is a native/driver temporal, or a string matching a full ISO date/datetime,
+  reconciles; genuine integers and free text pass through untouched. This is what lets a
+  Cypher `datetime(...)` predicate and an AQL string `>= '2010-06-01'` compare equal to
+  the same Postgres date. (The graphonauts datetime unification guarantees strict,
+  UTC-consistent ISO/native forms across the stores, so this per-value fold replaced an
+  earlier per-column oracle that scanned the Postgres rows to decide which columns were
+  dates.)
 - **Empty-as-null.** For AQL and Gremlin (`EMPTY_AS_NULL_TARGETS`), `norm_value` maps
   `'' → None`: ArangoDB stores absent optional text as `''`, and the gold Gremlin
   projects NULLs as `''` via `coalesce(values(x), constant(''))`; both mean Postgres
   NULL.
 - **Other types.** Booleans → `"True"`/`"False"`; ints → `str`; floats → integer
-  string when within 1e-9 of an integer else 6-decimal; other datetimes/dates →
-  ISO (seconds precision); remaining strings that look like `YYYY-MM-DDT…`/`… …` are
-  truncated to 19 chars. `None` stays `None`.
+  string when within 1e-9 of an integer else 6-decimal. `None` stays `None`.
 
 ### Result precision / recall / F1
 
@@ -409,8 +411,9 @@ not *correctness*: it cannot distinguish a valid-but-wrong translation from a ri
 one (that is what the structural, distance, and execution families are for).
 
 **How it's computed here.** `validation_passed`, `iterations_used` are recorded by
-`run_translation` from the library's `TranslationResult`; `pass_at_1` and the Pass@k
-aggregate are derived in notebook 02. Stored columns: `validation_passed`, `pass_at_1`.
+`translate_one` (driven by notebook 01's run loop) from the library's `TranslationResult`;
+`pass_at_1` and the Pass@k aggregate are derived in notebook 02. Stored columns:
+`validation_passed`, `pass_at_1`.
 
 ### Token usage (billed tokens)
 

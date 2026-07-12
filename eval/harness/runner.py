@@ -1,13 +1,15 @@
 """Translation run: drive the translator over a RunConfig and record results.
 
-This is the only part of the harness that calls the LLM. :func:`run_translation`
-builds the work list for one :class:`~harness.config.RunConfig`, runs each
-SQL query through :class:`~sql2graph.SQLTranslator`, and writes one
-:class:`AttemptRecord` per query to ``records_<dataset>_<target>_<model>.json``,
-incrementally so a crash mid-run preserves prior work. Token counts come straight
-from ``result.token_usage`` (the library reports them first-class; no log
-scraping). Stratification keys (dataset / target / model / provider) live on every
-record so the metric notebooks can glob all record files and slice the matrix.
+This is the only part of the harness that calls the LLM. :func:`translate_one` is
+the single-query primitive: it runs one SQL query for a
+:class:`~harness.config.RunConfig` through :class:`~sql2graph.SQLTranslator` and
+returns one :class:`AttemptRecord` (as a dict). Notebook 01 builds the resumable
+run loop on top of it -- writing ``records_<dataset>_<target>_<model>.json``
+incrementally so a crash mid-run preserves prior work -- so that flow reads in the
+notebook. Token counts come straight from ``result.token_usage`` (the library
+reports them first-class; no log scraping). Stratification keys (dataset / target /
+model / provider) live on every record so the metric notebooks can glob all record
+files and slice the matrix.
 """
 
 from __future__ import annotations
@@ -29,8 +31,6 @@ from sql2graph import (
 )
 
 from .config import RunConfig, default_validation_mode, records_filename
-from .datasets import build_work_items, mapping_for
-from .pricing import billed_input_tokens
 
 
 @dataclass
@@ -138,8 +138,8 @@ def translate_one(rc: RunConfig, item, mapping) -> dict:
 
     The single-query primitive: it calls the LLM once (a fresh translator per item, for
     chat-history isolation), captures the exact ``token_usage``, and never touches disk.
-    Both :func:`run_translation` and notebook 01's resume loop build on it, so the "run the
-    matrix" flow is visible in the notebook while the per-query mechanics live here.
+    Notebook 01's resume loop builds on it, so the "run the matrix" flow is visible in the
+    notebook while the per-query mechanics live here.
     """
     error_message: str | None = None
     result = None
@@ -179,46 +179,3 @@ def translate_one(rc: RunConfig, item, mapping) -> dict:
         error=error_message,
     )
     return asdict(record)
-
-
-def run_translation(rc: RunConfig) -> list[dict]:
-    """Run every work item for ``rc`` and return all records for this cell.
-
-    Resumes from ``records_<...>.json`` when ``rc.resume`` is set: query ids already on disk
-    are skipped (the filename already pins dataset/target/model, so query_id is a sufficient
-    key within the file). Notebook 01 spells this same resume/force-rerun loop out inline via
-    :func:`translate_one`; this function is the script-friendly one-call equivalent.
-    """
-    path = records_path(rc)
-    existing: list[dict] = []
-    done: set[str] = set()
-    if rc.resume and path.exists():
-        existing = json.loads(path.read_text())
-        done = {r["query_id"] for r in existing}
-        print(f"Resume: {len(existing)} record(s) on disk for {path.name}; {len(done)} query id(s) done.")
-
-    work = [w for w in build_work_items(rc) if w.query_id not in done]
-    print(f"{rc.dataset}/{rc.target}/{rc.model}: {len(work)} item(s) to translate.")
-
-    mapping = mapping_for(rc.dataset)
-    records: list[dict] = list(existing)
-    for idx, item in enumerate(work, start=1):
-        print(f"[{idx:3d}/{len(work)}] {item.query_id} -> {rc.target}", end=" ", flush=True)
-        rec = translate_one(rc, item, mapping)
-        records.append(rec)
-        write_records(path, records)
-        if rec["error"] is not None:
-            print(f"ERROR ({rec['error']})")
-            continue
-        marker = "ok" if rec["validation_passed"] else "x "
-        # Billed input = uncached input + both Anthropic cache buckets, so the log
-        # matches the reports (and platform.claude.com "tokens in").
-        billed_in = billed_input_tokens(rec["input_tokens"], rec["cache_read_tokens"], rec["cache_creation_tokens"])
-        print(
-            f"{marker} iters={rec['iterations_used']} "
-            f"tokens=({billed_in:>6},{rec['output_tokens']:>4}) "
-            f"{rec['duration_seconds']:5.1f}s status={rec['status']}"
-        )
-
-    print(f"Done: {len(records)} record(s) in {path}")
-    return records

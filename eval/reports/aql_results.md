@@ -8,8 +8,9 @@ grammar (Flex+Bison, 3.11 branch, best-effort). The base four-model run is from 
 claude-opus-4-8-thinking variant was added 2026-07-06 and all metrics were recomputed
 2026-07-07. Execution accuracy
 measured against the Postgres oracle on graphonauts's ArangoDB (database `graphonauts`, LDBC
-SNB SF1, camelCase attributes, ISO-8601 string dates, unified SCREAMING_SNAKE edge collections
-built by `scripts/build_arango_unified_edges.py`). Optional text (image-post content) comes
+SNB SF1, camelCase attributes, ISO-8601 string dates, unified SCREAMING_SNAKE edge names
+expanded to graphonauts's split snake_case collections at query time by
+`harness/arango_edges.expand_unified_edges` -- no database modification). Optional text (image-post content) comes
 back as `""` where Postgres has NULL and is reconciled by the comparator; each query runs under
 a 180s ceiling (raised from 120s). The gold AQL set itself was validated first: all 15 gold
 queries return exactly the same rows as their gold SQL (`scripts/validate_gold.py --target
@@ -173,8 +174,9 @@ structural canonicaliser scores differently from Cypher's `(:Person)`. Both mode
 
 2. **The unified-edge convention is handled here.** The models saw the SCREAMING_SNAKE
    collection patterns (`HAS_TAG`, `HAS_CREATOR`) and the `IS_SAME_COLLECTION` filter, and the
-   collections exist only because `build_arango_unified_edges.py` builds them. Given both, the
-   endpoint-discipline problem that sank q05 on Gremlin does not sink it here.
+   harness resolves those unified names to graphonauts's split collections at query time
+   (`harness/arango_edges`). Given both, the endpoint-discipline problem that sank q05 on
+   Gremlin does not sink it here.
 
 3. **The local-model gap is conceptual and language-independent.** llama cannot produce AQL at
    all and falls back on the prompt's placeholder identifiers; qwen writes fluent AQL but
@@ -205,10 +207,11 @@ structural canonicaliser scores differently from Cypher's `(:Person)`. Both mode
   queries visible.
 - Vacuous matches (both stores return 0 rows -> accuracy 1.0) can flatter a latent bug; qwen's
   empty results are *not* flattered, because their reference sets are non-empty and they score 0.
-- Execution depends on the environment: the unified SCREAMING_SNAKE edge collections must be
-  rebuilt by `scripts/build_arango_unified_edges.py` after every ArangoDB (re)load (database
-  `graphonauts`), or the traversals 404 and score 0. ISO-8601 string dates and `""`-vs-NULL text
-  are reconciled by the comparator.
+- Execution depends on the environment: graphonauts's split snake_case edge collections must be
+  loaded in database `graphonauts`; the harness expands the unified SCREAMING_SNAKE edge names
+  to them at query time (`harness/arango_edges`), so no build step is needed and the traversals
+  resolve without modifying the database. ISO-8601 string dates and `""`-vs-NULL text are
+  reconciled by the comparator.
 - llama's q09, q12 and q15 never pass static validation (57/60 AQL translations validate).
   Validity is not correctness: here even the 12 that validate execute at 0.
 - Extended thinking is query-for-query identical to terse opus on AQL (same 14 passes, same q12
