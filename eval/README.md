@@ -3,6 +3,9 @@
 **Measures translation quality across datasets, target languages, and models:
 DB-free structural metrics plus execution accuracy against a live database.**
 
+This directory is part of the documentation set; the full map and reading
+order are in [`docs/README.md`](../docs/README.md).
+
 Measures how well `sql2graph`'s LLM-driven SQL -> graph translator performs, across a
 matrix of **dataset x target language x model**. The `harness` package holds reusable
 primitives: the metric functions, cost accounting, the row comparator, the per-backend DB
@@ -227,6 +230,13 @@ the graphonauts project's validated set, aligned to `examples/mappings/ldbc.yaml
 queries carries `sql` plus gold `expected_cypher` / `expected_aql` / `expected_gremlin`,
 a difficulty bucket, and `sql_features` tags. Conventions:
 
+- **Difficulty buckets** grade expected translation effort by SQL construct:
+  `easy` = single-table queries with no join; `medium` = plain inner-join
+  traversals with at most one simple shaping step (a plain ORDER BY or a plain
+  grouped count); `hard` = at least one construct with no one-to-one graph
+  rendering (ordering/top-n over an aggregate, HAVING, outer join, set
+  operation, negation via a subquery, deduplication across a self-join,
+  recursion).
 - **KNOWS is directed** (`-[:KNOWS]->`), matching the directed `friend_id` SQL joins and the
   directed `knows` edge actually loaded in graphonauts (defect D2).
 - Graph properties are camelCase, SQL columns snake_case; multi-valued `person_email` /

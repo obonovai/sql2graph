@@ -20,7 +20,7 @@ Public API. The framework exposes four layers:
 4. **Mapping builder**: :func:`build_mapping` (and
    :func:`build_mapping_async`) bootstrap a first-draft
    :class:`SchemaMapping` from SQL ``CREATE TABLE`` DDL, so the layer-1
-   mapping need not be written entirely by hand. See ``docs/MAPPING_BUILDER.md``.
+   mapping need not be written entirely by hand. See ``docs/mapping/builder.md``.
 
 A minimal end-to-end usage::
 

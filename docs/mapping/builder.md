@@ -3,7 +3,7 @@
 **Bootstraps a first-draft `SchemaMapping` from `CREATE TABLE` DDL, so a reviewer edits a generated mapping instead of writing one by hand.**
 
 Every translation `sql2graph` performs needs a relational-to-graph
-[schema mapping](API.md#schemamapping-and-nodemapping-edgemapping). Authoring that
+[schema mapping](../api.md#schemamapping-and-nodemapping-edgemapping). Authoring that
 mapping by hand is the tedious part: for a schema of any size it means transcribing
 every table into a node, every foreign key into an edge, and every column into a
 property, keeping the SQL identifiers exact. The `mapping_builder/` subpackage
@@ -11,10 +11,31 @@ generates that mapping mechanically from the schema's DDL. The output is a *firs
 draft* meant to be reviewed and edited, not a final answer: it is emitted as ordinary
 mapping YAML (indistinguishable from a hand-authored file, and freely editable), and
 every non-obvious decision it made is recorded so the reviewer knows exactly what to
-check. For the architectural *why* see [Architecture](ARCHITECTURE.md); for the output
-mapping schema see the [API reference](API.md).
+check.
 
-All public symbols named below are re-exported from the top-level package:
+## Scope
+
+This page owns: the extract, project, and refine pipeline; the projection
+heuristics; the audit artifacts (`CoverageReport`, `BuildResult`,
+`MappingDiff`) and the refinement guardrail. Related topics live with their
+owners:
+
+- [format.md](format.md): the mapping YAML the builder emits.
+- [authoring.md](authoring.md): reviewing and editing the emitted draft by
+  hand.
+- [ldbc-normalization.md](ldbc-normalization.md): a case study of what the
+  deterministic projection can and cannot infer.
+- [architecture.md](../architecture.md): where the builder sits in the
+  system and why.
+- [api.md](../api.md): the public signatures of the symbols named here.
+
+The main entry points are re-exported from the top-level package
+(`build_mapping`, `build_mapping_async`, `BuildResult`, `CoverageReport`,
+`RelationalSchema`, `MappingDiff`, `RenameDiff`, `DdlParseError`,
+`project_to_mapping`, `extract_schema_from_ddl`, `mapping_to_yaml`,
+`diff_mappings`); internals named on this page for reference
+(`refine_mapping`, `RefinementResult`, `ProjectionResult`, the IR dataclasses)
+are importable from their `sql2graph.mapping_builder.*` modules:
 
 ```python
 from sql2graph import build_mapping, BuildResult, CoverageReport, project_to_mapping
@@ -113,7 +134,7 @@ The heuristics:
   it declares one of these markers; every reversal is recorded in `warnings`. A lone 1:N
   foreign key is otherwise direction-ambiguous (it looks identical whether it means
   "belongs to" or "contains"), so this is the only structural handle on direction — see
-  [LDBC_NORMALIZATION.md](LDBC_NORMALIZATION.md).
+  [ldbc-normalization.md](ldbc-normalization.md).
 - **Junction table becomes an edge.** `is_junction_table(table, schema)` detects a
   pure association table and collapses it into a single edge carrying its non-FK
   columns as edge properties. The predicate is intentionally *strict* (precision over
@@ -288,7 +309,7 @@ for rename in result.diff.label_renames + result.diff.edge_type_renames:
 ```
 
 The signature is keyword-only: `build_mapping(*, ddl: str, dialect: str | None = None,
-llm: LLMClient) -> BuildResult`. `dialect` is passed straight to sqlglot (e.g.
+llm: LLMClient | None = None) -> BuildResult`. `dialect` is passed straight to sqlglot (e.g.
 `"postgres"`, `"mysql"`); `None` uses sqlglot's dialect-neutral default. It raises
 `DdlParseError` if the DDL cannot be parsed.
 
@@ -342,7 +363,7 @@ the hand-authored `examples/mappings/tpch.yaml`:
 nodes:
   - label: "LineItem"                # word boundary fixed
     source_table: "lineitem"         # SQL identifiers unchanged
-    primary_key: "linenumber"
+    primary_key: [orderkey, linenumber]
 edges:
   - type: "SUPPLIED_BY"              # SUPP -> SUPPLIED_BY
     source_node: "LineItem"
@@ -400,9 +421,10 @@ async def build_mapping_async(
 
 The async variant takes an `AsyncLLMClient` and an optional `on_conversation`
 callback. When set, the refinement streams the assistant turn as a growing message
-snapshot (and emits a snapshot after every turn), so a caller such as the web SSE
-bridge can display the chat live as the model "types". Both entry points raise
-`DdlParseError` on unparseable DDL, and both return the same `BuildResult`.
+snapshot (and emits a snapshot after every turn), so a live-UI caller (for
+example a server-sent-events bridge) can display the chat as the model "types".
+Both entry points raise `DdlParseError` on unparseable DDL, and both return the
+same `BuildResult`.
 
 ---
 
@@ -421,7 +443,7 @@ mapping = SchemaMapping.from_yaml("examples/mappings/tpch.generated.yaml")
 ```
 
 From there the mapping drives a translation exactly as any hand-authored mapping does;
-see the [end-to-end example](API.md#end-to-end-example-library) in the API reference.
+see the [end-to-end example](../api.md#end-to-end-example-library) in the API reference.
 
 ### The `RelationalSchema` IR
 
@@ -459,8 +481,9 @@ clunky - polishing them is the LLM's job.
 
 `sql_types.semantic_type_for_sql(data_type)` collapses a column's dialect-noisy SQL
 type string (e.g. `"DECIMAL(15,2)"`, `"TIMESTAMP"`) onto the small, closed
-[`SemanticType`](API.md) vocabulary - `string`, `integer`, `float`, `boolean`, `date`,
-`datetime`, `time`, `duration` - that the translator can surface in its prompt. It is
+[`SemanticType`](format.md#typed-properties-optional) vocabulary (`string`, `integer`,
+`float`, `boolean`, `date`, `datetime`, `time`, `duration`) that the translator can
+surface in its prompt. It is
 best-effort: a type that does not resolve to a known family (UUID, JSON, an array, an
 unresolved vendor type), or a column that declared no type, returns `None` and the
 property is simply left untyped rather than guessed. The result stays overridable by

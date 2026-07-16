@@ -5,8 +5,21 @@ Interactive v1 dataset and explains why one converts to the proper LDBC property
 graph and the other does not — using only the **deterministic** mapping builder
 (`project_to_mapping`, no LLM).
 
-- [`examples/ddl/ldbc.sql`](../examples/ddl/ldbc.sql) — converts to the **proper** LDBC graph.
-- [`examples/ddl/ldbc_naive.sql`](../examples/ddl/ldbc_naive.sql) — the same schema, naively
+## Scope
+
+This page owns: the LDBC case study of schema normalization for graph
+projection, and the one-clause difference that decides edge direction. Related
+topics live with their owners:
+
+- [builder.md](builder.md): the projection pipeline and heuristics this case
+  study exercises.
+- [authoring.md](authoring.md): hand-writing or editing the resulting mapping.
+- [format.md](format.md): the mapping YAML field reference.
+
+The two schemas compared:
+
+- [`examples/ddl/ldbc.sql`](../../examples/ddl/ldbc.sql): converts to the **proper** LDBC graph.
+- [`examples/ddl/ldbc_naive.sql`](../../examples/ddl/ldbc_naive.sql): the same schema, naively
   normalized, that converts **almost** correctly (one edge points the wrong way).
 
 Reproduce either with:
@@ -89,7 +102,7 @@ edges change unless it declares one of these markers. Every reversal is recorded
 
 > Edge **type names** from the deterministic builder are mechanical (`HAS_POST`,
 > `HAS_REGION`, …) and are not meaningful — the hand-authored
-> [`examples/mappings/ldbc.yaml`](../examples/mappings/ldbc.yaml) carries the real LDBC
+> [`examples/mappings/ldbc.yaml`](../../examples/mappings/ldbc.yaml) carries the real LDBC
 > names (`CONTAINER_OF`, `HAS_CREATOR`, …). Only the **structure** (which tables are
 > nodes/edges, the join columns, and the direction) is what this note is about.
 

@@ -3,31 +3,12 @@
 **The translation inputs: a relational schema, its graph mapping, and the
 example SQL that exercises them.**
 
-This directory holds the **inputs** a translation operates on: the relational
-schema, its graph mapping, and example SQL queries. These are *not*
-configuration. They describe *what* is being translated, not *how* the
-translation runs. The operational configuration (which LLM, which database)
-lives under [`../config/`](../config/README.md).
-
-sql2graph does two things, and the files here feed both:
-
-1. **Builds a schema mapping** from your relational schema (the `CREATE TABLE`
-   DDL), via `build_mapping`.
-2. **Translates SQL queries** into graph queries (Cypher / AQL / Gremlin) using
-   that schema mapping, via `SQLTranslator`.
-
-A sql2graph translation has two inputs:
-
-1. a **schema mapping** (`mappings/`), describing how relational tables and
-   foreign keys map to graph nodes and edges, and
-2. a **SQL query** to translate.
-
-The mapping is the semantic input the framework interprets: the library
-serialises it into the LLM system prompt as content (via `build_system_prompt`),
-just as the SQL query is the per-call input to `translate()`. The mapping is
-bound once when you build a `SQLTranslator`; the SQL query varies per call. Both
-are orthogonal to the model and server *configuration* in `config/`: any mapping
-can be translated by any model and validated against any server.
+This directory holds the **inputs** a translation operates on. They describe
+*what* is being translated, not *how* the translation runs; the operational
+configuration (which LLM, which database) lives under
+[`../config/`](../config/README.md), and the authoritative statement of that
+split is the project README's [Configuration](../README.md#configuration)
+section.
 
 | Subdirectory | Contents | Model / loader |
 |---|---|---|
@@ -37,45 +18,28 @@ can be translated by any model and validated against any server.
 
 ## `ddl/`: where mappings come from
 
-A mapping YAML is not written from scratch. `ddl/tpch.sql` is the raw TPC-H
-relational schema, and `build_mapping` turns that DDL into a first-draft
-`mappings/tpch.yaml` for review. The two are kept in sync by the tests under
-`tests/unit/mapping_builder/`.
-
-```python
-from pathlib import Path
-from sql2graph import build_mapping, load_model_config, make_llm
-
-llm = make_llm(load_model_config("config/models/anthropic.yaml"))
-result = build_mapping(ddl=Path("examples/ddl/tpch.sql").read_text(), llm=llm)
-Path("examples/mappings/tpch.yaml").write_text(result.yaml)
-```
-
-Only `tpch.sql` ships as DDL; `mappings/ldbc.yaml` was authored directly (there
-is no `ldbc.sql`).
+A mapping YAML need not be written from scratch: `build_mapping` turns the
+DDL here into a first-draft mapping for review (see
+[`docs/mapping/builder.md`](../docs/mapping/builder.md)). `ddl/tpch.sql` is
+the raw TPC-H schema behind `mappings/tpch.yaml`; `ddl/ldbc.sql` and
+`ddl/ldbc_naive.sql` are the two normalized LDBC schemas compared in
+[`docs/mapping/ldbc-normalization.md`](../docs/mapping/ldbc-normalization.md).
 
 ## `mappings/`: the translation input
 
-A mapping deserialises directly into `sql2graph.SchemaMapping` and is the first
-argument to `SQLTranslator`:
+A mapping deserialises directly into `sql2graph.SchemaMapping` and is the
+first argument to `SQLTranslator`:
 
 ```python
-from pathlib import Path
-from sql2graph import (
-    SchemaMapping, SQLTranslator, load_model_config,
-    make_llm, make_target, make_validator,
-)
-
-mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")   # the input
-llm = make_llm(load_model_config("config/models/anthropic.yaml"))  # the config
-target = make_target("cypher")
-validator = make_validator("cypher", "syntax")
-
-with SQLTranslator(mapping, llm, target, validator) as translator:
-    sql = Path("examples/sql/tpch/q06.sql").read_text()
-    result = translator.translate(sql)
-    print(result.generated_query)
+mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
 ```
+
+The full first-run walkthrough is
+[`docs/getting-started.md`](../docs/getting-started.md). To design or edit a
+mapping by hand, see
+[`docs/mapping/authoring.md`](../docs/mapping/authoring.md) (which walks both
+shipped mappings); the field reference is
+[`docs/mapping/format.md`](../docs/mapping/format.md).
 
 ## `sql/`: example queries
 

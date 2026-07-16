@@ -1,31 +1,34 @@
 # Syntax validation
 
-**How deployment-free, grammar-based query validation works, and how to
-maintain it.**
-
-How the deployment-free, grammar-based syntax validation works, why it replaced
+**How deployment-free, grammar-based query validation works, why it replaced
 the original regex checks, and how to maintain it (including regenerating the
-parsers). For the public validator surface see [API.md](API.md) ("Validator
-components"); for where validation sits in the system see
-[ARCHITECTURE.md](ARCHITECTURE.md).
+parsers).**
+
+## Scope
+
+This page owns: the internals of the grammar-based syntax tier; grammar
+provenance per language; the parser regeneration recipe. Related topics live
+with their owners:
+
+- [modes.md](modes.md): choosing between the validation modes; this page
+  covers only the `syntax` tier.
+- [api.md](../api.md#validator-components): the public validator surface.
+- [extending.md](../extending.md): where a new grammar-based validator fits
+  in a new target language.
+- [validators/_grammar/sources/README.md](../../src/sql2graph/validators/_grammar/sources/README.md):
+  the vendored grammar files and their licenses.
 
 ## 1. Overview
 
 `sql2graph` translates SQL into a graph query with an LLM, then runs a
 generate-validate-fix loop: a validator inspects the generated query and returns
 a list of error strings (empty means valid); any errors are fed back to the LLM
-to repair the query. There are three validation modes:
+to repair the query. Choosing between the validation modes (`none`, `syntax`,
+`server`, and the derived managed variant) is covered in [modes.md](modes.md).
 
-- `none`: no checks (measure raw single-shot LLM quality).
-- `syntax`: **deployment-free** structural validation, the subject of this
-  document. No database, no Docker; runs in-process in milliseconds.
-- `server`: submit the query to a live (or auto-provisioned "managed") database
-  via its parse-without-executing endpoint (Neo4j `EXPLAIN`, ArangoDB
-  `db.aql.validate`, Gremlin Server). Catches schema-level mistakes too
-  (non-existent labels / properties), but needs infrastructure.
-
-The `syntax` tier exists so the framework can run end-to-end in CI or on a
-reviewer's laptop without provisioning a database. This document covers the
+The `syntax` tier is the **deployment-free** one: no database, no Docker,
+in-process, milliseconds. It exists so the framework can run end-to-end in CI or
+on a reviewer's laptop without provisioning a database. This document covers the
 grammar-based implementation of that tier.
 
 ### Where it fits in the pipeline
@@ -86,7 +89,7 @@ The fix is to parse each candidate with the **graph engine's own grammar**, so
 Cypher and Gremlin use each engine's **own** published grammar, so they are
 authoritative by construction. AQL is different: ArangoDB publishes no reusable
 offline grammar (its parser is hand-written C++/Flex+Bison), so the AQL syntax
-tier uses a **hand-port** of that parser (`grammars/AQL{Lexer,Parser}.g4`,
+tier uses a **hand-port** of that parser (`_grammar/sources/AQL{Lexer,Parser}.g4`,
 pinned to the `3.11` branch). It reproduces the grammar structure for
 recognition only and is *best-effort*: it may diverge slightly from ArangoDB's
 real parser (ANTLR has no `%nonassoc`, so a few non-associative chains are
@@ -131,15 +134,15 @@ make_async_validator(target, mode, *, server_config=None) -> AsyncQueryValidator
 ```
 src/sql2graph/validators/
   __init__.py            # QueryValidator protocol, factory, valid_modes_for_target
-  grammars/              # ANTLR grammars (the source of truth)
-    Cypher25Lexer.g4
-    Cypher25Parser.g4
-    Gremlin.g4
-    AQLLexer.g4
-    AQLParser.g4
-    README.md            # provenance: upstream source, version, license, edits
   _grammar/
-    errors.py            # shared parse routine + error listener
+    sources/             # ANTLR grammars (the source of truth)
+      Cypher25Lexer.g4
+      Cypher25Parser.g4
+      Gremlin.g4
+      AQLLexer.g4
+      AQLParser.g4
+      README.md          # provenance: upstream source, version, license, edits
+    runtime.py           # shared parse routine + error listener
     generated/           # committed, machine-generated parsers (do not hand-edit)
       cypher/  Cypher25Lexer.py, Cypher25Parser.py
       gremlin/ GremlinLexer.py, GremlinParser.py
@@ -150,14 +153,14 @@ src/sql2graph/validators/
   cypher/server.py, aql/server.py, gremlin/server.py   # the server tier
 ```
 
-The `.g4` files under `grammars/` are the source of truth; the Python parsers
+The `.g4` files under `_grammar/sources/` are the source of truth; the Python parsers
 under `_grammar/generated/` are produced from them by
 `scripts/generate_parsers.sh` and committed so that end users and CI need only
 the pure-Python `antlr4-python3-runtime` (no Java, no codegen).
 
 ### The shared parse routine
 
-Both syntax validators delegate to one function in `_grammar/runtime.py`. It
+All three syntax validators delegate to one function in `_grammar/runtime.py`. It
 attaches a listener that **collects** ANTLR's syntax errors (instead of printing
 them) as `line:col` strings, runs the grammar's start rule, and returns the
 (capped) list:
@@ -238,7 +241,7 @@ That precise, located message is the main advantage over the old regex strings.
 
 1. **Vendor the grammars.** Copy each engine's official ANTLR grammar into
    `src/sql2graph/validators/_grammar/sources/` and record provenance (upstream URL,
-   version, license, any edits) in `grammars/README.md`. Both grammars are
+   version, license, any edits) in `_grammar/sources/README.md`. Both grammars are
    Apache-2.0 and vendored verbatim. See section 9 for sources.
 2. **Get the toolchain.** Regeneration (dev-time only) needs a JDK and the ANTLR
    `4.13.2` "complete" jar. Practical notes from doing this:
@@ -249,7 +252,7 @@ That precise, located message is the main advantage over the old regex strings.
      `~/.m2/repository/org/antlr/antlr4/4.13.2/antlr4-4.13.2-complete.jar`.
 3. **Generate the Python parsers** with `scripts/generate_parsers.sh`. It runs
    ANTLR with `-Dlanguage=Python3 -no-listener -no-visitor` (only the lexer and
-   parser are needed), generates from inside the grammars directory with bare
+   parser are needed), generates from inside the sources directory with bare
    filenames so the generated header stays a relative path (no local absolute
    path leaks into a committed file), deletes the `.interp` / `.tokens` dev
    artifacts, and **prepends `from __future__ import annotations`** to each
@@ -283,11 +286,10 @@ That precise, located message is the main advantage over the old regex strings.
    `valid_modes_for_target` is correct. `tests/integration/test_managed.py`
    cross-checks the offline AQL grammar against ArangoDB's own `db.aql.validate`
    so the hand-port can't silently drift.
-9. **Update downstream consumers:** the web backend derives the
-   allowed modes from `valid_modes_for_target`; its `/api/options`
-   exposes `validation_modes_by_target` (built from it), and the web UI offers
-   only the valid modes per target and clamps the selected mode when the target
-   changes. AQL now offers `syntax` alongside the other targets.
+9. **Update downstream consumers:** any consumer that offers a mode choice
+   (a CLI, a UI such as the separately maintained sql2graph-web) should derive
+   it from `valid_modes_for_target` rather than hardcoding the modes, so a new
+   target's syntax tier appears everywhere the moment the factory knows it.
 
 ## 6. Regenerating the parsers
 
@@ -306,8 +308,8 @@ The ANTLR tool version **must match** the `antlr4-python3-runtime` pin in
 `pyproject.toml` (4.13.x). Regeneration is deterministic: re-running on an
 unchanged grammar produces byte-identical output (the generated header is a
 relative path with no timestamp), so a clean diff is the expected result. To
-upgrade a grammar, replace the `.g4` under `grammars/`, update
-`grammars/README.md` (version + any edits), regenerate, and run the tests.
+upgrade a grammar, replace the `.g4` under `_grammar/sources/`, update
+`_grammar/sources/README.md` (version + any edits), regenerate, and run the tests.
 
 ## 7. Usage
 
@@ -340,7 +342,7 @@ best-effort, and the `server` / `managed` validator remains authoritative.
 - Unit tests live under `tests/unit/` (no network, no DB) -- notably
   `tests/unit/validators/test_syntax.py` and `tests/unit/sql/`. Run them with
   `uv run pytest -m "not integration"`.
-- Type and lint gates: `uv run mypy src tests` (strict; the generated
+- Type and lint gates: `uv run mypy src tests/unit` (strict; the generated
   package is excluded via the override) and `uv run ruff check .` /
   `uv run ruff format --check` (the generated dir is excluded).
 - Regeneration check: run `scripts/generate_parsers.sh` and confirm the
@@ -356,6 +358,6 @@ best-effort, and the `server` / `managed` validator remains authoritative.
   <https://github.com/apache/tinkerpop>
 - ANTLR Python target runtime: `antlr4-python3-runtime` (4.13.x).
 - See also: `src/sql2graph/validators/_grammar/sources/README.md` (provenance),
-  [API.md](API.md) (public validator surface), and [ARCHITECTURE.md](ARCHITECTURE.md)
+  [api.md](../api.md) (public validator surface), and [architecture.md](../architecture.md)
   (the generate-validate-fix loop and module responsibilities).
 

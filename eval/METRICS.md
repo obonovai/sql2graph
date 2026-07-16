@@ -418,7 +418,7 @@ one (that is what the structural, distance, and execution families are for).
 ### Token usage (billed tokens)
 
 **Definition.** The prompt/response token counts for the translation, taken first-class
-from the library's `TokenUsage` (see [../docs/API.md](../docs/API.md); type defined in
+from the library's `TokenUsage` (see [../docs/api.md](../docs/api.md); type defined in
 `src/sql2graph/llm/usage.py`). `TokenUsage` carries `input_tokens`, `output_tokens`,
 `cache_read_tokens`, `cache_creation_tokens`, and a computed `total_tokens` (the sum of
 all four). For Anthropic the translator caches the whole system prompt

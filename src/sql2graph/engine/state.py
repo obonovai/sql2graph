@@ -21,7 +21,7 @@ The ``target_language`` field is declared as
 supported elsewhere in the framework. A further target language would
 require widening this literal (and the counterpart in
 :class:`sql2graph.validators.QueryValidator` dispatch). The Protocol-based
-extension story documented in ``docs/ARCHITECTURE.md`` notes this as a
+extension story documented in ``docs/architecture.md`` notes this as a
 known limitation.
 """
 

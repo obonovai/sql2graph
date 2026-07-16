@@ -5,10 +5,19 @@ checklist, in dependency order.**
 
 `sql2graph` is built around three structural `Protocol`s (`TargetLanguage`,
 `LLMClient`, `QueryValidator`), so most extensions need no changes to the core
-loop. This guide walks the two most common extensions end to end. For the
-design rationale behind the Protocols, see
-[ARCHITECTURE.md](ARCHITECTURE.md#protocol-typed-extension-points); for the
-public signatures, see [API.md](API.md).
+loop. This guide walks the two most common extensions end to end.
+
+## Scope
+
+This page owns: the step-by-step recipes for adding a target language or an
+LLM provider, including which steps are test-enforced. Related topics live
+with their owners:
+
+- [architecture.md](architecture.md#protocol-typed-extension-points): the
+  design rationale behind the Protocols.
+- [api.md](api.md): the public signatures each Protocol requires.
+- [validation/syntax.md](validation/syntax.md): the reproducible recipe for a
+  new grammar-based validator, referenced by the target-language checklist.
 
 ---
 
@@ -59,13 +68,13 @@ Add `"sparql"` to the `Literal["cypher", "aql", "gremlin"]` on
 `TranslationState.target_language` **and** `TranslationResult.target_language`
 (`src/sql2graph/engine/state.py`). This is the one non-Protocol-friendly step - a
 deliberate trade-off documented under "Known limitations" in
-[ARCHITECTURE.md](ARCHITECTURE.md#known-limitations).
+[architecture.md](architecture.md#known-limitations).
 
 ### 5. Add a validator
 
 A target needs at least one validation mode beyond `none`. Follow the
 reproducible recipe in
-[SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md#5-implementation-steps-reproducible-recipe):
+[validation/syntax.md](validation/syntax.md#5-implementation-steps-reproducible-recipe):
 
 - **Syntax (deployment-free):** vendor the engine's ANTLR grammar under
   `src/sql2graph/validators/_grammar/sources/` (record provenance in that directory's

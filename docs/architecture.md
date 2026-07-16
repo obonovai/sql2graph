@@ -4,8 +4,23 @@
 generate-validate-fix loop and its extension points.**
 
 This document explains the *why* behind the design decisions in `sql2graph`.
-For setup and usage see `README.md`; for the library API and YAML schemas
-see `API.md`.
+
+## Scope
+
+This page owns: the design rationale; the loop's state lifecycle and
+escalation logic; prompt strategy and per-query assembly; the extension-point
+philosophy; known limitations. Related topics live with their owners:
+
+- [api.md](api.md): the public surface those decisions produce, with
+  signatures.
+- [validation/modes.md](validation/modes.md): choosing a validation mode;
+  [validation/syntax.md](validation/syntax.md): the grammar tier's internals.
+- [mapping/builder.md](mapping/builder.md): the DDL-to-mapping pipeline this
+  page only motivates.
+- [extending.md](extending.md): the step-by-step recipes for the extension
+  points described here.
+- [../README.md](../README.md): setup and usage; [README.md](README.md): the
+  full doc map.
 
 ---
 
@@ -106,10 +121,10 @@ files involved (see the `ScriptedLLM` double in `tests/unit/_doubles.py`).
 All three targets ship a grammar-based syntax validator: Cypher and Gremlin use
 each engine's own published grammar, AQL uses a hand-port of ArangoDB's parser.
 They are documented in detail, with the parser-regeneration steps, in
-[SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md). The `mapping_builder/` subpackage
-has its own reference in [MAPPING_BUILDER.md](MAPPING_BUILDER.md), and the
+[validation/syntax.md](validation/syntax.md). The `mapping_builder/` subpackage
+has its own reference in [mapping/builder.md](mapping/builder.md), and the
 extension points (adding a target language or LLM provider) are walked through in
-[EXTENDING.md](EXTENDING.md).
+[extending.md](extending.md).
 
 ---
 
@@ -150,7 +165,7 @@ input was flagged.
 ## Mapping builder
 
 The library can also generate a *first-draft* schema mapping from SQL
-`CREATE TABLE` DDL (`src/sql2graph/mapping_builder/`), so the layer-1 mapping
+`CREATE TABLE` DDL (`src/sql2graph/mapping_builder/`), so the schema mapping
 need not be written entirely by hand. Three stages:
 
 1. **Extract** - parse the DDL into a dependency-free `RelationalSchema` IR
@@ -165,7 +180,7 @@ need not be written entirely by hand. Three stages:
 This mirrors the translator's own generate-then-check discipline: an LLM
 proposes, a deterministic guard verifies. The full reference - the `BuildResult`,
 the guardrail, and a worked example - is in
-[MAPPING_BUILDER.md](MAPPING_BUILDER.md).
+[mapping/builder.md](mapping/builder.md).
 
 ---
 
@@ -201,6 +216,32 @@ correspond to N `validate` calls and (N − 1) fix attempts. The final
 iteration does not get a fix pass because there is no point retrying
 without validating it again.
 
+### Stall detection and escalation
+
+A fix iteration that changes nothing is a fixed point the plain loop cannot
+leave: at low temperature the model reproduces its previous answer from a
+history that now contains several copies of that answer and its error. The
+loop therefore tracks progress between iterations
+(`src/sql2graph/engine/translator.py`): a stall is declared when the new
+candidate normalizes to the previous one (`engine/prompts.py::normalize_query`)
+or the validator returns the same error signature twice running
+(`engine/prompts.py::error_signature`).
+
+On the first stall the loop escalates exactly once. The escalation re-asks
+from a deliberately **fresh** context: the system prompt plus a single
+self-contained corrective turn
+(`engine/prompts.py::build_escalation_prompt`), discarding the
+repetition-poisoned fix history (the full record still keeps the turn). The
+call runs at the higher `escalation_temperature` (default `0.6`) because a
+near-greedy retry over the same context would land in the same place. The
+target language may inject a clause-specific `repair_hint` for the reported
+errors, which *replaces* the default "fix only the reported errors, don't
+restructure" instruction; `AqlTarget` uses this for the
+`RETURN`-must-be-last ordering trap. A second stall after the escalation
+ends the translation early with `status="stalled"` rather than burning the
+remaining iterations. This is what stops small local models (notably
+`qwen3-coder`) from looping on identical invalid output.
+
 ---
 
 ## Async path
@@ -234,7 +275,7 @@ The wins are elsewhere:
 `translate()` body is a copy of the sync one with `await` added at the
 right places. The events emitted, the iteration numbering, the
 `TranslationResult` produced, and even the log lines are identical. Tests
-in `tests/unit/translator/` (e.g. `test_events.py`, `test_async_loop.py`)
+in `tests/unit/engine/` (e.g. `test_events.py`, `test_async_loop.py`)
 assert event-sequence parity between the two paths against the same
 scripted LLM double.
 
@@ -616,7 +657,7 @@ overhead.
   numbering) has no shared definition. The mitigations are (a) shared
   helpers for the interesting non-loop logic (Anthropic kwargs builder,
   usage logger, response extractor), and (b) explicit parity tests in
-  `tests/unit/translator/` that drive both translators with the same
+  `tests/unit/engine/` that drive both translators with the same
   scripted LLM double and assert identical event sequences. If a future change
   introduces a real algorithmic divergence between the two, this would
   be the place to factor a shared helper out, but trying to share the

@@ -12,7 +12,7 @@
 -- containment edge's DIRECTION is wrong, because plain normalization records the
 -- relationship but not whether it is composition (ownership) or association.
 -- `ldbc.sql` fixes it with a single `ON DELETE CASCADE`. See
--- `docs/LDBC_NORMALIZATION.md` for the full comparison.
+-- `docs/mapping/ldbc-normalization.md` for the full comparison.
 
 -- --- Static reference data: places, tag hierarchy, organisations ------------
 

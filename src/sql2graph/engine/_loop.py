@@ -11,7 +11,7 @@ exception-isolated event emission, and final-result assembly.
 Deliberately narrow: only the IO-free, control-flow-free fragments move. The two
 ``while`` loops themselves stay in their own modules, byte-for-byte mirrors of
 each other, because that readable duplication is the property the codebase
-optimises for (see ``docs/ARCHITECTURE.md``).
+optimises for (see ``docs/architecture.md``).
 """
 
 from __future__ import annotations

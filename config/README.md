@@ -3,12 +3,12 @@
 **How a translation run is wired: which LLM translates, and which graph
 database validates the result.**
 
-This directory holds the operational configuration the `sql2graph` library
-loads: which LLM to translate with, and which graph database to validate
-against. These are *deployment* settings - they select and tune the machinery,
-they do not describe the data being translated. The relational-to-graph
-**inputs** (schema mappings, DDL, example SQL) are not configuration and live
-under [`../examples/`](../examples/README.md).
+This directory holds *deployment* settings: they select and tune the
+machinery, they do not describe the data being translated. The translation
+inputs live under [`../examples/`](../examples/README.md); the authoritative
+statement of that split is the project README's
+[Configuration](../README.md#configuration) section, and the field-by-field
+schema reference is [`docs/configuration.md`](../docs/configuration.md).
 
 Two categories live here, one per subdirectory:
 
@@ -17,38 +17,18 @@ Two categories live here, one per subdirectory:
 | `models/`  | LLM provider configuration. Discriminator: `provider`. | `OllamaConfig` \| `AnthropicConfig` | `sql2graph.load_model_config(path)` |
 | `servers/` | Graph database connection settings (only needed for server-side validation). Discriminator: `type`. | `Neo4jConfig` \| `ArangoDBConfig` \| `GremlinConfig` | `sql2graph.load_server_config(path)` |
 
-The two are orthogonal to each other and to the mapping input: the same
-`anthropic.yaml` model config drives any mapping against any server, and the
-same `neo4j.yaml` server validates any Cypher run regardless of mapping or
-model. A translation always needs a model; it needs a server only when
-validating against a live database.
-
-```python
-from sql2graph import (
-    SchemaMapping, SQLTranslator, load_model_config,
-    make_llm, make_target, make_validator,
-)
-
-# The mapping is a translation INPUT (see ../examples/), not configuration.
-mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
-
-# The model config IS deployment configuration (it lives here).
-llm = make_llm(load_model_config("config/models/anthropic.yaml"))
-target = make_target("cypher")
-validator = make_validator("cypher", "syntax")
-
-with SQLTranslator(mapping, llm, target, validator) as translator:
-    result = translator.translate("SELECT name FROM supplier WHERE suppkey = 1337")
-    print(result.generated_query)
-```
+A translation always needs a model; it needs a server only when validating
+against a live database. For a worked first run that loads these files, see
+[`docs/getting-started.md`](../docs/getting-started.md).
 
 ## Secrets
 
 Both `models/` and `servers/` YAML files support environment-variable
-interpolation. A string of the form `${VAR}` is replaced by
-`os.environ["VAR"]` at config-load time; if `VAR` is unset, the loader raises
-`KeyError` with a precise message. (The mapping inputs under `../examples/` hold
-no secrets and support no interpolation: they are deployment-invariant.)
+interpolation: a string of the form `${VAR}` is replaced by
+`os.environ["VAR"]` at config-load time, and an unset variable raises
+`KeyError` with a precise message. The interpolation semantics and the
+canonical variable table are in
+[`docs/configuration.md`](../docs/configuration.md#environment-variables).
 
 Set the referenced variables in your shell before loading the configs:
 
@@ -59,6 +39,3 @@ export NEO4J_PASSWORD=...      # servers/neo4j.yaml
 export ARANGO_PASSWORD=...     # servers/arangodb.yaml
 # export GREMLIN_PASSWORD=...  # servers/gremlin.yaml (only if you enable auth there)
 ```
-
-For the mappings, DDL, and example SQL queries that a translation consumes, see
-[`../examples/`](../examples/README.md).

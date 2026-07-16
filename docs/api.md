@@ -1,12 +1,26 @@
 # API reference
 
-**The public Python API surface and the three YAML schemas the library
-consumes.**
+**The public Python API surface: every exported symbol, with signatures.**
 
 This document is the canonical reference for the public Python API of
-`sql2graph` and for the three YAML schemas the library consumes. For the
-*why* behind the design see `ARCHITECTURE.md`; for hands-on usage see the
-top-level `README.md`.
+`sql2graph`.
+
+## Scope
+
+This page owns: every exported symbol, its signature, and its contract;
+the result and event types; the end-to-end library examples. Related topics
+live with their owners:
+
+- [architecture.md](architecture.md): the *why* behind this surface.
+- [mapping/format.md](mapping/format.md): the schema-mapping YAML these
+  classes load.
+- [configuration.md](configuration.md): the model and server config YAML.
+- [validation/syntax.md](validation/syntax.md): internals of the syntax
+  validators listed here.
+- [mapping/builder.md](mapping/builder.md): the mapping-builder pipeline
+  behind `build_mapping`.
+- [troubleshooting.md](troubleshooting.md): the canonical
+  `TranslationResult.status` table and symptom-first fixes.
 
 All public symbols are re-exported from the top-level package:
 
@@ -70,8 +84,9 @@ def make_async_llm(config: OllamaConfig | AnthropicConfig) -> AsyncLLMClient
 ```
 
 `OllamaConfig` and `AnthropicConfig` are typed Pydantic models: same
-config drives both the sync and async backends. See the YAML reference
-below for their field layouts; both include `max_retries: int = 3`.
+config drives both the sync and async backends. See
+[configuration.md](configuration.md) for their field layouts; both include
+`max_retries: int = 3`.
 
 Concrete classes (exported from the top-level package):
 `AnthropicLLMClient` / `AsyncAnthropicLLMClient`,
@@ -107,7 +122,7 @@ def make_target(name: str) -> TargetLanguage
 `name` ∈ `{"cypher", "aql", "gremlin"}`. `system_prompt_section` receives the
 `frozenset[SqlFeature]` detected in the SQL and returns the always-on base
 block plus the rule chunks gated on those features (see
-[Per-query prompt assembly](ARCHITECTURE.md#per-query-prompt-assembly)).
+[Per-query prompt assembly](architecture.md#per-query-prompt-assembly)).
 `repair_hint` lets a target inject clause-specific fix guidance for a class of
 validator errors - `AqlTarget` uses it for the `RETURN`-must-be-last ordering
 trap - and returns `None` when the default "fix only the reported errors,
@@ -125,7 +140,7 @@ comparable to Neo4j's `EXPLAIN`.
 ### Validator components
 
 > Deep dive (implementation, grammar provenance, and how to regenerate the
-> parsers): see [SYNTAX_VALIDATION.md](SYNTAX_VALIDATION.md).
+> parsers): see [validation/syntax.md](validation/syntax.md).
 
 ```python
 class QueryValidator(Protocol):
@@ -174,8 +189,11 @@ first `validate()` and tears it down on `close()`. It requires a running
 Docker daemon and raises `RuntimeError` from `validate()` if none is
 reachable. For Cypher, the managed Neo4j connection sets
 `Neo4jConfig.notifications_min_severity="OFF"` (an optional config field) so the
-empty database's advisory notifications (e.g. unknown label/property) are not
-logged. This does not change which queries pass or fail.
+server never sends the advisory notifications the validator would otherwise
+surface as schema errors. On the empty managed database those are guaranteed
+noise (every label and property would look unknown and fail every query);
+parse and plan errors are unaffected. See
+[validation/modes.md](validation/modes.md#mode-managed).
 
 Concrete async classes (also exported from the top-level package):
 `AsyncCypherSyntaxValidator`, `AsyncGremlinSyntaxValidator`,
@@ -273,7 +291,7 @@ assistant turn streams. Setting it implies streaming from the LLM even without
 just `last_messages`.)
 
 Same `TranslationResult`, same iteration semantics, same prompts. See
-`docs/ARCHITECTURE.md` § "Async path" for the rationale and the parity
+`docs/architecture.md` § "Async path" for the rationale and the parity
 contract.
 
 ### `TranslationResult`
@@ -293,17 +311,10 @@ class TranslationResult(BaseModel):
     token_usage: TokenUsage = TokenUsage()   # tokens billed across the loop
 ```
 
-`status` is one of:
-
-| `status` | Meaning |
-|---|---|
-| `"success"` | Validation passed on some iteration. |
-| `"max_iterations_reached"` | The loop hit `max_iterations` without a valid query; `generated_query` holds the last attempt. |
-| `"stalled"` | The loop made no progress, escalated once with a fresh-context, higher-temperature retry, still could not advance, and aborted early. `generated_query` holds the last attempt. |
-| `"unmapped_tables"` | Pre-flight found the SQL reads tables absent from the mapping; rejected before any LLM call. `unmapped_tables` lists them; `generated_query` is `None` and `token_usage` is zero. |
-| `"unmapped_columns"` | Pre-flight found the SQL uses columns a mapped table omits; rejected before any LLM call. `unmapped_columns` lists the `"table.column"` refs. |
-| `"parse_error"` | Pre-flight could not parse the SQL and `parse_error_action="reject"` (not the default, which warns). The LLM was skipped. |
-
+`status` is one of `"success"`, `"max_iterations_reached"`, `"stalled"`,
+`"parse_error"`, `"unmapped_tables"`, or `"unmapped_columns"`. The canonical
+interpretation table (what happened, which fields to inspect, what to do) is in
+[troubleshooting.md](troubleshooting.md#interpreting-translationresultstatus).
 (`"pending"` is an internal sentinel and never appears on a returned result.)
 
 ### Token usage
@@ -321,8 +332,10 @@ class TokenUsage(BaseModel):
 `TranslationResult.token_usage` accumulates the per-call `TokenUsage` across the
 whole generate-validate-fix loop. For Anthropic, `input_tokens` counts the
 *uncached* prompt portion only; tokens served from or written to the prompt
-cache are reported in `cache_read_tokens` / `cache_creation_tokens`. Ollama has
-no prompt cache, so its two cache fields stay `0`. `ChatReply` (returned by
+cache are reported in `cache_read_tokens` / `cache_creation_tokens`. Ollama
+populates `input_tokens` / `output_tokens` from the response's
+`prompt_eval_count` / `eval_count`; it has no prompt cache, so its two cache
+fields stay `0`. `ChatReply` (returned by
 `LLMClient.chat` / `AsyncLLMClient.chat`) bundles the assistant text with the
 `TokenUsage` for a single call; `TokenUsage` instances are additive with `+`.
 
@@ -409,31 +422,32 @@ an observer hook, not a control point.
 Generate a *first-draft* `SchemaMapping` from SQL `CREATE TABLE` DDL, so the
 mapping need not be written by hand. The full reference - the three-stage
 pipeline, the refinement guardrail, and a worked example - is in
-[MAPPING_BUILDER.md](MAPPING_BUILDER.md).
+[mapping/builder.md](mapping/builder.md).
 
 ```python
-def build_mapping(*, ddl: str, dialect: str | None = None, llm: LLMClient) -> BuildResult
+def build_mapping(*, ddl: str, dialect: str | None = None, llm: LLMClient | None = None) -> BuildResult
 async def build_mapping_async(
     *,
     ddl: str,
     dialect: str | None = None,
-    llm: AsyncLLMClient,
+    llm: AsyncLLMClient | None = None,
     on_conversation: ConversationCallback | None = None,
 ) -> BuildResult
 
 def extract_schema_from_ddl(ddl: str, *, dialect: str | None = None) -> RelationalSchema
 def project_to_mapping(schema: RelationalSchema) -> ProjectionResult   # deterministic, offline
-def mapping_to_yaml(mapping: SchemaMapping) -> str
+def mapping_to_yaml(mapping: SchemaMapping, *, header: str | None = None) -> str
 def diff_mappings(before: SchemaMapping, after: SchemaMapping) -> MappingDiff
 ```
 
-`build_mapping` runs all three stages and therefore *requires* an `LLMClient`
-for the naming-refinement pass; the pass is guarded, so if the model errors, is
-unreachable, or would violate the preservation guardrail, the deterministic
-mapping is kept and the reason is added to `BuildResult.warnings` (the result is
-always valid). For the deterministic projection alone, with no LLM, call
-`project_to_mapping` (offline and free) and serialise with `mapping_to_yaml`.
-`build_mapping` raises `DdlParseError` if the DDL cannot be parsed.
+The naming-refinement pass runs only when an `llm` is supplied; with
+`llm=None` (the default) `build_mapping` is deterministic, offline, and free.
+The pass is guarded, so if the model errors, is unreachable, or would violate
+the preservation guardrail, the deterministic mapping is kept and the reason is
+added to `BuildResult.warnings` (the result is always valid). The projection
+stage alone is also available directly as `project_to_mapping`; serialise
+either result with `mapping_to_yaml`. `build_mapping` raises `DdlParseError`
+if the DDL cannot be parsed.
 
 `BuildResult` fields:
 
@@ -456,7 +470,7 @@ and `DdlParseError`.
 Before any LLM call, both translators run an input-side pre-flight gate
 (`src/sql2graph/engine/preflight.py`): it checks that the SQL parses, that every table
 it reads is in the mapping, and that every column it names on a mapped table is
-exposed. See [Pre-flight gate](ARCHITECTURE.md#pre-flight-gate-input-side) for
+exposed. See [Pre-flight gate](architecture.md#pre-flight-gate-input-side) for
 the design and defaults.
 
 Each check's policy is a `PreflightAction`, passed to the translator constructor
@@ -603,205 +617,14 @@ asyncio.run(main())
 
 ---
 
-## YAML schema reference
+## YAML file formats
 
-### `examples/mappings/<name>.yaml`: schema mapping
+The three YAML schemas the library consumes are documented on their own pages:
 
-The file *is* the mapping: there is no `schema_mapping:` outer key.
-
-```yaml
-nodes:
-  - label: "Person"                   # graph vertex label
-    source_table: "employees"         # relational table
-    properties:                       # graph_property -> sql_column
-      name: "first_name"
-      email: "email_address"
-    primary_key: "employee_id"        # SQL column
-
-  - label: "Department"
-    source_table: "departments"
-    properties:
-      name: "dept_name"
-    primary_key: "dept_id"
-
-edges:
-  - type: "WORKS_IN"                  # graph relationship type
-    source_node: "Person"             # must match a label in nodes[]
-    target_node: "Department"
-    source_table: "employees"
-    source_foreign_key: "dept_id"     # FK in source_table
-    target_primary_key: "dept_id"     # PK in target node's table
-    properties:                       # optional edge properties
-      since: "hire_date"
-```
-
-Field reference:
-
-| Node field | Type | Required | Description |
-|---|---|---|---|
-| `label` | string | yes | Graph node label. Used verbatim in queries. |
-| `source_table` | string | yes | Relational table. |
-| `properties` | `dict[str, str]` | yes | Graph property name → SQL column. |
-| `property_types` | `dict[str, SemanticType]` | no | Optional per-property semantic type (see "Typed properties" below). |
-| `primary_key` | string | yes | SQL column uniquely identifying rows. |
-
-| Edge field | Type | Required | Description |
-|---|---|---|---|
-| `type` | string | yes | Relationship type. Used verbatim in queries. |
-| `source_node` | string | yes | A node `label`. Checked at load time. |
-| `target_node` | string | yes | A node `label`. Self-references allowed. |
-| `source_table` | string | yes | Table containing the FK. |
-| `source_foreign_key` | string | yes | FK column in `source_table`. |
-| `target_primary_key` | string | yes | PK column in target node's table. |
-| `properties` | `dict[str, str]` | no | Optional edge properties. |
-| `property_types` | `dict[str, SemanticType]` | no | Optional per-property semantic type (see "Typed properties" below). |
-
-Loaded with `SchemaMapping.from_yaml(path)`. Strict mode (`extra="forbid"`)
-rejects unknown keys.
-
-#### Typed properties (optional)
-
-A property value may be written two ways. The short form maps a graph property
-straight to a SQL column:
-
-```yaml
-properties:
-  name: "first_name"
-```
-
-The long form additionally records a `SemanticType`, surfaced in the prompt so
-the LLM does not have to guess the value's type:
-
-```yaml
-properties:
-  name: {column: "first_name", type: "string"}
-  joined: {column: "hire_date", type: "date"}
-```
-
-Loading normalises the long form into `properties` (`{name: column}`) plus a
-parallel `property_types` (`{name: type}`); the two forms may be mixed in one
-mapping. `SemanticType` is one of `string`, `integer`, `float`, `boolean`,
-`date`, `datetime`, `time`, `duration`. Types are optional and best-effort: the
-mapping builder assigns them where it can (see
-[MAPPING_BUILDER.md](MAPPING_BUILDER.md)), and an untyped property is left as a
-bare string.
-
-### `config/models/<name>.yaml`: LLM model config
-
-Discriminator: `provider`.
-
-#### Ollama (`provider: "ollama"`)
-
-```yaml
-provider: "ollama"
-model: "llama3.2"                    # must be pulled on the Ollama server
-# host: ...                          # optional; SDK reads OLLAMA_HOST if omitted
-temperature: 0.1
-num_ctx: 8192                        # context window size in tokens
-max_retries: 3                       # exponential backoff on connection errors
-                                     # and 5xx; 4xx propagates immediately.
-```
-
-#### Anthropic (`provider: "anthropic"`)
-
-```yaml
-provider: "anthropic"
-# api_key: "${ANTHROPIC_API_KEY}"     # optional; SDK reads env var if omitted
-model: "claude-opus-4-8"
-temperature: 0.1
-max_output_tokens: 4096
-max_retries: 3                       # forwarded to the Anthropic SDK's
-                                     # built-in retry layer (exp. backoff +
-                                     # jitter on 408/409/429/5xx).
-```
-
-Authentication is via the `ANTHROPIC_API_KEY` environment variable. The
-upstream SDK reads it automatically when `api_key` is omitted; that is the
-recommended posture so the YAML file remains safe to commit. You may also
-set `api_key` explicitly (with `${ENV_VAR}` interpolation, e.g.
-`api_key: "${ANTHROPIC_API_KEY}"`). Set budget caps and usage alerts in
-the [Anthropic console](https://console.anthropic.com).
-
-### `config/servers/<name>.yaml`: graph DB connection
-
-Discriminator: `type`. Loaded with `load_server_config` and passed to
-`make_validator(target, "server", server_config=...)`. All string fields
-support `${ENV_VAR}` interpolation; an unset variable raises `KeyError`.
-
-#### Neo4j (`type: "neo4j"`)
-
-```yaml
-type: "neo4j"
-uri: "bolt://localhost:7687"
-username: "neo4j"
-password: "${NEO4J_PASSWORD}"
-database: "neo4j"
-```
-
-The validator runs `EXPLAIN <query>`, which parses and plans without
-executing, safe for any statement.
-
-#### ArangoDB (`type: "arangodb"`)
-
-```yaml
-type: "arangodb"
-url: "http://localhost:8529"
-username: "root"
-password: "${ARANGO_PASSWORD}"
-database: "ldbc"
-```
-
-The validator runs `db.aql.validate(query)`. Generated AQL uses bare
-edge-collection traversals (`FOR v IN OUTBOUND <doc> <EdgeCollection>`),
-so no named graph is referenced or configured.
-
-#### Gremlin (`type: "gremlin"`)
-
-```yaml
-type: "gremlin"
-url: "ws://localhost:8182/gremlin"
-traversal_source: "g"
-# username: "..."                      # optional; required for IAM / SASL backends
-# password: "${GREMLIN_PASSWORD}"
-```
-
-The validator submits each candidate script via the `gremlinpython`
-`Client` and consumes the result; any parse / step-compatibility error
-surfaces as an exception that is captured as a validation message.
-
-Recommended local backend: Apache TinkerPop Gremlin Server with
-TinkerGraph, runnable in one line:
-
-```bash
-docker run --rm -p 8182:8182 tinkerpop/gremlin-server
-```
-
-TinkerGraph is *schemaless*: this catches script-level parse errors and
-unsupported steps but NOT label / property hallucinations. Point `url`
-at JanusGraph with a registered schema for schema-aware validation
-comparable to Neo4j's `EXPLAIN`. The same `type: "gremlin"`
-discriminator also works for Amazon Neptune and Azure Cosmos DB Gremlin
-API endpoints (set `url` and provide `username` / `password` per the
-backend's auth scheme).
-
----
-
-## Common validation errors
-
-```
-ValidationError: Edge 'WORKS_IN' references undefined source_node 'Employee'
-```
-An edge's `source_node` or `target_node` does not match any `label` in
-`nodes[]`. Labels are case-sensitive.
-
-```
-KeyError: Environment variable '${NEO4J_PASSWORD}' is referenced in config but not set
-```
-A server (or model) config references an environment variable that you
-have not exported. Run `export NEO4J_PASSWORD=...` first.
-
-```
-ValidationError: extra fields not permitted
-```
-Typo in a field name. Pydantic reports the offending field; compare
-against the schemas above.
+- [mapping/format.md](mapping/format.md): the schema mapping
+  (`examples/mappings/<name>.yaml`), including typed properties, composite
+  keys, and list properties.
+- [configuration.md](configuration.md): the LLM model config
+  (`config/models/<name>.yaml`) and the graph server config
+  (`config/servers/<name>.yaml`), plus `${VAR}` interpolation and the
+  canonical environment-variable table.

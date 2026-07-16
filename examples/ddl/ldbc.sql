@@ -19,7 +19,7 @@
 --     direct the edge parent -> child, i.e. `Forum -> Post`. Association FKs like
 --     `post.creator_person_id` stay plain (RESTRICT) and keep the default
 --     `Post -> Person` direction. See `ldbc_naive.sql` for the same schema
---     without this signal, and `docs/LDBC_NORMALIZATION.md` for the rationale.
+--     without this signal, and `docs/mapping/ldbc-normalization.md` for the rationale.
 
 -- --- Static reference data: places, tag hierarchy, organisations ------------
 

@@ -23,7 +23,7 @@ connected through small structural Protocols. Both sync and async variants
 of the LLM client, validator, and translator ship side by side. A mapping
 builder (`build_mapping`) can also bootstrap the schema mapping itself from
 SQL `CREATE TABLE` DDL, so it need not be written by hand; see
-[`docs/MAPPING_BUILDER.md`](docs/MAPPING_BUILDER.md).
+[`docs/mapping/builder.md`](docs/mapping/builder.md).
 
 ## Architecture at a glance
 
@@ -90,51 +90,30 @@ also accepts `stream_to` for token-by-token output.
 
 When a fix iteration makes no progress (the model repeats its previous
 candidate, or the validator returns the same error signature twice running)
-the loop escalates once: it re-asks from a *fresh* context (system prompt +
-a single corrective turn, discarding the repetition-poisoned history) at a
-higher `escalation_temperature`, and the target language can inject a
-clause-specific `repair_hint` that overrides the default "don't restructure"
-advice (AQL uses this for the `RETURN`-must-be-last ordering trap). If the
-escalation still stalls, the translation ends early with
-`status="stalled"` rather than burning the remaining iterations. This is
-what stops small local models (notably `qwen3-coder`) from looping on
-identical invalid output.
+the loop escalates once, re-asking from a fresh context at a higher
+`escalation_temperature`. If the escalation still stalls, the translation
+ends early with `status="stalled"` rather than burning the remaining
+iterations. The full mechanism is in
+[`docs/architecture.md`](docs/architecture.md).
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the deeper technical
+See [`docs/architecture.md`](docs/architecture.md) for the deeper technical
 reference, including a discussion of why the loop is implemented as plain Python
-rather than a graph-orchestration framework, and [`docs/API.md`](docs/API.md) for
-the library API and YAML schema reference. The full doc index is in
-[Documentation](#documentation) below.
+rather than a graph-orchestration framework, and [`docs/api.md`](docs/api.md) for
+the library API. The full doc index and suggested reading order are in
+[`docs/README.md`](docs/README.md).
 
 ## Per-query prompt assembly
 
-The system prompt is assembled *per query*, not once per translator. Before
-the first LLM call, `detect_features` (in `src/sql2graph/sql_features.py`)
-parses the SQL with sqlglot and returns a `frozenset[SqlFeature]` naming the
-operation clusters present: `JOIN`, `AGGREGATION`, `LIKE`, `ORDER_LIMIT`,
-`CTE`, `UNION`, `WINDOW`, `CASE`, `SUBQUERY`, `DISTINCT`, `TEMPORAL`, `SCALAR`,
-`NULL`. Both the generic
-rules block and the target-language section (see
-`src/sql2graph/targets/cypher.py`, `targets/aql.py`, `targets/gremlin.py`) emit only the rule
-chunks corresponding to features actually in the query, so the LLM is not
-distracted by, e.g., a 14-line `LIKE`/`ILIKE` mapping table on a query with
-no string predicates. On any parser failure the function returns
-`ALL_FEATURES`, which restores the pre-refactor "ship every rule" behaviour.
-Unparseable input degrades prompt focus, never translation correctness.
-
-The Anthropic backends (sync and async) send the assembled system block
-with `cache_control: ephemeral` set, so iterations 2+ of any multi-iteration
-translation read the schema + rules from Anthropic's prompt cache instead
-of re-billing them as input tokens. See `src/sql2graph/llm/anthropic.py`.
-The `Anthropic call:` log line reports `cache_read` and `cache_write`
-counts alongside the regular input/output totals so cache hit rate is
-observable per call. Those per-call counts are also accumulated across the
-generate-validate-fix loop and returned on `TranslationResult.token_usage`
-(a `TokenUsage` with `input_tokens`, `output_tokens`, Anthropic-only
-`cache_read_tokens` / `cache_creation_tokens`, and a computed `total_tokens`),
-so callers can report exactly how many tokens each translation cost. Ollama
-populates `input_tokens` / `output_tokens` from `prompt_eval_count` /
-`eval_count`; its cache fields stay 0.
+The system prompt is assembled *per query*, not once per translator: the SQL
+is parsed for the operation clusters it contains (`JOIN`, `AGGREGATION`,
+`LIKE`, ...), and only the target-language rule chunks matching those
+features enter the prompt. The Anthropic backends additionally send the
+assembled system block with `cache_control: ephemeral`, so iterations 2+ of a
+multi-iteration translation read the schema and rules from the prompt cache
+instead of re-billing them; the per-call counts accumulate on
+`TranslationResult.token_usage`. The full treatment is in
+[`docs/architecture.md`](docs/architecture.md#per-query-prompt-assembly) and
+[Anthropic prompt caching](docs/architecture.md#anthropic-prompt-caching).
 
 ## Install
 
@@ -184,6 +163,10 @@ anthropic`) as the model config. See [Configuration](#configuration) for the
 YAML files, and [As a library](#as-a-library) below for server-side
 validation, the async variant, event callbacks, and token streaming.
 
+For the guided version of this first run (reading the mapping, picking a
+backend and a validation mode, interpreting the result), follow
+[`docs/getting-started.md`](docs/getting-started.md).
+
 ## Configuration
 
 Two kinds of files drive a run, kept in separate top-level directories.
@@ -203,31 +186,18 @@ validated against any server, and the same model drives any mapping. Two
 mappings ship under `examples/`; two models and three servers ship under
 `config/`. Copy and adapt as needed.
 
-See `examples/README.md`, `config/README.md`, and `docs/API.md` for the YAML
-schemas.
+The field references: [`docs/mapping/format.md`](docs/mapping/format.md) for
+the mapping file, [`docs/configuration.md`](docs/configuration.md) for the
+model and server configs (including the environment-variable table), plus the
+directory guides [`examples/README.md`](examples/README.md) and
+[`config/README.md`](config/README.md).
 
 ## As a library
 
-```python
-from sql2graph import (
-    SchemaMapping, SQLTranslator,
-    load_model_config, make_llm,
-    make_target, make_validator,
-)
-
-mapping = SchemaMapping.from_yaml("examples/mappings/tpch.yaml")
-llm = make_llm(load_model_config("config/models/anthropic.yaml"))
-target = make_target("cypher")
-validator = make_validator("cypher", "syntax")
-
-with SQLTranslator(mapping, llm, target, validator) as translator:
-    result = translator.translate("SELECT name FROM supplier WHERE suppkey = 1337")
-    if result.validation_passed:
-        print(result.generated_query)
-    else:
-        print(f"Failed after {result.iterations_used} iterations: {result.validation_errors}")
-    print(f"Consumed {result.token_usage.total_tokens} tokens")
-```
+The [Quick start](#quick-start) above is the sync library usage; a fuller
+worked example (constructor knobs, error handling) is the
+[end-to-end example](docs/api.md#end-to-end-example-library) in the API
+reference.
 
 ### Async variant
 
@@ -269,14 +239,15 @@ asyncio.run(main())
 ## Development
 
 ```bash
-uv run mypy src/                  # Strict type checking
-uv run ruff check .               # Linting
-uv run ruff format .              # Formatting
-uv run pytest                     # Static tests (mocked, no LLM or DB calls)
-uv run pytest -m integration      # Integration tests (real Anthropic + Neo4j)
+uv run mypy src/                             # Strict type checking
+uv run ruff check .                          # Linting
+uv run ruff format .                         # Formatting
+uv run pytest                                # Static tests (mocked, no LLM or DB calls)
+uv run pytest -m integration                 # Integration tests (real Anthropic + Neo4j)
+uv run python scripts/check_doc_refs.py      # Validate doc citations and links
 ```
 
-The static suite (~100 tests) is what runs by default; the `integration`
+The static suite (400+ tests) is what runs by default; the `integration`
 marker is excluded via `pyproject.toml`. Integration tests gracefully skip
 when their credentials are absent. See `tests/README.md` for the env-var
 reference and a `docker run` recipe for Neo4j.
@@ -288,16 +259,22 @@ ruff lint rules as the original Poetry-based ancestor (`E F I PERF ARG W UP B`).
 
 | Document | What's in it |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Design rationale: the plain-Python loop, `Protocol` extension points, the pre-flight gate, per-query prompt assembly, the async path. |
-| [`docs/API.md`](docs/API.md) | The public Python API surface and the three YAML schemas (mapping, model, server). |
-| [`docs/MAPPING_BUILDER.md`](docs/MAPPING_BUILDER.md) | Generating a first-draft schema mapping from SQL DDL (extract → project → LLM-refine). |
-| [`docs/SYNTAX_VALIDATION.md`](docs/SYNTAX_VALIDATION.md) | The deployment-free, grammar-based (ANTLR) syntax validators and how to regenerate the parsers. |
-| [`docs/EXTENDING.md`](docs/EXTENDING.md) | How to add a new target language or LLM provider. |
-| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Common failures and how to resolve them. |
+| [`docs/getting-started.md`](docs/getting-started.md) | The nine-step first-run tutorial: install, read the shipped mapping, configure a backend, translate, interpret the result. |
+| [`docs/architecture.md`](docs/architecture.md) | Design rationale: the plain-Python loop, `Protocol` extension points, the pre-flight gate, per-query prompt assembly, the async path. |
+| [`docs/api.md`](docs/api.md) | The public Python API surface: every exported symbol with signatures. |
+| [`docs/mapping/authoring.md`](docs/mapping/authoring.md) | Designing and hand-writing a schema mapping, with worked TPC-H and LDBC examples. |
+| [`docs/mapping/format.md`](docs/mapping/format.md) | The mapping YAML field reference: typed properties, composite keys, list properties. |
+| [`docs/mapping/builder.md`](docs/mapping/builder.md) | Generating a first-draft schema mapping from SQL DDL (extract, project, LLM-refine). |
+| [`docs/validation/modes.md`](docs/validation/modes.md) | Choosing a validation mode: what `none`, `syntax`, `server`, and managed check, need, and miss. |
+| [`docs/validation/syntax.md`](docs/validation/syntax.md) | The deployment-free, grammar-based (ANTLR) syntax validators and how to regenerate the parsers. |
+| [`docs/configuration.md`](docs/configuration.md) | The model and server config YAML schemas, `${VAR}` interpolation, and the environment-variable table. |
+| [`docs/extending.md`](docs/extending.md) | How to add a new target language or LLM provider. |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common failures and the canonical `TranslationResult.status` interpretation table. |
 | [`eval/README.md`](eval/README.md) · [`eval/METRICS.md`](eval/METRICS.md) | The evaluation harness (how to run) and the metric definitions (how F1, tree-edit distance, execution accuracy, etc. are computed). |
 
 Directory READMEs: [`config/`](config/README.md), [`examples/`](examples/README.md),
-[`tests/`](tests/README.md).
+[`tests/`](tests/README.md). Full map and suggested reading order:
+[`docs/README.md`](docs/README.md).
 
 ## Acknowledgments
 

@@ -4,7 +4,8 @@
 behind an opt-in marker.**
 
 The suite is split into three areas, kept separate so casual development never
-accidentally hits a paid API or a database.
+accidentally hits a paid API or a database. This page is part of the
+documentation set; the full map is in [`docs/README.md`](../docs/README.md).
 
 ```
 tests/
@@ -12,8 +13,8 @@ tests/
   unit/                    # static: no network, no real LLM, no database (runs by default)
     conftest.py            # schema builders + scripted fake-LLM factory fixtures
     _doubles.py            # in-process LLMClient / AsyncLLMClient doubles (used via fixtures)
-    mapping/  config/  llm/  targets/  prompts/  validators/
-    sql/  preflight/  translator/  mapping_builder/
+    mapping/  config/  llm/  targets/  engine/  validators/
+    sql/  mapping_builder/
   integration/             # real LLMs / databases (deselected by default)
     conftest.py            # anthropic_config / neo4j_config / docker_available / small_schema
   eval/                    # offline tests for the evaluation harness (runs by default)
@@ -51,7 +52,7 @@ Shared setup lives in `conftest.py` files, not copy-pasted per module:
   `tests/unit/mapping_builder/conftest.py`) return a one-shot double for the
   mapping-builder refinement pass. Tests obtain them via the fixture, never by
   importing `_doubles` directly.
-- **Spy** (`tests/unit/translator/conftest.py`): `spy_analyze_sql(module)`
+- **Spy** (`tests/unit/engine/conftest.py`): `spy_analyze_sql(module)`
   records the `dialect` forwarded into a translator's pre-flight parse.
 
 ## Integration tests (`integration/`)
@@ -127,6 +128,8 @@ uv run pytest -m integration -k managed
   converges to valid Cypher), token-usage logging, and the async translator.
 - `test_neo4j.py`: Neo4j `EXPLAIN` accepts/rejects, sync vs async server
   validator parity, and a full end-to-end loop against real Anthropic + Neo4j.
+- `test_arango.py`: a real ArangoDB server validator with a populated
+  catalogue, including collection-hallucination reporting.
 - `test_managed.py`: managed mode auto-provisions each engine and
   accepts/rejects; `make_validator` / `make_async_validator` drive managed mode
   end-to-end; the offline AQL grammar is cross-checked against ArangoDB's parser.
