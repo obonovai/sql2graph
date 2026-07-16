@@ -68,6 +68,17 @@ def _list_props_out(list_properties: dict[str, ListProperty]) -> dict[str, Any]:
     return out
 
 
+def _key_out(columns: list[str]) -> Any:
+    """Emit a bare string for a single-column key, a list for a composite one.
+
+    Single-column keys stay scalar so pre-existing YAML and diffs are byte-stable;
+    only a genuinely composite key serialises as a YAML list. Both forms round-trip
+    through :meth:`SchemaMapping.from_yaml_string`, which normalises a scalar back
+    to a one-element list.
+    """
+    return columns[0] if len(columns) == 1 else list(columns)
+
+
 def _node_dict(node: NodeMapping) -> dict[str, Any]:
     out: dict[str, Any] = {
         "label": node.label,
@@ -76,7 +87,7 @@ def _node_dict(node: NodeMapping) -> dict[str, Any]:
     }
     if node.list_properties:
         out["list_properties"] = _list_props_out(node.list_properties)
-    out["primary_key"] = node.primary_key
+    out["primary_key"] = _key_out(node.primary_key)
     return out
 
 
@@ -86,8 +97,8 @@ def _edge_dict(edge: EdgeMapping) -> dict[str, Any]:
         "source_node": edge.source_node,
         "target_node": edge.target_node,
         "source_table": edge.source_table,
-        "source_foreign_key": edge.source_foreign_key,
-        "target_primary_key": edge.target_primary_key,
+        "source_foreign_key": _key_out(edge.source_foreign_key),
+        "target_primary_key": _key_out(edge.target_primary_key),
     }
     if edge.properties:
         out["properties"] = _props_out(edge.properties, edge.property_types)

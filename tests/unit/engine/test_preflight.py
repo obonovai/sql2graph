@@ -41,15 +41,15 @@ def test_find_unmapped_columns_absorbs_join_keys_of_node_plus_edge_table() -> No
     # A table that is BOTH a node source and an edge source: the edge's FK/PK
     # join columns are absorbed as covered, so they aren't false-flagged.
     mapping = SchemaMapping(
-        nodes=[NodeMapping(label="Forum", source_table="forum", primary_key="id", properties={"id": "id"})],
+        nodes=[NodeMapping(label="Forum", source_table="forum", primary_key=["id"], properties={"id": "id"})],
         edges=[
             EdgeMapping(
                 type="OWNS",
                 source_node="Forum",
                 target_node="Forum",
                 source_table="forum",
-                source_foreign_key="owner_id",
-                target_primary_key="id",
+                source_foreign_key=["owner_id"],
+                target_primary_key=["id"],
             )
         ],
     )

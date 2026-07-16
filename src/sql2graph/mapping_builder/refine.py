@@ -232,10 +232,11 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
         if cols is None:
             violations.append(f"node '{node.label}': source_table '{node.source_table}' is not a table in the schema")
             continue
-        if node.primary_key.casefold() not in cols:
-            violations.append(
-                f"node '{node.label}': primary_key '{node.primary_key}' is not a column of '{node.source_table}'"
-            )
+        violations.extend(
+            f"node '{node.label}': primary_key column '{pk_col}' is not a column of '{node.source_table}'"
+            for pk_col in node.primary_key
+            if pk_col.casefold() not in cols
+        )
         for prop, column in node.properties.items():
             if column.casefold() not in cols:
                 violations.append(
@@ -262,10 +263,11 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
         if cols is None:
             violations.append(f"edge '{edge.type}': source_table '{edge.source_table}' is not a table in the schema")
             continue
-        if edge.source_foreign_key.casefold() not in cols:
-            violations.append(
-                f"edge '{edge.type}': source_foreign_key '{edge.source_foreign_key}' is not a column of '{edge.source_table}'"
-            )
+        violations.extend(
+            f"edge '{edge.type}': source_foreign_key column '{fk_col}' is not a column of '{edge.source_table}'"
+            for fk_col in edge.source_foreign_key
+            if fk_col.casefold() not in cols
+        )
         for prop, column in edge.properties.items():
             if column.casefold() not in cols:
                 violations.append(
@@ -273,9 +275,11 @@ def validate_against_schema(mapping: SchemaMapping, schema: RelationalSchema) ->
                 )
         target_table = table_for_label.get(edge.target_node)
         target_cols = columns_by_table.get(target_table.casefold()) if target_table else None
-        if target_cols is not None and edge.target_primary_key.casefold() not in target_cols:
-            violations.append(
-                f"edge '{edge.type}': target_primary_key '{edge.target_primary_key}' is not a column of '{target_table}'"
+        if target_cols is not None:
+            violations.extend(
+                f"edge '{edge.type}': target_primary_key column '{pk_col}' is not a column of '{target_table}'"
+                for pk_col in edge.target_primary_key
+                if pk_col.casefold() not in target_cols
             )
 
     return violations
@@ -325,7 +329,7 @@ def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozens
     nodes = frozenset(
         (
             n.source_table.casefold(),
-            n.primary_key.casefold(),
+            tuple(c.casefold() for c in n.primary_key),
             frozenset(_typed_columns(n.properties, n.property_types)),
             frozenset(
                 (
@@ -342,8 +346,8 @@ def _sql_side_signature(mapping: SchemaMapping) -> tuple[frozenset[Any], frozens
     edges = frozenset(
         (
             e.source_table.casefold(),
-            e.source_foreign_key.casefold(),
-            e.target_primary_key.casefold(),
+            tuple(c.casefold() for c in e.source_foreign_key),
+            tuple(c.casefold() for c in e.target_primary_key),
             frozenset(_typed_columns(e.properties, e.property_types)),
         )
         for e in mapping.edges
@@ -411,7 +415,10 @@ def _build_refine_system_prompt() -> str:
         "  - the KEYS of any `list_properties` map (the graph-facing names of multi-valued props).\n\n"
         "You MUST NOT change any SQL identifier. Every `source_table`, `primary_key`, "
         "`source_foreign_key`, `target_primary_key`, and every `properties` VALUE must be "
-        "copied verbatim from the draft. A `properties` VALUE may be a bare column name or "
+        "copied verbatim from the draft. A `primary_key`, `source_foreign_key`, or "
+        "`target_primary_key` may be a single column or a YAML list of columns (a composite "
+        "key); copy the whole value, including the order of its columns, verbatim. A "
+        "`properties` VALUE may be a bare column name or "
         "an object `{column: ..., type: ...}`; copy the column AND any `type` verbatim, "
         "renaming only the property KEY. A `list_properties` entry has "
         "`source_table`/`foreign_key`/`column`/`type` fields - copy them all verbatim, "

@@ -102,8 +102,8 @@ def find_unmapped_columns(column_refs: frozenset[tuple[str, str]], mapping: Sche
     tables are skipped because the mapping stores just one of a junction's
     foreign keys, so a strict check would false-flag the *other* legitimate join
     key. For a checkable table the covered SQL columns are its node property
-    values and primary key, plus (for a table that *also* backs an edge) that
-    edge's property values and its join keys (``source_foreign_key`` /
+    values and primary-key columns, plus (for a table that *also* backs an edge)
+    that edge's property values and its join-key columns (``source_foreign_key`` /
     ``target_primary_key``). The edge union is a leniency valve: it keeps a
     node-table's FK/PK join columns from being flagged.
 
@@ -117,13 +117,13 @@ def find_unmapped_columns(column_refs: frozenset[tuple[str, str]], mapping: Sche
     for n in mapping.nodes:
         t = n.source_table.casefold()
         covered[t].update(c.casefold() for c in n.properties.values())
-        covered[t].add(n.primary_key.casefold())
+        covered[t].update(c.casefold() for c in n.primary_key)
     for e in mapping.edges:
         t = e.source_table.casefold()
         if t in covered:  # only matters when the edge's table is also a node source
             covered[t].update(c.casefold() for c in e.properties.values())
-            covered[t].add(e.source_foreign_key.casefold())
-            covered[t].add(e.target_primary_key.casefold())
+            covered[t].update(c.casefold() for c in e.source_foreign_key)
+            covered[t].update(c.casefold() for c in e.target_primary_key)
     flagged = {
         f"{table}.{column}"
         for table, column in column_refs

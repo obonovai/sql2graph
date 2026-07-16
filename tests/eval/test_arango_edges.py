@@ -72,12 +72,9 @@ def test_string_literals_are_never_rewritten() -> None:
     )
     # The IS_SAME_COLLECTION filter's PascalCase string arg (gold q05/q09) is untouched, while
     # the edge name beside it still expands.
-    out = expand_unified_edges(
-        "FOR c IN 1..1 INBOUND po REPLY_OF FILTER IS_SAME_COLLECTION('Comment', c) RETURN c"
-    )
+    out = expand_unified_edges("FOR c IN 1..1 INBOUND po REPLY_OF FILTER IS_SAME_COLLECTION('Comment', c) RETURN c")
     assert out == (
-        "FOR c IN 1..1 INBOUND po reply_of_post, reply_of_comment "
-        "FILTER IS_SAME_COLLECTION('Comment', c) RETURN c"
+        "FOR c IN 1..1 INBOUND po reply_of_post, reply_of_comment FILTER IS_SAME_COLLECTION('Comment', c) RETURN c"
     )
 
 

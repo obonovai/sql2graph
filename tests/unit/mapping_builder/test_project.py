@@ -134,7 +134,7 @@ def test_on_delete_cascade_reverses_edge_direction() -> None:
     assert is_composition_fk(post, post.single_column_foreign_keys()[0]) is True
     edge = next(e for e in project_to_mapping(schema).mapping.edges if e.source_table == "post")
     assert (edge.source_node, edge.target_node) == ("Forum", "Post")
-    assert (edge.source_foreign_key, edge.target_primary_key) == ("forum_id", "id")
+    assert (edge.source_foreign_key, edge.target_primary_key) == (["forum_id"], ["id"])
 
 
 def test_plain_fk_keeps_default_child_to_parent_direction() -> None:
@@ -171,17 +171,58 @@ def test_identifying_fk_reverses_direction_and_is_reported() -> None:
     assert any("composition" in w.lower() for w in result.report.warnings)
 
 
-def test_choose_primary_key_prefers_non_fk_of_composite(tpch_ddl: str) -> None:
+def test_choose_primary_key_returns_full_composite(tpch_ddl: str) -> None:
+    # A composite primary key keeps all its columns (the node's true identity),
+    # even though orderkey is also a foreign key that becomes an edge.
     schema = extract_schema_from_ddl(tpch_ddl, dialect="postgres")
     lineitem = schema.table("lineitem")
     assert lineitem is not None
-    assert choose_primary_key(lineitem) == ("linenumber", False)
+    assert choose_primary_key(lineitem) == (["orderkey", "linenumber"], False)
 
 
 def test_choose_primary_key_synthesizes_when_absent() -> None:
     table = extract_schema_from_ddl("CREATE TABLE t (a INT, b INT);").table("t")
     assert table is not None
-    assert choose_primary_key(table) == ("a", True)
+    assert choose_primary_key(table) == (["a"], True)
+
+
+def test_composite_fk_edge_emitted() -> None:
+    # A genuine composite foreign key is now emitted in full, not collapsed to its
+    # first column.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE orders (orderkey INT PRIMARY KEY);
+        CREATE TABLE lineitem (
+            orderkey INT REFERENCES orders(orderkey), linenumber INT, qty INT,
+            PRIMARY KEY (orderkey, linenumber)
+        );
+        CREATE TABLE lineitem_note (
+            order_id INT, line_no INT, note TEXT,
+            FOREIGN KEY (order_id, line_no) REFERENCES lineitem(orderkey, linenumber)
+        );
+        """,
+        dialect="postgres",
+    )
+    result = project_to_mapping(schema)
+    edge = next(e for e in result.mapping.edges if e.source_table == "lineitem_note")
+    assert edge.source_foreign_key == ["order_id", "line_no"]
+    assert edge.target_primary_key == ["orderkey", "linenumber"]
+    assert not any("collaps" in w.lower() for w in result.report.warnings)
+
+
+def test_composite_fk_arity_mismatch_dropped() -> None:
+    # A composite FK that cannot be positionally paired with the referenced key is
+    # dropped with a warning rather than silently collapsed.
+    schema = extract_schema_from_ddl(
+        """
+        CREATE TABLE t (a INT PRIMARY KEY);
+        CREATE TABLE u (x INT, y INT, FOREIGN KEY (x, y) REFERENCES t(a));
+        """,
+        dialect="postgres",
+    )
+    result = project_to_mapping(schema)
+    assert not any(e.source_table == "u" for e in result.mapping.edges)
+    assert any("mismatched column count" in w.lower() for w in result.report.warnings)
 
 
 def test_projection_is_valid_by_construction(tpch_ddl: str) -> None:
@@ -216,8 +257,13 @@ def test_node_properties_exclude_fk_columns_but_keep_pk(tpch_ddl: str) -> None:
     mapping = project_to_mapping(extract_schema_from_ddl(tpch_ddl, dialect="postgres")).mapping
     supplier = next(n for n in mapping.nodes if n.source_table == "supplier")
     assert "nationkey" not in supplier.properties  # FK -> becomes an edge
-    assert supplier.primary_key == "suppkey"
+    assert supplier.primary_key == ["suppkey"]
     assert "suppkey" in supplier.properties
+    # A composite-PK table keeps every key column as its identity, and each key
+    # column is a stored property even when it is also a foreign key (orderkey).
+    lineitem = next(n for n in mapping.nodes if n.source_table == "lineitem")
+    assert lineitem.primary_key == ["orderkey", "linenumber"]
+    assert "orderkey" in lineitem.properties
 
 
 def test_projection_duplicate_bare_name_is_valid_not_crash() -> None:

@@ -108,13 +108,13 @@ def small_schema() -> SchemaMapping:
             NodeMapping(
                 label="Person",
                 source_table="persons",
-                primary_key="id",
+                primary_key=["id"],
                 properties={"name": "full_name"},
             ),
             NodeMapping(
                 label="Forum",
                 source_table="forums",
-                primary_key="id",
+                primary_key=["id"],
                 properties={"title": "title"},
             ),
         ],
@@ -124,8 +124,8 @@ def small_schema() -> SchemaMapping:
                 source_node="Person",
                 target_node="Forum",
                 source_table="forum_members",
-                source_foreign_key="person_id",
-                target_primary_key="id",
+                source_foreign_key=["person_id"],
+                target_primary_key=["id"],
             ),
         ],
     )

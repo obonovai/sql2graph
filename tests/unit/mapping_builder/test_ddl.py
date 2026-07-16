@@ -107,7 +107,7 @@ def test_extract_alter_table_adds_primary_and_foreign_keys() -> None:
     ]
     # End to end: the ALTER-declared FK now becomes an edge.
     mapping = project_to_mapping(schema).mapping
-    assert any(e.source_table == "nation" and e.source_foreign_key == "regionkey" for e in mapping.edges)
+    assert any(e.source_table == "nation" and e.source_foreign_key == ["regionkey"] for e in mapping.edges)
 
 
 def test_extract_alter_table_unnamed_foreign_key() -> None:

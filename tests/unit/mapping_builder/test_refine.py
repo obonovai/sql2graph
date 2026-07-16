@@ -10,6 +10,7 @@ from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
 from sql2graph.mapping_builder import mapping_to_yaml
 from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
 from sql2graph.mapping_builder.diff import diff_mappings
+from sql2graph.mapping_builder.project import project_to_mapping
 from sql2graph.mapping_builder.refine import refine_mapping, refine_mapping_async, validate_against_schema
 from tests.unit._doubles import ScriptedLLM
 
@@ -35,6 +36,39 @@ def test_refine_applies_valid_rename(
     roles = [m["role"] for m in outcome.messages]
     assert roles[:2] == ["system", "user"]
     assert "assistant" in roles
+
+
+_COMPOSITE_DDL = """
+CREATE TABLE orders (orderkey INT PRIMARY KEY);
+CREATE TABLE lineitem (orderkey INT REFERENCES orders(orderkey), linenumber INT, qty INT, PRIMARY KEY (orderkey, linenumber));
+"""
+
+
+def test_refine_preserves_composite_key(oneshot_llm: Callable[..., Any]) -> None:
+    # A composite key passes through a valid graph-facing rename untouched.
+    schema = extract_schema_from_ddl(_COMPOSITE_DDL, dialect="postgres")
+    skeleton = project_to_mapping(schema).mapping
+    improved = mapping_to_yaml(skeleton).replace("qty: qty", "quantity: qty")  # rename a property KEY only
+    outcome = refine_mapping(skeleton, schema, oneshot_llm(improved))
+    assert outcome.accepted is True
+    lineitem = next(n for n in outcome.mapping.nodes if n.source_table == "lineitem")
+    assert lineitem.primary_key == ["orderkey", "linenumber"]
+
+
+def test_refine_rejects_reordered_composite_key(oneshot_llm: Callable[..., Any]) -> None:
+    # Reordering a composite key's columns is a positional SQL-side change; the
+    # preservation guardrail rejects it and keeps the deterministic skeleton.
+    schema = extract_schema_from_ddl(_COMPOSITE_DDL, dialect="postgres")
+    skeleton = project_to_mapping(schema).mapping
+    reordered_nodes = [
+        n.model_copy(update={"primary_key": ["linenumber", "orderkey"]}) if n.source_table == "lineitem" else n
+        for n in skeleton.nodes
+    ]
+    bad = mapping_to_yaml(skeleton.model_copy(update={"nodes": reordered_nodes}))
+    outcome = refine_mapping(skeleton, schema, oneshot_llm(bad))
+    assert outcome.accepted is False
+    lineitem = next(n for n in outcome.mapping.nodes if n.source_table == "lineitem")
+    assert lineitem.primary_key == ["orderkey", "linenumber"]  # skeleton kept
 
 
 def test_refine_sums_token_usage_across_repair_and_times_the_pass(
@@ -162,8 +196,8 @@ def test_refine_rejects_added_edge(
                 source_node="Supplier",
                 target_node="Supplier",
                 source_table="supplier",
-                source_foreign_key="suppkey",
-                target_primary_key="suppkey",
+                source_foreign_key=["suppkey"],
+                target_primary_key=["suppkey"],
             ),
         ],
     )

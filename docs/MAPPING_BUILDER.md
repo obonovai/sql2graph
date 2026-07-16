@@ -94,11 +94,12 @@ The heuristics:
 - **Table becomes a node.** Each non-junction table with at least one column becomes a
   `NodeMapping`. Its label is derived by `naming.table_to_label` (see below), made
   unique against previously assigned labels (a collision is suffixed and warned).
-- **Foreign key becomes an edge.** Each single-column foreign key on a node table
-  becomes an `EdgeMapping` joining the source node's FK column to the target node's
-  key. A composite (multi-column) foreign key is collapsed to its first column with a
-  warning; a foreign key referencing an unknown table, or one modeled as an edge, is
-  dropped with a reason.
+- **Foreign key becomes an edge.** Each foreign key on a node table becomes an
+  `EdgeMapping` joining the source node's FK column(s) to the target node's key. A
+  composite (multi-column) foreign key keeps **all** its columns, positionally matched
+  to the referenced key (`source.fk[i] = target.pk[i]`); a foreign key whose column
+  count does not match the referenced key, one referencing an unknown table, or one
+  modeled as an edge, is dropped with a reason.
 - **Edge direction — composition vs association.** By default an FK edge points
   *FK-holder → referenced* (child → parent), which is right for a reference /
   association. When the schema marks the foreign key as **composition** (the parent
@@ -131,13 +132,14 @@ The heuristics:
   map (one graph property ← one column of the node's own table) cannot express. The
   parent-table → list-properties resolution is `_resolve_list_properties`; the folded
   child tables are recorded in `report.list_property_tables`.
-- **Primary-key choice.** `choose_primary_key(table)` returns `(column, synthesized)`.
-  It prefers a declared primary-key column that is *not* itself a foreign key (so a
-  composite PK like `lineitem(orderkey, linenumber)` yields `linenumber`, since
-  `orderkey` becomes an edge); with no declared key it falls back to the first column
-  and flags the guess (`synthesized=True`).
+- **Primary-key choice.** `choose_primary_key(table)` returns `(columns, synthesized)`.
+  It returns the table's full declared primary key, so a composite PK like
+  `lineitem(orderkey, linenumber)` keeps **both** columns as the node's identity (even
+  though `orderkey` also becomes an edge); with no declared key it falls back to the
+  first column and flags the guess (`synthesized=True`).
 - **Properties.** A node's non-foreign-key columns become properties (a join column
-  becomes an edge, not a stored value); the chosen key is always included.
+  becomes an edge, not a stored value); every primary-key column is always included,
+  even a composite key's foreign-key part.
 - **Naming** is delegated to `naming.py` (see [Naming](#naming)).
 - **Semantic typing** is delegated to `sql_types.py` (see [Semantic typing](#semantic-typing)).
 
@@ -152,7 +154,7 @@ account of what was done and what to check:
 | `fk_edges` | `list[str]` | One line per emitted edge, e.g. `"Lineitem -[SUPP]-> Supplier (lineitem.suppkey)"` (deterministic labels, before refinement); a composition edge is tagged `[reversed to parent->child: …]`. |
 | `dropped_objects` | `list[tuple[str, str]]` | `(name, reason)` for things that produced nothing (views, FKs to unknown tables, empty-column tables, duplicate names). |
 | `synthesized_keys` | `list[str]` | Tables whose primary key had to be guessed. |
-| `warnings` | `list[str]` | Soft issues a reviewer should look at (synthesized keys, collapsed composite FKs, candidate association tables kept as nodes, label collisions). |
+| `warnings` | `list[str]` | Soft issues a reviewer should look at (synthesized keys, foreign keys dropped for a mismatched column count, candidate association tables kept as nodes, label collisions). |
 
 `CoverageReport.as_dict()` returns a JSON-serialisable view (adding derived
 `node_count` / `edge_count`) for a UI audit panel.
@@ -304,8 +306,9 @@ nodes:
       quantity: {column: "quantity", type: "float"}
       shipdate: {column: "shipdate", type: "date"}
       comment: {column: "comment", type: "string"}
+      orderkey: {column: "orderkey", type: "integer"}   # PK column, kept even though it also drives an edge
       # ... other non-foreign-key columns ...
-    primary_key: "linenumber"        # orderkey is a FK -> the composite PK yields linenumber
+    primary_key: [orderkey, linenumber]   # the full composite primary key is the node's identity
 edges:
   - type: "SUPP"                     # from stripping "suppkey" -> "supp"
     source_node: "Lineitem"

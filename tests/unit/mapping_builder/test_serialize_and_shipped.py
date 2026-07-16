@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sql2graph import SchemaMapping
+from sql2graph import EdgeMapping, NodeMapping, SchemaMapping
 from sql2graph.mapping_builder import mapping_to_yaml
 from sql2graph.mapping_builder.ddl import extract_schema_from_ddl
 from sql2graph.mapping_builder.project import project_to_mapping
@@ -21,9 +21,9 @@ def test_generated_tpch_matches_shipped_join_semantics(tpch_ddl: str, mappings_d
     ship_nodes = {n.source_table for n in shipped.nodes}
     assert gen_nodes == ship_nodes
 
-    def direct_triples(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
+    def direct_triples(mapping: SchemaMapping) -> set[tuple[str, tuple[str, ...], tuple[str, ...]]]:
         return {
-            (e.source_table, e.source_foreign_key, e.target_primary_key)
+            (e.source_table, tuple(e.source_foreign_key), tuple(e.target_primary_key))
             for e in mapping.edges
             if e.source_table not in junction_tables and e.source_table != "partsupp"
         }
@@ -51,9 +51,9 @@ def test_bundled_tpch_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path
 
     assert {n.source_table for n in generated.nodes} == {n.source_table for n in shipped.nodes}
 
-    def direct_triples(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
+    def direct_triples(mapping: SchemaMapping) -> set[tuple[str, tuple[str, ...], tuple[str, ...]]]:
         return {
-            (e.source_table, e.source_foreign_key, e.target_primary_key)
+            (e.source_table, tuple(e.source_foreign_key), tuple(e.target_primary_key))
             for e in mapping.edges
             if e.source_table != "partsupp"
         }
@@ -76,8 +76,8 @@ def test_bundled_ldbc_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path
     assert len(generated.edges) == 23
     assert {n.source_table for n in generated.nodes} == {n.source_table for n in shipped.nodes}
 
-    def triples(mapping: SchemaMapping) -> set[tuple[str, str, str]]:
-        return {(e.source_table, e.source_foreign_key, e.target_primary_key) for e in mapping.edges}
+    def triples(mapping: SchemaMapping) -> set[tuple[str, tuple[str, ...], tuple[str, ...]]]:
+        return {(e.source_table, tuple(e.source_foreign_key), tuple(e.target_primary_key)) for e in mapping.edges}
 
     # Join semantics agree exactly (edge type names/directions aside).
     assert triples(generated) == triples(shipped)
@@ -98,7 +98,7 @@ def test_bundled_ldbc_ddl_matches_shipped(examples_dir: Path, mappings_dir: Path
 
     # The forum-post containment FK carries ON DELETE CASCADE, so the builder emits
     # the LDBC-correct Forum -> Post direction (not the default Post -> Forum).
-    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == "forum_id")
+    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == ["forum_id"])
     assert (containment.source_node, containment.target_node) == ("Forum", "Post")
 
 
@@ -110,7 +110,7 @@ def test_bundled_ldbc_naive_ddl_reverses_containment(examples_dir: Path) -> None
     ).mapping
     assert len(generated.nodes) == 8
     assert len(generated.edges) == 23
-    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == "forum_id")
+    containment = next(e for e in generated.edges if e.source_table == "post" and e.source_foreign_key == ["forum_id"])
     assert (containment.source_node, containment.target_node) == ("Post", "Forum")
 
 
@@ -123,6 +123,47 @@ def test_shipped_mapping_round_trips(name: str, mappings_dir: Path) -> None:
 def test_generated_mapping_round_trips(tpch_ddl: str) -> None:
     mapping = project_to_mapping(extract_schema_from_ddl(tpch_ddl, dialect="postgres")).mapping
     assert SchemaMapping.from_yaml_string(mapping_to_yaml(mapping)) == mapping
+
+
+def test_composite_key_round_trips() -> None:
+    mapping = SchemaMapping(
+        nodes=[
+            NodeMapping(
+                label="LineItem",
+                source_table="lineitem",
+                primary_key=["orderkey", "linenumber"],
+                properties={"orderkey": "orderkey", "linenumber": "linenumber"},
+            ),
+            NodeMapping(
+                label="Order", source_table="orders", primary_key=["orderkey"], properties={"orderkey": "orderkey"}
+            ),
+        ],
+        edges=[
+            EdgeMapping(
+                type="PART_OF",
+                source_node="LineItem",
+                target_node="Order",
+                source_table="lineitem",
+                source_foreign_key=["orderkey"],
+                target_primary_key=["orderkey"],
+            )
+        ],
+    )
+    yaml_text = mapping_to_yaml(mapping)
+    assert SchemaMapping.from_yaml_string(yaml_text) == mapping  # exact round-trip
+    reloaded = SchemaMapping.from_yaml_string(yaml_text)
+    line_item = next(n for n in reloaded.nodes if n.label == "LineItem")
+    assert line_item.primary_key == ["orderkey", "linenumber"]  # composite key survives round-trip
+
+
+def test_single_column_key_serializes_scalar() -> None:
+    # Byte-stability guard: a single-column key stays a bare scalar, not a YAML list,
+    # so pre-existing mappings serialise unchanged.
+    mapping = SchemaMapping(
+        nodes=[NodeMapping(label="Person", source_table="person", primary_key=["id"], properties={"id": "id"})],
+        edges=[],
+    )
+    assert "primary_key: id" in mapping_to_yaml(mapping)
 
 
 def test_list_properties_serialize_and_round_trip() -> None:

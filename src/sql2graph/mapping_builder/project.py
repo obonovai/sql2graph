@@ -31,9 +31,9 @@ class CoverageReport:
 
     Every list is ordered for stable, snapshot-friendly output. ``warnings``
     collects the soft issues a reviewer should look at (synthesized keys,
-    collapsed composite foreign keys, candidate association tables kept as
-    nodes); ``dropped_objects`` lists things that produced nothing at all
-    (views, FKs to unknown tables).
+    foreign keys dropped for a mismatched column count, candidate association
+    tables kept as nodes); ``dropped_objects`` lists things that produced nothing
+    at all (views, FKs to unknown tables).
     """
 
     node_tables: list[str] = field(default_factory=list)
@@ -111,7 +111,7 @@ def project_to_mapping(schema: RelationalSchema) -> ProjectionResult:
 
     edges: list[EdgeMapping] = []
     seen_types: dict[str, set[str]] = {}  # source_table.casefold() -> assigned types
-    seen_edges: set[tuple[str, ...]] = set()
+    seen_edges: set[tuple[Any, ...]] = set()
 
     for t in node_tables:
         for fk in t.foreign_keys:
@@ -222,19 +222,18 @@ def is_composition_fk(table: Table, fk: ForeignKey) -> bool:
     return any(c.casefold() in pk for c in fk.columns)
 
 
-def choose_primary_key(table: Table) -> tuple[str, bool]:
-    """Pick the identity column for a node and whether it had to be synthesized.
+def choose_primary_key(table: Table) -> tuple[list[str], bool]:
+    """Pick the identity columns for a node and whether they had to be synthesized.
 
-    Prefers the non-foreign-key column of a declared primary key (so a composite
-    PK like ``lineitem(orderkey, linenumber)`` yields ``linenumber``, since
-    ``orderkey`` is a foreign key that becomes an edge). With no declared key it
-    falls back to the first column and flags the guess.
+    Returns the table's full declared primary key, so a composite key keeps all
+    its columns (``lineitem(orderkey, linenumber)`` yields
+    ``[orderkey, linenumber]``, the node's true identity, even though ``orderkey``
+    also becomes an edge). With no declared key it falls back to the first column
+    and flags the guess.
     """
-    fk_cols = {c.casefold() for c in table.fk_columns()}
     if table.primary_key:
-        non_fk = [c for c in table.primary_key if c.casefold() not in fk_cols]
-        return (non_fk[0] if non_fk else table.primary_key[0], False)
-    return (table.columns[0].name, True)
+        return (list(table.primary_key), False)
+    return ([table.columns[0].name], True)
 
 
 def _build_node(
@@ -250,22 +249,24 @@ def _build_node(
     *list_properties* carries the multi-valued attributes folded in from child
     tables (empty for a plain single-table node).
     """
-    pk_col, synthesized = choose_primary_key(table)
+    pk_cols, synthesized = choose_primary_key(table)
     if synthesized:
         report.synthesized_keys.append(table.name)
-        report.warnings.append(f"Table '{table.name}' has no primary key; using column '{pk_col}' as the node key")
+        report.warnings.append(f"Table '{table.name}' has no primary key; using column '{pk_cols[0]}' as the node key")
     fk_cols = {c.casefold() for c in table.fk_columns()}
-    # Non-FK columns become properties; the chosen key is always included even if
-    # it happens to also be a foreign-key column (composite-key tables).
+    # Non-FK columns become properties; every primary-key column is always included
+    # too, even when it is also a foreign-key column (composite/identifying keys),
+    # so the node exposes its whole identity.
     properties: dict[str, str] = {c.name: c.name for c in table.columns if c.name.casefold() not in fk_cols}
-    properties.setdefault(pk_col, pk_col)
+    for col in pk_cols:
+        properties.setdefault(col, col)
     return NodeMapping(
         label=label,
         source_table=table.name,
         properties=properties,
         property_types=_property_types_for(table, properties),
         list_properties=list_properties,
-        primary_key=pk_col,
+        primary_key=pk_cols,
     )
 
 
@@ -358,7 +359,7 @@ def _append_fk_edge(
     edges: list[EdgeMapping],
     report: CoverageReport,
     seen_types: dict[str, set[str]],
-    seen_edges: set[tuple[str, ...]],
+    seen_edges: set[tuple[Any, ...]],
 ) -> None:
     """Emit (or skip, with a reason) the edge for one foreign key of a node table."""
     target = schema.table(fk.ref_table)
@@ -376,14 +377,26 @@ def _append_fk_edge(
             )
         )
         return
-    if len(fk.columns) > 1:
-        report.warnings.append(
-            f"Composite foreign key {table.name}({', '.join(fk.columns)}) collapsed to its first column '{fk.columns[0]}'"
-        )
-
     fk_holder_label = label_for[table.name.casefold()]
     referenced_label = label_for[target_key]
-    target_pk = fk.ref_columns[0] if fk.ref_columns else choose_primary_key(target)[0]
+    # Composite keys are represented in full: emit every local column paired with
+    # the referenced column (or the target's full primary key when the DDL omitted
+    # the referenced column list). A join that cannot be positionally paired is
+    # dropped rather than silently collapsed to its first column.
+    source_fk = list(fk.columns)
+    target_pk = list(fk.ref_columns) if fk.ref_columns else choose_primary_key(target)[0]
+    if len(source_fk) != len(target_pk):
+        report.warnings.append(
+            f"Foreign key {table.name}({', '.join(source_fk)}) references "
+            f"{target.name}({', '.join(target_pk)}) with mismatched column count; edge dropped"
+        )
+        report.dropped_objects.append(
+            (
+                f"{table.name}.{','.join(source_fk)}",
+                "composite foreign key column count does not match the referenced key; edge dropped",
+            )
+        )
+        return
 
     # Composition flips the labeled direction to parent -> child; the join columns
     # (source_table / source_foreign_key / target_primary_key) are unchanged. The
@@ -401,10 +414,10 @@ def _append_fk_edge(
         source_node=source_label,
         target_node=target_label,
         source_table=table.name,
-        source_foreign_key=fk.columns[0],
+        source_foreign_key=source_fk,
         target_primary_key=target_pk,
     )
-    description = f"{source_label} -[{edge_type}]-> {target_label} ({table.name}.{fk.columns[0]})"
+    description = f"{source_label} -[{edge_type}]-> {target_label} ({table.name}.{','.join(source_fk)})"
     if composition:
         reason = "ON DELETE CASCADE" if fk.on_delete == "CASCADE" else "identifying foreign key in the primary key"
         description += f" [reversed to parent->child: composition via {reason}]"
@@ -421,7 +434,7 @@ def _append_junction_edge(
     edges: list[EdgeMapping],
     report: CoverageReport,
     seen_types: dict[str, set[str]],
-    seen_edges: set[tuple[str, ...]],
+    seen_edges: set[tuple[Any, ...]],
 ) -> None:
     """Emit the single edge that a junction table collapses to."""
     f0, f1 = table.single_column_foreign_keys()
@@ -441,7 +454,15 @@ def _append_junction_edge(
     target_label = label_for[b.name.casefold()]
     fk_cols = {c.casefold() for c in table.fk_columns()}
     properties = {c.name: c.name for c in table.columns if c.name.casefold() not in fk_cols}
-    target_pk = f1.ref_columns[0] if f1.ref_columns else choose_primary_key(b)[0]
+    source_fk = [f1.columns[0]]
+    target_pk = list(f1.ref_columns) if f1.ref_columns else choose_primary_key(b)[0]
+    if len(source_fk) != len(target_pk):
+        # The junction's own foreign key is single-column; a composite referenced
+        # key cannot be paired against it, so drop rather than collapse the target.
+        report.dropped_objects.append(
+            (table.name, "junction foreign key column count does not match the referenced key; edge dropped")
+        )
+        return
     edge_type = _unique_type(table.name, junction_to_edge_type(table.name), target_label, seen_types)
 
     edge = EdgeMapping(
@@ -449,7 +470,7 @@ def _append_junction_edge(
         source_node=source_label,
         target_node=target_label,
         source_table=table.name,
-        source_foreign_key=f1.columns[0],
+        source_foreign_key=source_fk,
         target_primary_key=target_pk,
         properties=properties,
         property_types=_property_types_for(table, properties),
@@ -464,7 +485,7 @@ def _add_edge(
     edge: EdgeMapping,
     edges: list[EdgeMapping],
     report: CoverageReport,
-    seen_edges: set[tuple[str, ...]],
+    seen_edges: set[tuple[Any, ...]],
     description: str,
 ) -> None:
     """Append *edge* unless an identical one already exists (the validator forbids dupes)."""
@@ -473,8 +494,8 @@ def _add_edge(
         edge.source_node,
         edge.target_node,
         edge.source_table,
-        edge.source_foreign_key,
-        edge.target_primary_key,
+        tuple(edge.source_foreign_key),
+        tuple(edge.target_primary_key),
     )
     if key in seen_edges:
         return

@@ -80,7 +80,7 @@ def _edge_type_renames(before: SchemaMapping, after: SchemaMapping) -> list[Rena
     for key, edge in _edge_index(before.edges).items():
         match = after_index.get(key)
         if match is not None and match.type != edge.type:
-            where = f"{edge.source_table}.{edge.source_foreign_key}"
+            where = f"{edge.source_table}.{','.join(edge.source_foreign_key)}"
             out.append(RenameDiff(kind="edge type", where=where, before=edge.type, after=match.type))
     return out
 
@@ -108,16 +108,20 @@ def _node_index(nodes: list[NodeMapping]) -> dict[str, NodeMapping]:
     return {n.source_table.casefold(): n for n in nodes if counts[n.source_table.casefold()] == 1}
 
 
-def _edge_index(edges: list[EdgeMapping]) -> dict[tuple[str, str, str], EdgeMapping]:
+def _edge_index(edges: list[EdgeMapping]) -> dict[tuple[str, tuple[str, ...], tuple[str, ...]], EdgeMapping]:
     """Index edges by the join identity refinement preserves, dropping non-unique keys."""
-    counts: dict[tuple[str, str, str], int] = {}
+    counts: dict[tuple[str, tuple[str, ...], tuple[str, ...]], int] = {}
     for edge in edges:
         counts[_edge_key(edge)] = counts.get(_edge_key(edge), 0) + 1
     return {_edge_key(e): e for e in edges if counts[_edge_key(e)] == 1}
 
 
-def _edge_key(edge: EdgeMapping) -> tuple[str, str, str]:
-    return (edge.source_table.casefold(), edge.source_foreign_key.casefold(), edge.target_primary_key.casefold())
+def _edge_key(edge: EdgeMapping) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    return (
+        edge.source_table.casefold(),
+        tuple(c.casefold() for c in edge.source_foreign_key),
+        tuple(c.casefold() for c in edge.target_primary_key),
+    )
 
 
 def _prop_renames(before_props: dict[str, str], after_props: dict[str, str], *, where: str) -> list[RenameDiff]:

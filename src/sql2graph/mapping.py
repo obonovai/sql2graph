@@ -55,6 +55,24 @@ class _StrictModel(BaseModel):
 # trims accidental surrounding spaces from names.
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
+# A key that is one or more columns. Accepts a scalar string or a list in YAML
+# (normalized to a list by the models' ``mode="before"`` validators); an empty
+# list is rejected, and each element must be a non-blank column name. Composite
+# keys keep every column so a node's identity and an edge's join are not lossily
+# reduced to a single column.
+KeyColumns = Annotated[list[NonBlankStr], Field(min_length=1)]
+
+
+def _as_key_list(value: Any) -> Any:
+    """Normalize a scalar-or-list key field to a list, for a ``mode="before"`` validator.
+
+    Accepts the legacy scalar form (``primary_key: id``) and the composite list
+    form (``primary_key: [orderkey, linenumber]``), returning a list either way so
+    the stored value is always a list. A non-str/non-list value is passed through
+    untouched for Pydantic to reject with its normal type error.
+    """
+    return [value] if isinstance(value, str) else value
+
 
 class SemanticType(StrEnum):
     """A normalized, loader-agnostic semantic type for a graph property.
@@ -173,8 +191,10 @@ class NodeMapping(_StrictModel):
             :class:`ListProperty` describing a multi-valued attribute sourced
             from a child table (e.g. ``email``, ``language``). Empty for the
             common single-table node.
-        primary_key: SQL column that uniquely identifies rows in
-            ``source_table``. Used by the LLM to reason about joins.
+        primary_key: One or more SQL columns that identify rows in
+            ``source_table`` (a composite key keeps all its columns, e.g.
+            ``[orderkey, linenumber]``). Accepts a scalar string or a list in
+            YAML; stored as a list. Used by the LLM to reason about joins.
     """
 
     label: NonBlankStr
@@ -182,12 +202,16 @@ class NodeMapping(_StrictModel):
     properties: dict[NonBlankStr, NonBlankStr]
     property_types: dict[NonBlankStr, SemanticType] = Field(default_factory=dict)
     list_properties: dict[NonBlankStr, ListProperty] = Field(default_factory=dict)
-    primary_key: NonBlankStr
+    primary_key: KeyColumns
 
     @model_validator(mode="before")
     @classmethod
-    def _accept_typed_properties(cls, data: Any) -> Any:
-        return _split_property_types(data)
+    def _normalize_before(cls, data: Any) -> Any:
+        """Split typed properties, then normalize ``primary_key`` to a list."""
+        data = _split_property_types(data)
+        if isinstance(data, dict) and "primary_key" in data:
+            data = {**data, "primary_key": _as_key_list(data["primary_key"])}
+        return data
 
     @model_validator(mode="after")
     def _validate_property_types(self) -> Self:
@@ -208,7 +232,9 @@ class EdgeMapping(_StrictModel):
 
     The edge connects rows in ``source_node``'s table to rows in
     ``target_node``'s table via a join on
-    ``source_table.source_foreign_key = target_primary_key``. If
+    ``source_table.source_foreign_key = target_primary_key``. Both key fields may
+    hold more than one column for a composite join, positionally matched
+    (``source.fk[i] = target.pk[i]``) and required to be the same length. If
     ``source_table`` is a dedicated junction table (e.g. ``forum_person``,
     ``partsupp``), additional non-FK columns can become edge properties.
 
@@ -222,8 +248,10 @@ class EdgeMapping(_StrictModel):
         target_node: ``label`` of an existing node, checked at load time.
         source_table: Table containing the foreign key that materialises the
             edge.
-        source_foreign_key: Foreign key column in ``source_table``.
-        target_primary_key: Primary key column in the target node's table.
+        source_foreign_key: Foreign-key column(s) in ``source_table`` (a scalar
+            or a list in YAML; stored as a list).
+        target_primary_key: Primary-key column(s) in the target node's table,
+            positionally matched to ``source_foreign_key`` (same length).
         properties: Optional edge properties, same format as node properties.
         property_types: Optional per-property :class:`SemanticType`, same
             meaning as :attr:`NodeMapping.property_types`.
@@ -233,19 +261,38 @@ class EdgeMapping(_StrictModel):
     source_node: NonBlankStr
     target_node: NonBlankStr
     source_table: NonBlankStr
-    source_foreign_key: NonBlankStr
-    target_primary_key: NonBlankStr
+    source_foreign_key: KeyColumns
+    target_primary_key: KeyColumns
     properties: dict[NonBlankStr, NonBlankStr] = Field(default_factory=dict)
     property_types: dict[NonBlankStr, SemanticType] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
-    def _accept_typed_properties(cls, data: Any) -> Any:
-        return _split_property_types(data)
+    def _normalize_before(cls, data: Any) -> Any:
+        """Split typed properties, then normalize both join-key fields to lists."""
+        data = _split_property_types(data)
+        if isinstance(data, dict):
+            merged = dict(data)
+            for field_name in ("source_foreign_key", "target_primary_key"):
+                if field_name in merged:
+                    merged[field_name] = _as_key_list(merged[field_name])
+            return merged
+        return data
 
     @model_validator(mode="after")
     def _validate_property_types(self) -> Self:
         _check_property_types_subset(self.properties, self.property_types)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_join_arity(self) -> Self:
+        """A composite join must pair the same number of source and target columns."""
+        if len(self.source_foreign_key) != len(self.target_primary_key):
+            raise ValueError(
+                f"edge '{self.type}': source_foreign_key has {len(self.source_foreign_key)} "
+                f"column(s) but target_primary_key has {len(self.target_primary_key)}; a "
+                f"composite join must be positionally length-matched (source.fk[i] = target.pk[i])"
+            )
         return self
 
 
@@ -335,15 +382,15 @@ class SchemaMapping(_StrictModel):
         legitimate multi-junction pattern (e.g. Person-LIKES-Post alongside
         Person-LIKES-Comment).
         """
-        seen: set[tuple[str, str, str, str, str, str, tuple[tuple[str, str], ...]]] = set()
+        seen: set[tuple[str, str, str, str, tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]] = set()
         for edge in self.edges:
             key = (
                 edge.type,
                 edge.source_node,
                 edge.target_node,
                 edge.source_table,
-                edge.source_foreign_key,
-                edge.target_primary_key,
+                tuple(edge.source_foreign_key),
+                tuple(edge.target_primary_key),
                 tuple(sorted(edge.properties.items())),
             )
             if key in seen:

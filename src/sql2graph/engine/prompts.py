@@ -48,6 +48,27 @@ def _type_suffix(semantic: SemanticType | None) -> str:
     return f" ({semantic.value})" if semantic is not None else ""
 
 
+def _key_str(columns: list[str]) -> str:
+    """Render key columns for the prompt: one backticked column, or a parenthesised
+    comma-separated tuple of backticked columns for a composite key.
+
+    A single-column key reproduces the previous byte-for-byte output, so untyped
+    single-column mappings and their prompt snapshots stay unchanged.
+    """
+    if len(columns) == 1:
+        return f"`{columns[0]}`"
+    return "(" + ", ".join(f"`{c}`" for c in columns) + ")"
+
+
+def _join_str(source_table: str, fks: list[str], pks: list[str]) -> str:
+    """Render an edge join, pairing columns positionally.
+
+    ``t.fk -> pk`` for a single column; ``t.a -> pk_a AND t.b -> pk_b`` for a
+    composite join, so the LLM knows every column pair must match.
+    """
+    return " AND ".join(f"`{source_table}.{fk}` -> `{pk}`" for fk, pk in zip(fks, pks, strict=True))
+
+
 def format_schema_context(schema: SchemaMapping) -> str:
     """Render a schema mapping as a human-readable Markdown-ish block.
 
@@ -64,7 +85,7 @@ def format_schema_context(schema: SchemaMapping) -> str:
     lines.append("### Nodes")
     for node in schema.nodes:
         lines.append(f"- **{node.label}** (from table `{node.source_table}`)")
-        lines.append(f"  Primary key: `{node.primary_key}`")
+        lines.append(f"  Primary key: {_key_str(node.primary_key)}")
         lines.append("  Properties:")
         for graph_prop, sql_col in node.properties.items():
             suffix = _type_suffix(node.property_types.get(graph_prop))
@@ -79,7 +100,7 @@ def format_schema_context(schema: SchemaMapping) -> str:
     lines.append("### Relationships (Edges)")
     for edge in schema.edges:
         lines.append(f"- **[:{edge.type}]** from `{edge.source_node}` to `{edge.target_node}`")
-        lines.append(f"  Join: `{edge.source_table}.{edge.source_foreign_key}` -> `{edge.target_primary_key}`")
+        lines.append(f"  Join: {_join_str(edge.source_table, edge.source_foreign_key, edge.target_primary_key)}")
         if edge.properties:
             lines.append("  Properties:")
             for graph_prop, sql_col in edge.properties.items():

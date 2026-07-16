@@ -64,6 +64,7 @@ nodes:
   - label: "LineItem"
     source_table: "lineitem"
     properties:
+      orderkey: "orderkey"
       linenumber: "linenumber"
       quantity: "quantity"
       extendedprice: "extendedprice"
@@ -77,7 +78,7 @@ nodes:
       shipinstruct: "shipinstruct"
       shipmode: "shipmode"
       comment: "comment"
-    primary_key: "linenumber"
+    primary_key: [orderkey, linenumber]
 edges:
   - type: "BELONGS_TO"
     source_node: "Nation"

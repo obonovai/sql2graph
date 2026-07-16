@@ -99,7 +99,7 @@ def test_property_types_reject_orphan_key() -> None:
             source_table="x",
             properties={"a": "a"},
             property_types={"missing": SemanticType.DATE},
-            primary_key="a",
+            primary_key=["a"],
         )
 
 

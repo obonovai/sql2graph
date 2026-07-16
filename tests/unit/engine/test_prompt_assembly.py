@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from sql2graph import AqlTarget, CypherTarget, GremlinTarget
+from sql2graph import AqlTarget, CypherTarget, EdgeMapping, GremlinTarget, NodeMapping, SchemaMapping
 from sql2graph.engine.prompts import (
     build_escalation_prompt,
     build_fix_prompt,
     build_generate_prompt,
     build_system_prompt,
     error_signature,
+    format_schema_context,
     normalize_query,
 )
 
@@ -40,6 +41,37 @@ def test_build_system_prompt_gremlin(person_forum_schema: Callable[..., Any]) ->
     assert "gremlin" in prompt
     assert "g.V()" in prompt
     assert "Person" in prompt  # schema is embedded
+
+
+def test_format_schema_context_renders_composite_key_and_join() -> None:
+    mapping = SchemaMapping(
+        nodes=[
+            NodeMapping(label="Child", source_table="child", primary_key=["id"], properties={"id": "id"}),
+            NodeMapping(
+                label="LineItem",
+                source_table="lineitem",
+                primary_key=["orderkey", "linenumber"],
+                properties={"orderkey": "orderkey", "linenumber": "linenumber"},
+            ),
+        ],
+        edges=[
+            EdgeMapping(
+                type="REFERS_TO",
+                source_node="Child",
+                target_node="LineItem",
+                source_table="child",
+                source_foreign_key=["order_id", "line_no"],
+                target_primary_key=["orderkey", "linenumber"],
+            ),
+        ],
+    )
+    block = format_schema_context(mapping)
+    # A composite primary key renders as a parenthesised tuple; a single-column one
+    # stays byte-identical to the pre-composite format.
+    assert "Primary key: (`orderkey`, `linenumber`)" in block
+    assert "Primary key: `id`" in block
+    # A composite join pairs columns positionally with AND.
+    assert "`child.order_id` -> `orderkey` AND `child.line_no` -> `linenumber`" in block
 
 
 def test_build_generate_prompt_includes_sql() -> None:

@@ -44,13 +44,13 @@ def person_forum_schema() -> Callable[[], SchemaMapping]:
                 NodeMapping(
                     label="Person",
                     source_table="persons",
-                    primary_key="id",
+                    primary_key=["id"],
                     properties={"name": "full_name"},
                 ),
                 NodeMapping(
                     label="Forum",
                     source_table="forums",
-                    primary_key="id",
+                    primary_key=["id"],
                     properties={"title": "title"},
                 ),
             ],
@@ -60,8 +60,8 @@ def person_forum_schema() -> Callable[[], SchemaMapping]:
                     source_node="Person",
                     target_node="Person",
                     source_table="knows",
-                    source_foreign_key="from_id",
-                    target_primary_key="id",
+                    source_foreign_key=["from_id"],
+                    target_primary_key=["id"],
                 )
             ],
         )
@@ -75,7 +75,7 @@ def forum_no_title_schema() -> Callable[[], SchemaMapping]:
 
     def _build() -> SchemaMapping:
         return SchemaMapping(
-            nodes=[NodeMapping(label="Forum", source_table="forum", primary_key="id", properties={"id": "id"})],
+            nodes=[NodeMapping(label="Forum", source_table="forum", primary_key=["id"], properties={"id": "id"})],
             edges=[],
         )
 
