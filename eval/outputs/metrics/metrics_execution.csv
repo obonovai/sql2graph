@@ -1,166 +1,166 @@
 dataset,target,model,query_id,difficulty,validation_passed,reference_runtime_s,reference_error,translated_runtime_s,execution_error,execution_accuracy,result_precision,result_recall,result_f1,result_jaccard_dist,reference_rows,translated_rows
-ldbc,cypher,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.6504819539841264,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.1550302280811593,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Variable `p` not defined (line 4, column 8 (offset: 161))
+ldbc,cypher,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,1.4396420730045065,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.1881981670157984,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Variable `p` not defined (line 4, column 8 (offset: 161))
 ""RETURN p.id, creation_date, p.content""
         ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,12932,0
-ldbc,cypher,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.47414382395800203,,0.0,0.0,0.0,0.0,1.0,4,0
-ldbc,cypher,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,3.315620432025753,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,20.811127160093747,,0.0,0.0,0.0,0.0,1.0,20,20
-ldbc,cypher,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.18538718204945326,,0.0,0.0,0.0,0.0,1.0,5,1
-ldbc,cypher,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.299330304027535,,0.0,0.0,0.0,0.0,1.0,58,0
-ldbc,cypher,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,1.5778401429997757,,0.0,0.0,0.0,0.0,1.0,2805,0
-ldbc,cypher,llama3.2:latest,ldbc_q09,medium,True,0.024463952984660864,,0.14972948492504656,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,5.868501556920819,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
-ldbc,cypher,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.27553251304198056,,0.0,0.0,0.0,0.0,1.0,5407,0
-ldbc,cypher,llama3.2:latest,ldbc_q12,hard,True,0.1029304499970749,,0.04198394890408963,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: PatternExpressions are not allowed to introduce new variables: 'l'. (line 6, column 20 (offset: 267))
+ldbc,cypher,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.4368454979849048,,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,cypher,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,8.48142371699214,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,23.629609236959368,,0.0,0.0,0.0,0.0,1.0,20,20
+ldbc,cypher,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.18873731803614646,,0.0,0.0,0.0,0.0,1.0,5,1
+ldbc,cypher,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.30704178201267496,,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,cypher,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,1.676987852959428,,0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,cypher,llama3.2:latest,ldbc_q09,medium,True,0.024463952984660864,,0.14967934996820986,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,6.615954694978427,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
+ldbc,cypher,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.31037748797098175,,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,cypher,llama3.2:latest,ldbc_q12,hard,True,0.1029304499970749,,0.039773497032001615,"CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: PatternExpressions are not allowed to introduce new variables: 'l'. (line 6, column 20 (offset: 267))
 ""WHERE NOT EXISTS ((l:LikesPost {person_id: p.id})-[:LIKES]->(po))""
                     ^} {gql_status: 42001} {gql_status_description: error: syntax error or access rule violation - invalid syntax}",0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,cypher,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.20486156595870852,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.10357715107966214,,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,cypher,llama3.2:latest,ldbc_q15,hard,True,0.08245797699782997,,0.11772666906472296,,0.0,0.0,0.0,0.0,1.0,3,1
-ldbc,cypher,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.07347985403612256,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,1.8612639040220529,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.05244188092183322,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,cypher,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,1.0385476470692083,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,181.49318520294037,"ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration} {message: The transaction has been terminated. Retry your operation in a new transaction, and you should see a successful result. The transaction has not completed within the timeout specified at its start by the client. You may want to retry with a longer timeout. } {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.06620049895718694,,0.0,0.0,0.0,0.0,1.0,5,5
-ldbc,cypher,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.10863014904316515,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,0.4534094580449164,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,0.20439657801762223,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,5.120510909939185,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
-ldbc,cypher,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,0.4370869309641421,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,0.21725053596310318,,0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.17372710804920644,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.07737540896050632,,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,cypher,qwen3-coder:30b,ldbc_q15,hard,True,0.08245797699782997,,0.2473358119605109,,0.0,0.3333333333333333,0.3333333333333333,0.3333333333333333,0.8,3,3
-ldbc,cypher,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.008910469943657517,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,2.0385846629505977,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.011389738065190613,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,cypher,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,2.960230103926733,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,2.8630966329947114,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.07176398998126388,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,cypher,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.10916483798064291,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,0.3609793980140239,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,0.1154525539604947,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,5.520868008956313,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,cypher,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.41115166107192636,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.16997502802405506,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,cypher,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.10386902198661119,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.09827083791606128,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,cypher,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,0.09071888693142682,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,cypher,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.005676822038367391,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,1.8001656709238887,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.01144027803093195,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,cypher,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,2.685180008993484,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,2.6878792360657826,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.06314448895864189,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,cypher,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.02702626900281757,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,0.20282352692447603,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,0.08447130699642003,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,5.2785472749965265,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,cypher,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,0.3981459019705653,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.06731539708562195,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,cypher,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.09701000398490578,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.0852090329863131,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,cypher,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.05955499701667577,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,0.008254743064753711,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,1.858277132967487,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.03919283393770456,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,2.6735649389447644,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,2.6927168229594827,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,0.00684554292820394,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,0.009930053958669305,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,0.30643497791606933,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,0.07437929895240813,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,5.292423940030858,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,0.38416668609716,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.14861586201004684,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.09677322709467262,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.0491414190037176,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,cypher,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.00541479408275336,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,aql,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.007845678017474711,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,1,0
-ldbc,aql,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.0054551230277866125,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,12932,0
-ldbc,aql,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.0043894239934161305,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,4,0
-ldbc,aql,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,0.0049267039867118,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,10,0
-ldbc,aql,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,0.0036109250504523516,AQLQueryExecuteError: [HTTP 400][ERR 1512] use of unknown variable 'usage_count' in object literal near '}' at position 13:46,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.004273358965292573,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5,0
-ldbc,aql,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.004044231027364731,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,58,0
-ldbc,aql,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,0.004658406018279493,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,2805,0
+ldbc,cypher,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.26519087300403044,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.11126011400483549,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,cypher,llama3.2:latest,ldbc_q15,hard,True,0.08245797699782997,,0.12948998803040013,,0.0,0.0,0.0,0.0,1.0,3,1
+ldbc,cypher,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.07004887500079349,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,2.3926181819988415,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.05056055501336232,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,0.9755790379713289,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,180.39964135497576,"ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionTimedOutClientConfiguration} {message: The transaction has been terminated. Retry your operation in a new transaction, and you should see a successful result. The transaction has not completed within the timeout specified at its start by the client. You may want to retry with a longer timeout. } {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unexpected error has occurred. See debug log for details.}",0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.08027582097565755,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,cypher,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.126615290006157,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,0.5217040670104325,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,0.19951981399208307,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,5.118878840003163,,0.0,0.12180082217212572,0.12180082217212572,0.12180082217212572,0.9351502100469516,90492,90492
+ldbc,cypher,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,0.44383832201128826,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,0.2337849560426548,,0.0,0.0,0.0,0.0,1.0,917,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.1680440250202082,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.08840293297544122,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,cypher,qwen3-coder:30b,ldbc_q15,hard,True,0.08245797699782997,,0.2868008549557999,,0.0,0.3333333333333333,0.3333333333333333,0.3333333333333333,0.8,3,3
+ldbc,cypher,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.01321711897617206,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,1.7479043130297214,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.010836881003342569,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,2.587837840022985,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,2.7821721490472555,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.06494780501816422,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,cypher,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.08948300301562995,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,0.33840064401738346,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,0.11356038501253352,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,5.979931949987076,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,cypher,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.455184355028905,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.18903120898175985,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,cypher,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.10517727502156049,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.09027234499808401,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,cypher,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,0.07791597599862143,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,cypher,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.008557609980925918,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,2.1847452860092744,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.009856260032393038,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,2.6446052549872547,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,2.4859019379946403,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.06427649699617177,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,cypher,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.02888469398021698,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,0.21199548500590026,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,0.07636455399915576,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,5.724527125013992,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,cypher,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,0.43306407099589705,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.05821186304092407,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,cypher,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.09541088802507147,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.08505124697694555,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,cypher,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.05912889400497079,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,0.005873584013897926,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,1.8180397949763574,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.0398000170243904,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,2.7785172869917005,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,2.5039795769844204,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,0.006218661030288786,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,0.009488142968621105,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,0.3537284680060111,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,0.07063408597605303,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,5.759482194960583,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,0.38448814395815134,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.14584232901688665,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.09517979994416237,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.04751528601627797,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,cypher,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.005290271015837789,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,aql,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.01555440400261432,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,1,0
+ldbc,aql,llama3.2:latest,ldbc_q02,easy,True,0.050616532971616834,,0.004156071983743459,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,12932,0
+ldbc,aql,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,0.002968318003695458,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,aql,llama3.2:latest,ldbc_q04,hard,True,0.2299396800226532,,0.0038104799459688365,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,10,0
+ldbc,aql,llama3.2:latest,ldbc_q05,hard,True,0.3396434560418129,,0.00360617897240445,AQLQueryExecuteError: [HTTP 400][ERR 1512] use of unknown variable 'usage_count' in object literal near '}' at position 13:46,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,llama3.2:latest,ldbc_q06,medium,True,0.02351882099173963,,0.0036995569826103747,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5,0
+ldbc,aql,llama3.2:latest,ldbc_q07,medium,True,0.027347599039785564,,0.003878982039168477,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,aql,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,0.003467345959506929,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,2805,0
 ldbc,aql,llama3.2:latest,ldbc_q09,medium,False,0.024463952984660864,,,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,0.0058507900685071945,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,90492,0
-ldbc,aql,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.004892953904345632,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5407,0
+ldbc,aql,llama3.2:latest,ldbc_q10,hard,True,0.4510297270026058,,0.052170647017192096,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelF,0.0,0.0,0.0,0.0,1.0,90492,0
+ldbc,aql,llama3.2:latest,ldbc_q11,hard,True,0.10510849603451788,,0.005606691993307322,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelA,0.0,0.0,0.0,0.0,1.0,5407,0
 ldbc,aql,llama3.2:latest,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,aql,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.004830803023651242,AQLQueryExecuteError: [HTTP 400][ERR 1540] usage of unknown function 'KNOWS()',0.0,0.0,0.0,0.0,1.0,1642,0
-ldbc,aql,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.004024574998766184,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelC,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,aql,llama3.2:latest,ldbc_q13,hard,True,0.044496565009467304,,0.008144524006638676,AQLQueryExecuteError: [HTTP 400][ERR 1540] usage of unknown function 'KNOWS()',0.0,0.0,0.0,0.0,1.0,1642,0
+ldbc,aql,llama3.2:latest,ldbc_q14,medium,True,0.02760434296214953,,0.006702177983243018,AQLQueryExecuteError: [HTTP 404][ERR 1203] collection or view not found: LabelC,0.0,0.0,0.0,0.0,1.0,111,0
 ldbc,aql,llama3.2:latest,ldbc_q15,hard,False,0.08245797699782997,,,,0.0,0.0,0.0,0.0,1.0,3,0
-ldbc,aql,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.011744069983251393,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,0.15185578598175198,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.005909913103096187,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,aql,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,31.388226349954493,,0.0,0.0,0.0,0.0,1.0,10,10
-ldbc,aql,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,2.574111812049523,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.006615217076614499,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.1122228850144893,,0.0,0.0,0.0,0.0,1.0,58,58
-ldbc,aql,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,52.65404420194682,,0.0,0.0,0.0,0.0,1.0,2805,21084
-ldbc,aql,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,7.191860054037534,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,aql,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,15.093435270013288,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,3.512847786070779,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,121.50006025796756,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.11871160299051553,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,1.3475063840160146,,0.0,0.0,0.0,0.0,1.0,111,0
-ldbc,aql,qwen3-coder:30b,ldbc_q15,hard,True,0.08245797699782997,,0.0043868779903277755,,0.0,0.0,0.0,0.0,1.0,3,2
-ldbc,aql,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.014646244933828712,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,0.15818406199105084,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.005911450018174946,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,aql,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,0.9786521770292893,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,aql,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,47.334946239949204,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.005746769951656461,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.012431313982233405,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,aql,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,28.38726201490499,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,aql,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,112.5889850340318,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,1.3830509090330452,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.14972041198052466,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.14171385893132538,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.11462997598573565,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.164634331013076,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,aql,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,0.0042391689494252205,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,aql,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.006873250938951969,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,0.12605072394944727,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.005984165007248521,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,aql,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,14.49222103098873,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,aql,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,116.855038322974,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.006546491989865899,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.011154890060424805,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,aql,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,24.648493460961618,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,aql,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,50.02368279104121,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,16.921002911985852,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,1.8399029120337218,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.14420750399585813,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.12289369897916913,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.17463556106667966,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,aql,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.0038631849456578493,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,0.00766293506603688,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,0.1615647909929976,,1.0,1.0,1.0,1.0,0.0,12932,12932
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.006076898891478777,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,15.014864103985019,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,43.2688472350128,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,0.006364736007526517,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,0.010169005952775478,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,24.541372230974957,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,0.28504488803446293,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,16.07915403600782,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,1.720135326962918,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.13630154798738658,,0.0,0.0,0.0,0.0,1.0,917,1
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.11489486997015774,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.162177580059506,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,aql,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.00486807303968817,,1.0,1.0,1.0,1.0,0.0,3,3
-ldbc,gremlin,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.18955343193374574,,0.0,0.0,0.0,0.0,1.0,1,0
+ldbc,aql,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,0.022959401016123593,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,0.7591794769978151,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.008612070989329368,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,35.37110847700387,,0.0,0.0,0.0,0.0,1.0,10,10
+ldbc,aql,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,10.211333585029934,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.013498375017661601,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,0.32412011799169704,,0.0,0.0,0.0,0.0,1.0,58,58
+ldbc,aql,qwen3-coder:30b,ldbc_q08,hard,True,0.07784026098670438,,55.59692991297925,,0.0,0.0,0.0,0.0,1.0,2805,21084
+ldbc,aql,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,17.444493563030846,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,aql,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,17.261326893989462,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,aql,qwen3-coder:30b,ldbc_q11,hard,True,0.10510849603451788,,3.002570927958004,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,qwen3-coder:30b,ldbc_q12,hard,True,0.1029304499970749,,176.44055730005493,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.12154208798892796,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,6.923375861020759,,0.0,0.0,0.0,0.0,1.0,111,0
+ldbc,aql,qwen3-coder:30b,ldbc_q15,hard,True,0.08245797699782997,,0.005844696017447859,,0.0,0.0,0.0,0.0,1.0,3,2
+ldbc,aql,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.024072755011729896,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,0.1294437239994295,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.007562596001662314,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,0.9624027769896202,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,aql,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,47.69877582194749,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.006416399963200092,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,0.011460135981906205,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,aql,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,28.6663902940345,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,aql,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,122.33888144697994,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,1.487898302031681,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,aql,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.1507634929730557,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.14479365100851282,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.12108009704388678,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.2070903410203755,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,aql,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,0.004388764966279268,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,aql,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.007407553028315306,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,0.13331886200467125,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.005768735019955784,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,15.476401337014977,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,aql,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,118.0410089000361,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.006029326003044844,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,0.010719167010392994,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,aql,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,25.430906789028086,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,aql,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,53.81991268397542,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,17.011978777998593,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,aql,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,1.964146793994587,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.1454457749496214,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.11869301501428708,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.22207746596541256,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,aql,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.00461540900869295,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,0.0061573259881697595,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,0.10970359097700566,,1.0,1.0,1.0,1.0,0.0,12932,12932
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.006540590024087578,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,14.961422518012114,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,43.24614101101179,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,0.00631863996386528,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,0.011207293020561337,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,27.995240194024518,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,0.3663016860373318,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,16.259504112997092,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,1.9023523239884526,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.15169045701622963,,0.0,0.0,0.0,0.0,1.0,917,1
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.11837731499690562,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.20490018598502502,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,aql,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.005975210980977863,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,gremlin,llama3.2:latest,ldbc_q01,easy,True,0.03953209100291133,,0.9554809269611724,,0.0,0.0,0.0,0.0,1.0,1,0
 ldbc,gremlin,llama3.2:latest,ldbc_q02,easy,False,0.050616532971616834,,,,0.0,0.0,0.0,0.0,1.0,12932,0
-ldbc,gremlin,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,1.2219826540676877,,0.0,0.0,0.0,0.0,1.0,4,0
+ldbc,gremlin,llama3.2:latest,ldbc_q03,easy,True,0.018220558005850762,,21.74524839298101,,0.0,0.0,0.0,0.0,1.0,4,0
 ldbc,gremlin,llama3.2:latest,ldbc_q04,hard,False,0.2299396800226532,,,,0.0,0.0,0.0,0.0,1.0,10,0
 ldbc,gremlin,llama3.2:latest,ldbc_q05,hard,False,0.3396434560418129,,,,0.0,0.0,0.0,0.0,1.0,20,0
 ldbc,gremlin,llama3.2:latest,ldbc_q06,medium,False,0.02351882099173963,,,,0.0,0.0,0.0,0.0,1.0,5,0
 ldbc,gremlin,llama3.2:latest,ldbc_q07,medium,False,0.027347599039785564,,,,0.0,0.0,0.0,0.0,1.0,58,0
-ldbc,gremlin,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,180.2755936110625,"GremlinServerError: 598: Evaluation exceeded the configured 'evaluationTimeout' threshold of 180000 ms or evaluation was otherwise cancelled directly for request [g.V().has('id', 933)
+ldbc,gremlin,llama3.2:latest,ldbc_q08,hard,True,0.07784026098670438,,181.4350223520305,"GremlinServerError: 598: Evaluation exceeded the configured 'evaluationTimeout' threshold of 180000 ms or evaluation was otherwise cancelled directly for request [g.V().has('id', 933)
     .out('KNOWS').in('KNOWS')
     .out('KNOWS').in('KNOWS')
     .out('STUDY_AT').in('STUDY_AT')
@@ -180,63 +180,63 @@ ldbc,gremlin,llama3.2:latest,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0
 ldbc,gremlin,llama3.2:latest,ldbc_q13,hard,False,0.044496565009467304,,,,0.0,0.0,0.0,0.0,1.0,1642,0
 ldbc,gremlin,llama3.2:latest,ldbc_q14,medium,False,0.02760434296214953,,,,0.0,0.0,0.0,0.0,1.0,111,0
 ldbc,gremlin,llama3.2:latest,ldbc_q15,hard,False,0.08245797699782997,,,,0.0,0.0,0.0,0.0,1.0,3,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,1.8586858020862564,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,gremlin,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,1.5603470369242132,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
-ldbc,gremlin,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.7407169700600207,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,gremlin,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,5.220697385026142,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [v[393222]=20] a Node class instead",0.0,0.0,0.0,0.0,1.0,10,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,1.929617388988845,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,0.8728060550056398,,0.0,0.0,0.0,0.0,1.0,5,5
-ldbc,gremlin,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,1.312621777993627,,0.0,0.0,0.0,0.0,1.0,58,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q01,easy,True,0.03953209100291133,,8.070344148029108,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,qwen3-coder:30b,ldbc_q02,easy,True,0.050616532971616834,,4.232256114017218,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,qwen3-coder:30b,ldbc_q03,easy,True,0.018220558005850762,,0.7278748740209267,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,qwen3-coder:30b,ldbc_q04,hard,True,0.2299396800226532,,14.85706910904264,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [v[393222]=20] a Node class instead",0.0,0.0,0.0,0.0,1.0,10,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q05,hard,True,0.3396434560418129,,1.295787935028784,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q06,medium,True,0.02351882099173963,,1.1105457099620253,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,gremlin,qwen3-coder:30b,ldbc_q07,medium,True,0.027347599039785564,,1.2414714110200293,,0.0,0.0,0.0,0.0,1.0,58,0
 ldbc,gremlin,qwen3-coder:30b,ldbc_q08,hard,False,0.07784026098670438,,,,0.0,0.0,0.0,0.0,1.0,2805,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,1.2530660190386698,,0.0,0.0,0.0,0.0,1.0,20,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,0.791524249012582,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [5] a Long class instead",0.0,0.0,0.0,0.0,1.0,90492,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q09,medium,True,0.024463952984660864,,1.3221537309582345,,0.0,0.0,0.0,0.0,1.0,20,0
+ldbc,gremlin,qwen3-coder:30b,ldbc_q10,hard,True,0.4510297270026058,,1.9674519939580932,"GremlinServerError: 597: The by(""member_count"") modulator can only be applied to a traverser that is an Element or a Map - it is being applied to [5] a Long class instead",0.0,0.0,0.0,0.0,1.0,90492,0
 ldbc,gremlin,qwen3-coder:30b,ldbc_q11,hard,False,0.10510849603451788,,,,0.0,0.0,0.0,0.0,1.0,5407,0
 ldbc,gremlin,qwen3-coder:30b,ldbc_q12,hard,False,0.1029304499970749,,,,0.0,0.0,0.0,0.0,1.0,917,0
-ldbc,gremlin,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.8789643869968131,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,gremlin,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.8235419330885634,,0.0,0.0,0.0,0.0,1.0,111,1
+ldbc,gremlin,qwen3-coder:30b,ldbc_q13,hard,True,0.044496565009467304,,0.9777141470112838,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,qwen3-coder:30b,ldbc_q14,medium,True,0.02760434296214953,,0.741048772004433,,0.0,0.0,0.0,0.0,1.0,111,1
 ldbc,gremlin,qwen3-coder:30b,ldbc_q15,hard,False,0.08245797699782997,,,,0.0,0.0,0.0,0.0,1.0,3,0
-ldbc,gremlin,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.780957888928242,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,gremlin,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,2.254800501978025,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
-ldbc,gremlin,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,0.8909650179557502,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,gremlin,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,1.4695521040121093,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,gremlin,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,1.8991210930980742,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
-ldbc,gremlin,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,0.7469270139699802,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,gremlin,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,1.240940360003151,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,gremlin,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,4.35908339091111,,0.0,0.07952934505245252,1.0,0.1473407747866054,0.9204706549475474,2805,35270
-ldbc,gremlin,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,6.328937581041828,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,gremlin,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,3.081766933086328,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,gremlin,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,0.9647070639766753,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,gremlin,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.8250103479949757,,0.0,1.0,0.9989094874591058,0.9994544462629569,0.0010905125408942062,917,916
-ldbc,gremlin,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,0.7734357829904184,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,gremlin,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,0.7606569960480556,,1.0,1.0,1.0,1.0,0.0,111,111
-ldbc,gremlin,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,0.7621151380008087,,0.0,0.0,0.0,0.0,1.0,3,2
-ldbc,gremlin,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,0.7887158549856395,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,gremlin,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,1.496892916969955,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
-ldbc,gremlin,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.7327713359845802,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,gremlin,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,1.581132411956787,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,gremlin,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,1.5482291540829465,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
-ldbc,gremlin,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.7315072439378127,,0.0,0.0,0.0,0.0,1.0,5,5
-ldbc,gremlin,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,1.2608198859961703,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,gremlin,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,4.97491315100342,,0.0,0.0,0.0,0.0,1.0,2805,2423
-ldbc,gremlin,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,6.516040125978179,,0.0,0.0,0.0,0.0,1.0,20,20
-ldbc,gremlin,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,3.4012199440039694,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,gremlin,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,1.023949665017426,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,gremlin,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.8386250979965553,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,gremlin,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.7589200320653617,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,gremlin,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.7471953659551218,,0.0,0.0,0.0,0.0,1.0,111,1
-ldbc,gremlin,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.7426051520742476,KeyError: <DataType.tree: 43>,0.0,0.0,0.0,0.0,1.0,3,0
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,1.3080821220064536,,1.0,1.0,1.0,1.0,0.0,1,1
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,1.5238957239780575,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.7275324949296191,,1.0,1.0,1.0,1.0,0.0,4,4
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,1.2383152130059898,,1.0,1.0,1.0,1.0,0.0,10,10
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,3.808544385014102,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,1.058551648980938,,1.0,1.0,1.0,1.0,0.0,5,5
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,1.552300940034911,,1.0,1.0,1.0,1.0,0.0,58,58
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,5.069680941989645,,1.0,1.0,1.0,1.0,0.0,2805,2805
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,7.8389335330575705,,1.0,1.0,1.0,1.0,0.0,20,20
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,3.5688463640399277,,1.0,1.0,1.0,1.0,0.0,90492,90492
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,0.9426735059823841,,1.0,1.0,1.0,1.0,0.0,5407,5407
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.7993955049896613,,1.0,1.0,1.0,1.0,0.0,917,917
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.7568711519706994,,1.0,1.0,1.0,1.0,0.0,1642,1642
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.7430546740069985,,0.0,0.0,0.0,0.0,1.0,111,1
-ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.7316848069895059,,1.0,1.0,1.0,1.0,0.0,3,3
+ldbc,gremlin,gemma4:26b,ldbc_q01,easy,True,0.03953209100291133,,0.8466999770025723,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,gemma4:26b,ldbc_q02,easy,True,0.050616532971616834,,5.3646760690025985,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,gemma4:26b,ldbc_q03,easy,True,0.018220558005850762,,1.330890998011455,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,gemma4:26b,ldbc_q04,hard,True,0.2299396800226532,,2.9737654669443145,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,gremlin,gemma4:26b,ldbc_q05,hard,True,0.3396434560418129,,9.276375576970167,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
+ldbc,gremlin,gemma4:26b,ldbc_q06,medium,True,0.02351882099173963,,3.682047171983868,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,gremlin,gemma4:26b,ldbc_q07,medium,True,0.027347599039785564,,8.060471976001281,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,gremlin,gemma4:26b,ldbc_q08,hard,True,0.07784026098670438,,14.083626515988726,,0.0,0.07952934505245252,1.0,0.1473407747866054,0.9204706549475474,2805,35270
+ldbc,gremlin,gemma4:26b,ldbc_q09,medium,True,0.024463952984660864,,19.322019857994746,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,gremlin,gemma4:26b,ldbc_q10,hard,True,0.4510297270026058,,4.913454712019302,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,gremlin,gemma4:26b,ldbc_q11,hard,True,0.10510849603451788,,1.4752958349999972,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,gremlin,gemma4:26b,ldbc_q12,hard,True,0.1029304499970749,,0.8728811689652503,,0.0,1.0,0.9989094874591058,0.9994544462629569,0.0010905125408942062,917,916
+ldbc,gremlin,gemma4:26b,ldbc_q13,hard,True,0.044496565009467304,,1.61996206297772,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,gemma4:26b,ldbc_q14,medium,True,0.02760434296214953,,5.0808900549891405,,1.0,1.0,1.0,1.0,0.0,111,111
+ldbc,gremlin,gemma4:26b,ldbc_q15,hard,True,0.08245797699782997,,1.325278367032297,,0.0,0.0,0.0,0.0,1.0,3,2
+ldbc,gremlin,claude-opus-4-8,ldbc_q01,easy,True,0.03953209100291133,,2.6778547249850817,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,claude-opus-4-8,ldbc_q02,easy,True,0.050616532971616834,,3.637098832987249,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,claude-opus-4-8,ldbc_q03,easy,True,0.018220558005850762,,0.8129111790331081,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,claude-opus-4-8,ldbc_q04,hard,True,0.2299396800226532,,2.1488406480057165,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,gremlin,claude-opus-4-8,ldbc_q05,hard,True,0.3396434560418129,,1.7482282670098357,,0.0,0.05,0.05,0.05000000000000001,0.9743589743589743,20,20
+ldbc,gremlin,claude-opus-4-8,ldbc_q06,medium,True,0.02351882099173963,,0.7290463660028763,,0.0,0.0,0.0,0.0,1.0,5,5
+ldbc,gremlin,claude-opus-4-8,ldbc_q07,medium,True,0.027347599039785564,,1.8249635500251316,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,gremlin,claude-opus-4-8,ldbc_q08,hard,True,0.07784026098670438,,6.999764582957141,,0.0,0.0,0.0,0.0,1.0,2805,2423
+ldbc,gremlin,claude-opus-4-8,ldbc_q09,medium,True,0.024463952984660864,,8.153869920002762,,0.0,0.0,0.0,0.0,1.0,20,20
+ldbc,gremlin,claude-opus-4-8,ldbc_q10,hard,True,0.4510297270026058,,4.986082119983621,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,gremlin,claude-opus-4-8,ldbc_q11,hard,True,0.10510849603451788,,1.7640136699774303,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,gremlin,claude-opus-4-8,ldbc_q12,hard,True,0.1029304499970749,,0.8141557099879719,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,gremlin,claude-opus-4-8,ldbc_q13,hard,True,0.044496565009467304,,0.7586010340019129,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,claude-opus-4-8,ldbc_q14,medium,True,0.02760434296214953,,0.7587071070447564,,0.0,0.0,0.0,0.0,1.0,111,1
+ldbc,gremlin,claude-opus-4-8,ldbc_q15,hard,True,0.08245797699782997,,0.7504157769726589,KeyError: <DataType.tree: 43>,0.0,0.0,0.0,0.0,1.0,3,0
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q01,easy,True,0.03953209100291133,,0.9856228519929573,,1.0,1.0,1.0,1.0,0.0,1,1
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q02,easy,True,0.050616532971616834,,1.9563553530024365,,0.0,0.31503247757500774,0.31503247757500774,0.31503247757500774,0.8130335016062413,12932,12932
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q03,easy,True,0.018220558005850762,,0.7491621900117025,,1.0,1.0,1.0,1.0,0.0,4,4
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q04,hard,True,0.2299396800226532,,1.5596789249684662,,1.0,1.0,1.0,1.0,0.0,10,10
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q05,hard,True,0.3396434560418129,,4.683754402038176,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q06,medium,True,0.02351882099173963,,1.2546693069743924,,1.0,1.0,1.0,1.0,0.0,5,5
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q07,medium,True,0.027347599039785564,,2.1311872450169176,,1.0,1.0,1.0,1.0,0.0,58,58
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q08,hard,True,0.07784026098670438,,5.954982369032223,,1.0,1.0,1.0,1.0,0.0,2805,2805
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q09,medium,True,0.024463952984660864,,8.909041335980874,,1.0,1.0,1.0,1.0,0.0,20,20
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q10,hard,True,0.4510297270026058,,4.853474707051646,,1.0,1.0,1.0,1.0,0.0,90492,90492
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q11,hard,True,0.10510849603451788,,1.1480287680169567,,1.0,1.0,1.0,1.0,0.0,5407,5407
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q12,hard,True,0.1029304499970749,,0.9265806049806997,,1.0,1.0,1.0,1.0,0.0,917,917
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q13,hard,True,0.044496565009467304,,0.8535693829762749,,1.0,1.0,1.0,1.0,0.0,1642,1642
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q14,medium,True,0.02760434296214953,,0.832506547041703,,0.0,0.0,0.0,0.0,1.0,111,1
+ldbc,gremlin,claude-opus-4-8-thinking,ldbc_q15,hard,True,0.08245797699782997,,0.8606385859893635,,1.0,1.0,1.0,1.0,0.0,3,3
